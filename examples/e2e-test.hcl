@@ -34,7 +34,7 @@ worker_memory      = 128
 worker_count               = 1
 worker_autoscaling_enabled = false
 
-docker_user            = ""
+docker_user            = "root"
 docker_readonly_rootfs = false
 docker_cap_drop        = []
 
