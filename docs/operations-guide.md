@@ -116,6 +116,8 @@ Step-by-step migration from the [NREL openstudio-server Helm chart](https://gith
 
 This pack also ships an optional stub at `templates/nomad-autoscaler.nomad.tpl` gated by `nomad_autoscaler_enabled = false`. The stub defaults to the `nomad-apm` source and includes comments showing where to add an optional Prometheus source.
 
+When worker autoscaling is enabled, this pack now includes a built-in `nomad-apm` CPU check (`avg_cpu`) as the primary simple-scaling path. This requires no external metrics stack and is controlled by `worker_autoscaling_cpu_enabled` and `worker_cpu_target_utilization` (default `50`, matching Helm HPA behavior). Existing Prometheus queue-depth checks remain available for advanced backlog-aware tuning.
+
 ---
 
 ## Quick-Reference: Pack Variables
