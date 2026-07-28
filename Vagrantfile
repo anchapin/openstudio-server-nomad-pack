@@ -41,6 +41,20 @@ Vagrant.configure("2") do |config|
         vb.cpus = node[:cpus]
       end
 
+      machine.vm.provider "parallels" do |prl|
+        prl.name = "openstudio-#{name}"
+        prl.memory = node[:memory]
+        prl.cpus = node[:cpus]
+      end
+
+      # Uncomment to use VMware Fusion / Workstation.
+      # Requires the `vagrant-vmware-desktop` plugin and VMware Utility.
+      # machine.vm.provider "vmware_desktop" do |vmw|
+      #   vmw.vmx["displayName"] = "openstudio-#{name}"
+      #   vmw.vmx["memsize"] = node[:memory].to_s
+      #   vmw.vmx["numvcpus"] = node[:cpus].to_s
+      # end
+
       machine.vm.provision "shell", path: "vagrant/provision/common.sh"
       machine.vm.provision "shell", path: node[:role_script]
     end
