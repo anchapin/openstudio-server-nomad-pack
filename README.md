@@ -190,7 +190,7 @@ The raw variable declarations and defaults live in [`variables.hcl`](./variables
 | `nfs_volume_source` | `string` | Nomad host_volume name (recommended) or CSI volume ID for the NFS shared volume | `"openstudio-nfs"` |
 | `nfs_volume_mount_path` | `string` | Mount path for the NFS volume in web and worker tasks | `"/mnt/openstudio"` |
 | `worker_min_replicas` | `number` | Minimum worker replica count | `1` |
-| `worker_max_replicas` | `number` | Maximum worker replica count | `3` |
+| `worker_max_replicas` | `number` | Maximum worker replica count | `10` |
 | `vault_integration_enabled` | `bool` | Enable Nomad Vault stanzas in tasks | `false` |
 | `ingress_domain` | `string` | Hostname for Traefik router rules and service ingress | `"localhost"` |
 | `ingress_tls_enabled` | `bool` | When `true`, adds Traefik TLS (`websecure`) router tags to the web service | `false` |
@@ -208,10 +208,10 @@ The raw variable declarations and defaults live in [`variables.hcl`](./variables
 | `worker_priority` | `number` | Nomad priority for calculation workers | `40` |
 | `worker_queues` | `string` | Queue list for worker processing | `"requeued,simulations"` |
 | `worker_process_count` | `string` | Worker container `COUNT` env value | `"1"` |
-| `worker_autoscaling_enabled` | `bool` | Enables worker autoscaling policy | `true` |
-| `worker_autoscaling_min` | `number` | Minimum worker allocations under autoscaling | `1` |
-| `worker_autoscaling_max` | `number` | Maximum worker allocations under autoscaling | `10` |
-| `worker_autoscaling_cooldown` | `string` | Worker autoscaling cooldown duration | `"2m"` |
+| `worker_autoscaling_enabled` | `bool` | Enables worker autoscaling policy | `false` |
+| `worker_min_replicas` | `number` | Minimum worker allocations under autoscaling | `1` |
+| `worker_max_replicas` | `number` | Maximum worker allocations under autoscaling | `10` |
+| `autoscaler_cooldown` | `string` | Worker autoscaling cooldown duration | `"60m"` |
 | `worker_queue_requeued_query` | `string` | Prometheus query for `requeued` queue depth | `"sum(openstudio_worker_queue_depth{queue=\"requeued\"})"` |
 | `worker_queue_requeued_target` | `number` | Target value for `requeued` queue depth per allocation | `1` |
 | `worker_queue_simulations_query` | `string` | Prometheus query for `simulations` queue depth | `"sum(openstudio_worker_queue_depth{queue=\"simulations\"})"` |
@@ -333,9 +333,9 @@ Set `worker_autoscaling_enabled = true` to activate worker scaling policies:
 | `worker_autoscaling_enabled` | `false` | Enable/disable the `scaling` block |
 | `nomad_autoscaler_enabled` | `false` | Render optional autoscaler daemon stub (`templates/nomad-autoscaler.nomad.tpl`) |
 | `worker_min_replicas` | `1` | Minimum worker allocations |
-| `worker_max_replicas` | `3` | Maximum worker allocations |
-| `autoscaler_cooldown` | `"2m"` | Cooldown between scaling decisions |
-| `autoscaler_prometheus_address` | `""` | Prometheus URL for the Autoscaler plugin |
+| `worker_max_replicas` | `10` | Maximum worker allocations |
+| `autoscaler_cooldown` | `"60m"` | Cooldown between scaling decisions |
+| `autoscaler_prometheus_address` | `"http://prometheus:9090"` | Prometheus URL for the Autoscaler plugin |
 | `worker_queue_requeued_query` | see vars | PromQL for the `requeued` queue depth |
 | `worker_queue_simulations_query` | see vars | PromQL for the `simulations` queue depth |
 
