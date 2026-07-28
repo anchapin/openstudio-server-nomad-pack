@@ -177,7 +177,13 @@ target "aws-asg" {
 }
 ```
 
-Use the same pattern for GCP Managed Instance Groups with the `gce-mig` target plugin. See:
+Use the same pattern for GCP Managed Instance Groups with the `gce-mig` target plugin.
+
+> **Tip:** `templates/nomad-autoscaler.nomad.tpl` includes ready-to-uncomment `target "aws-asg"` and
+> `target "gce-mig"` stanzas inside the inline `autoscaler.hcl` config block. Uncomment and fill in
+> the appropriate fields for your cloud provider — no HCL needs to be written from scratch.
+
+See:
 
 - Nomad Autoscaler AWS ASG target:
   [developer.hashicorp.com/nomad/tools/autoscaling/plugins/target/aws-asg](https://developer.hashicorp.com/nomad/tools/autoscaling/plugins/target/aws-asg)
