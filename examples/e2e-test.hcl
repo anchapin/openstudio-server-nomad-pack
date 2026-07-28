@@ -33,6 +33,7 @@ worker_memory      = 128
 
 worker_count               = 1
 worker_autoscaling_enabled = false
+worker_kill_timeout        = "9m"
 
 docker_user            = "root"
 docker_readonly_rootfs = false
