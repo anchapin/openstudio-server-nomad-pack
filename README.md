@@ -60,6 +60,13 @@ vagrant ssh vault -c "VAULT_ADDR=http://127.0.0.1:8200 VAULT_TOKEN=root vault st
 vagrant destroy -f
 ```
 
+## CI Validation
+
+GitHub Actions validates pull requests targeting `develop` with:
+
+- `nomad-pack fmt -check -recursive .`
+- `nomad-pack render .`
+
 ## Configuration Variables
 
 Refer to [`variables.hcl`](file:///Users/achapin/OpenStudio/openstudio-server-nomad-pack/variables.hcl) for the list of configuration parameters and defaults.
