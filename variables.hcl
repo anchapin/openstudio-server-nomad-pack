@@ -125,6 +125,54 @@ variable "worker_memory" {
   default     = 4096
 }
 
+variable "worker_autoscaling_enabled" {
+  type        = bool
+  description = "Enable autoscaling for the worker task group."
+  default     = true
+}
+
+variable "worker_autoscaling_min" {
+  type        = number
+  description = "Minimum worker allocations when autoscaling is enabled."
+  default     = 1
+}
+
+variable "worker_autoscaling_max" {
+  type        = number
+  description = "Maximum worker allocations when autoscaling is enabled."
+  default     = 10
+}
+
+variable "worker_autoscaling_cooldown" {
+  type        = string
+  description = "Cooldown duration between worker autoscaling actions."
+  default     = "2m"
+}
+
+variable "worker_queue_requeued_query" {
+  type        = string
+  description = "Prometheus query for requeued backlog depth."
+  default     = "sum(openstudio_worker_queue_depth{queue=\"requeued\"})"
+}
+
+variable "worker_queue_requeued_target" {
+  type        = number
+  description = "Target queue depth for requeued jobs per worker allocation."
+  default     = 1
+}
+
+variable "worker_queue_simulations_query" {
+  type        = string
+  description = "Prometheus query for simulations backlog depth."
+  default     = "sum(openstudio_worker_queue_depth{queue=\"simulations\"})"
+}
+
+variable "worker_queue_simulations_target" {
+  type        = number
+  description = "Target queue depth for simulation jobs per worker allocation."
+  default     = 5
+}
+
 variable "db_image" {
   type        = string
   description = "The MongoDB database image name and tag."
