@@ -85,6 +85,60 @@ The `web` task group includes a `prestart` init task that blocks web container s
 - `openstudio-db`
 - `openstudio-redis`
 
+## Persistent Storage
+
+By default, MongoDB and Redis use **host volumes** (`mongodb_storage_type = "host_volume"`, `redis_storage_type = "host_volume"`), ensuring data survives container restarts and rescheduling. Set either to `"ephemeral"` to disable persistent volume wiring (useful for throwaway CI environments).
+
+### MongoDB and Redis storage types
+
+| Value | Nomad volume type | Notes |
+|---|---|---|
+| `host_volume` (default) | `host` | Volume must be pre-declared in each Nomad client agent config |
+| `csi` | `csi` | CSI plugin must be deployed as a system job before use |
+| `ephemeral` | — | No volume wired; data lost on allocation stop or reschedule |
+
+**Pre-provisioning host volumes** (add to each Nomad client `client.hcl`):
+
+```hcl
+host_volume "openstudio-mongodb" {
+  path      = "/var/lib/nomad/volumes/mongodb"
+  read_only = false
+}
+
+host_volume "openstudio-redis" {
+  path      = "/var/lib/nomad/volumes/redis"
+  read_only = false
+}
+```
+
+Create the directories on each node:
+
+```bash
+sudo mkdir -p /var/lib/nomad/volumes/mongodb /var/lib/nomad/volumes/redis
+```
+
+**Pre-provisioning CSI volumes** (example using the `nfs` CSI plugin):
+
+```bash
+nomad volume create mongodb-csi.hcl
+nomad volume create redis-csi.hcl
+```
+
+### NFS shared volume (web and worker)
+
+Enable the shared NFS volume for simulation input/output by setting `nfs_shared_volume_enabled = true`. This wires a CSI NFS volume (with `multi-node-multi-writer` access mode) into both `web` and `worker` task groups.
+
+```hcl
+# override.hcl
+nfs_shared_volume_enabled = true
+nfs_volume_source         = "openstudio-nfs"
+nfs_volume_mount_path     = "/mnt/openstudio"
+```
+
+The CSI NFS plugin and volume must be registered in Nomad before deploying with this option enabled.
+
+
+
 ## Configuration Variables
 
 A full variable reference — including types, defaults, example override values, and notes on
@@ -109,8 +163,13 @@ The raw variable declarations and defaults live in [`variables.hcl`](./variables
 | --- | --- | --- | --- |
 | `job_name` | `string` | The name of the Nomad job | `"openstudio-server"` |
 | `app_version` | `string` | Version tag for OpenStudio Server components | `"latest"` |
-| `mongodb_storage_type` | `string` | Nomad volume type for MongoDB persistence (`host`, `csi`, or `ephemeral`) | `"host"` |
-| `mongodb_volume_source` | `string` | Nomad volume source name for MongoDB data | `"openstudio-mongodb"` |
+| `mongodb_storage_type` | `string` | MongoDB storage type (`host_volume`, `csi`, or `ephemeral`) | `"host_volume"` |
+| `mongodb_volume_source` | `string` | Nomad host_volume name or CSI volume ID for MongoDB data | `"openstudio-mongodb"` |
+| `redis_storage_type` | `string` | Redis storage type (`host_volume`, `csi`, or `ephemeral`) | `"host_volume"` |
+| `redis_volume_source` | `string` | Nomad host_volume name or CSI volume ID for Redis data | `"openstudio-redis"` |
+| `nfs_shared_volume_enabled` | `bool` | Enable CSI NFS shared volume in web and worker task groups | `false` |
+| `nfs_volume_source` | `string` | Nomad CSI volume ID for the NFS shared volume | `"openstudio-nfs"` |
+| `nfs_volume_mount_path` | `string` | Mount path for the NFS volume in web and worker tasks | `"/mnt/openstudio"` |
 | `worker_min_replicas` | `number` | Minimum worker replica count | `1` |
 | `worker_max_replicas` | `number` | Maximum worker replica count | `3` |
 | `vault_integration_enabled` | `bool` | Enable Nomad Vault stanzas in tasks | `false` |
@@ -141,13 +200,14 @@ The raw variable declarations and defaults live in [`variables.hcl`](./variables
 | `web_background_image` | `string` | Docker image for OpenStudio Web-Background | `"nrel/openstudio-server:latest"` |
 | `web_background_count` | `number` | Number of Web-Background tasks | `1` |
 | `db_image` | `string` | MongoDB image | `"mongo:4.2"` |
-| `mongodb_storage_type` | `string` | MongoDB storage type (`ephemeral`, `host`, `csi`) | `"ephemeral"` |
-| `mongodb_host_volume` | `string` | Host volume name for MongoDB when `mongodb_storage_type=host` | `"openstudio-mongodb"` |
-| `mongodb_csi_volume` | `string` | CSI volume ID for MongoDB when `mongodb_storage_type=csi` | `"openstudio-mongodb"` |
+| `mongodb_storage_type` | `string` | MongoDB storage type (`host_volume`, `csi`, or `ephemeral`) | `"host_volume"` |
+| `mongodb_volume_source` | `string` | host_volume name or CSI volume ID for MongoDB | `"openstudio-mongodb"` |
 | `redis_image` | `string` | Redis image | `"redis:6.2-alpine"` |
-| `redis_storage_type` | `string` | Redis storage type (`ephemeral`, `host`, `csi`) | `"ephemeral"` |
-| `redis_host_volume` | `string` | Host volume name for Redis when `redis_storage_type=host` | `"openstudio-redis"` |
-| `redis_csi_volume` | `string` | CSI volume ID for Redis when `redis_storage_type=csi` | `"openstudio-redis"` |
+| `redis_storage_type` | `string` | Redis storage type (`host_volume`, `csi`, or `ephemeral`) | `"host_volume"` |
+| `redis_volume_source` | `string` | host_volume name or CSI volume ID for Redis | `"openstudio-redis"` |
+| `nfs_shared_volume_enabled` | `bool` | Enable CSI NFS shared volume in web and worker groups | `false` |
+| `nfs_volume_source` | `string` | Nomad CSI volume ID for the NFS shared volume | `"openstudio-nfs"` |
+| `nfs_volume_mount_path` | `string` | Mount path for the NFS volume in web and worker tasks | `"/mnt/openstudio"` |
 | `rserve_image` | `string` | Rserve image | `"nrel/rserve:latest"` |
 | `enable_vault_mongo_secrets` | `bool` | Enable Vault template rendering for MongoDB credentials. | `false` |
 | `vault_mongo_secret_path` | `string` | Vault path containing MongoDB credentials. | `"secret/data/openstudio/mongodb"` |
@@ -303,12 +363,9 @@ For full instructions — including token creation, namespace scoping, and token
 
 ## Stateful DB/Redis Storage
 
-By default, MongoDB and Redis run with `ephemeral` storage. To persist data, set each service to `host` or `csi`:
+By default, MongoDB and Redis use `host_volume` storage. To change the persistence mode, set `mongodb_storage_type` and `redis_storage_type` to `host_volume`, `csi`, or `ephemeral`. Set `mongodb_volume_source` and `redis_volume_source` to the corresponding host_volume name or CSI volume ID.
 
-- `mongodb_storage_type`: `host` or `csi`
-- `redis_storage_type`: `host` or `csi`
-
-Then set the matching volume name/ID via `mongodb_host_volume`/`mongodb_csi_volume` and `redis_host_volume`/`redis_csi_volume`.
+See the [Persistent Storage](#persistent-storage) section above for pre-provisioning instructions.
 
 ## Consul Service Checks
 

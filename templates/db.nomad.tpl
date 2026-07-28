@@ -14,6 +14,23 @@ job "[[ var "job_name" . ]]-db" {
     [[ template "affinities" (var "db_affinities" .) ]]
     [[ template "spreads" (var "db_spreads" .) ]]
 
+    [[ if ne (var "mongodb_storage_type" .) "ephemeral" ]]
+    [[ if eq (var "mongodb_storage_type" .) "csi" ]]
+    volume "mongodb-data" {
+      type            = "csi"
+      source          = "[[ var "mongodb_volume_source" . ]]"
+      access_mode     = "single-node-writer"
+      attachment_mode = "file-system"
+    }
+    [[ else ]]
+    volume "mongodb-data" {
+      type      = "host"
+      source    = "[[ var "mongodb_volume_source" . ]]"
+      read_only = false
+    }
+    [[ end ]]
+    [[ end ]]
+
     network {
       port "db" {
         to = 27017
@@ -55,6 +72,14 @@ job "[[ var "job_name" . ]]-db" {
         env = [[ var "vault_env" . ]]
       }
       [[ end ]]
+      [[ end ]]
+
+      [[ if ne (var "mongodb_storage_type" .) "ephemeral" ]]
+      volume_mount {
+        volume      = "mongodb-data"
+        destination = "/data/db"
+        read_only   = false
+      }
       [[ end ]]
 
       config {

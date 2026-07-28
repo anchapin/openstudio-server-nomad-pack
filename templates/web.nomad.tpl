@@ -7,6 +7,15 @@ job "[[ var "job_name" . ]]-web" {
   group "web" {
     count = 1
 
+    [[ if var "nfs_shared_volume_enabled" . ]]
+    volume "nfs-shared" {
+      type            = "csi"
+      source          = "[[ var "nfs_volume_source" . ]]"
+      access_mode     = "multi-node-multi-writer"
+      attachment_mode = "file-system"
+    }
+    [[ end ]]
+
     network {
       port "http" {
         static = 80
@@ -16,6 +25,14 @@ job "[[ var "job_name" . ]]-web" {
 
     task "web" {
       driver = "docker"
+
+      [[ if var "nfs_shared_volume_enabled" . ]]
+      volume_mount {
+        volume      = "nfs-shared"
+        destination = "[[ var "nfs_volume_mount_path" . ]]"
+        read_only   = false
+      }
+      [[ end ]]
 
       config {
         image = "[[ var "web_image" . ]]"
