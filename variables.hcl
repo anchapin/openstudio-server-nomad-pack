@@ -295,7 +295,7 @@ variable "redis_csi_volume" {
 variable "rserve_image" {
   type        = string
   description = "The Rserve image name and tag."
-  default     = "nrel/rserve:latest"
+  default     = "nrel/openstudio-rserve:latest"
 }
 
 variable "rserve_cpu" {
@@ -308,6 +308,18 @@ variable "rserve_memory" {
   type        = number
   description = "Memory (MB) allocated to the Rserve task."
   default     = 1024
+}
+
+variable "rserve_health_check_interval" {
+  type        = string
+  description = "Interval between Consul health checks for the Rserve service."
+  default     = "10s"
+}
+
+variable "rserve_health_check_timeout" {
+  type        = string
+  description = "Timeout for Consul health checks for the Rserve service."
+  default     = "2s"
 }
 
 variable "enable_consul_connect" {
