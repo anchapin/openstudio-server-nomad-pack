@@ -56,6 +56,19 @@ jobs:
           fi
           rm -f "${GENERATED_DOC}"
 
+      - name: Check README references docs/variables.md (no stale inline table)
+        run: |
+          if [ ! -f docs/variables.md ]; then
+            echo "ERROR: docs/variables.md does not exist."
+            exit 1
+          fi
+          if ! grep -qF 'docs/variables.md' README.md; then
+            echo "ERROR: README.md does not reference docs/variables.md."
+            echo "The variable reference must link to docs/variables.md — do not maintain a duplicate table in the README."
+            exit 1
+          fi
+          echo "OK: README.md references docs/variables.md and the file exists."
+
       - name: Check compatibility.md is up-to-date
         run: |
           PACK_VERSION=$(grep -E '^\s*version\s*=' metadata.hcl | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')

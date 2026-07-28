@@ -123,17 +123,31 @@ To prepare a release:
 
 ## Regenerating `docs/variables.md`
 
-`docs/variables.md` is generated from `variables.hcl`.
+`docs/variables.md` is auto-generated from `variables.hcl` — **do not edit it manually**.
+`variables.hcl` is the **sole source of truth** for all pack variable definitions.
 
-After changing any variable definition, run:
+After changing any variable definition (adding, removing, or modifying any `variable "..."` block
+in `variables.hcl`), regenerate the reference doc:
 
 ```bash
 ./scripts/generate-vars-doc.sh
 ```
 
-Then commit both updated files (`variables.hcl` and `docs/variables.md` as applicable).
+Then commit both updated files (`variables.hcl` and `docs/variables.md`).
 
-CI validates this with the `Check variables.md is up-to-date` workflow step.
+CI validates this with the `Check variables.md is up-to-date` workflow step,
+which diffs the committed file against a freshly generated copy and fails on any divergence.
+
+### README variable table
+
+The README **does not** maintain a separate variable table.
+The `## Configuration Variables` section links to `docs/variables.md` — that is the only
+variable reference in the README.  A CI step (`Check README references docs/variables.md`)
+enforces this: it fails if the link is absent or if `docs/variables.md` is missing.
+
+> **Never** paste a variable table into README.md — it will drift and CI will not catch the
+> individual cell values.  Update `variables.hcl`, regenerate `docs/variables.md`, and let the
+> auto-generated doc speak for itself.
 
 ## Updating compatibility matrix on release
 
