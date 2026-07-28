@@ -6,7 +6,7 @@
 | Variable | Type | Default | Description |
 | --- | --- | --- | --- |
 | `job_name` | `string` | `"openstudio-server"` | The name of the Nomad job. |
-| `app_version` | `string` | `"latest"` | Application version tag used for OpenStudio Server component images. |
+| `app_version` | `string` | `"3.11.0"` | Application version tag injected as APP_VERSION into all OpenStudio Server containers. Must match the image tag used in web_image, worker_image, web_background_image, and rserve_image to avoid version mismatch. |
 | `worker_min_replicas` | `number` | `2` | Minimum number of worker replicas. Aligned with Helm chart worker-hpa.yaml minReplicas: 2. |
 | `worker_max_replicas` | `number` | `20` | Maximum number of worker replicas. Aligned with Helm chart worker-hpa.yaml maxReplicas: 20. |
 | `vault_integration_enabled` | `bool` | `false` | Enable Nomad Vault integration stanzas for tasks. |
