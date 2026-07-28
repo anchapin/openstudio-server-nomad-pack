@@ -45,6 +45,17 @@ jobs:
         run: |
           ./scripts/test_bump_metadata_version.sh
 
+      - name: Check variables.md is up-to-date
+        run: |
+          GENERATED_DOC=docs/variables.generated.md
+          ./scripts/generate-vars-doc.sh "${GENERATED_DOC}"
+          if ! diff -u docs/variables.md "${GENERATED_DOC}"; then
+            echo "docs/variables.md is out of date. Run ./scripts/generate-vars-doc.sh and commit the result."
+            rm -f "${GENERATED_DOC}"
+            exit 1
+          fi
+          rm -f "${GENERATED_DOC}"
+
       - name: Start Nomad dev agent
         env:
           NOMAD_ADDR: http://127.0.0.1:4646
