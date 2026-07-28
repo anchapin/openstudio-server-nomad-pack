@@ -62,7 +62,7 @@ variable "datacenters" {
 variable "web_image" {
   type        = string
   description = "The image name and tag for the OpenStudio Server web container."
-  default     = "nrel/openstudio-server:latest"
+  default     = "nrel/openstudio-server:3.11.0"
 }
 
 variable "web_command" {
@@ -176,7 +176,7 @@ variable "web_background_memory" {
 variable "worker_image" {
   type        = string
   description = "The image name and tag for the OpenStudio Server worker container."
-  default     = "nrel/openstudio-server:latest"
+  default     = "nrel/openstudio-server:3.11.0"
 }
 
 variable "worker_command" {
@@ -332,7 +332,7 @@ variable "worker_queue_simulations_target" {
 variable "web_background_image" {
   type        = string
   description = "The image name and tag for the OpenStudio Server web-background container."
-  default     = "nrel/openstudio-server:latest"
+  default     = "nrel/openstudio-server:3.11.0"
 }
 
 variable "web_background_command" {
