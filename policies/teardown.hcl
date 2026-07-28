@@ -21,7 +21,7 @@ namespace "default" {
 }
 
 namespace "openstudio" {
-  policy = "write"
+  policy = "deny"
   capabilities = [
     "read-job",
     "list-jobs",
