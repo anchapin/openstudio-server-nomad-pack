@@ -1,0 +1,108 @@
+name: Integration Test
+
+on:
+  pull_request:
+    branches: [ develop ]
+    paths:
+      - 'templates/**'
+      - 'variables.hcl'
+
+jobs:
+  integration-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Nomad
+        env:
+          NOMAD_VERSION: "1.7.7"
+        run: |
+          curl -fsSL "https://releases.hashicorp.com/nomad/${NOMAD_VERSION}/nomad_${NOMAD_VERSION}_linux_amd64.zip" -o nomad.zip
+          unzip -q nomad.zip
+          sudo mv nomad /usr/local/bin/
+          nomad --version
+
+      - name: Setup Nomad Pack
+        uses: hashicorp/setup-nomad-pack@main
+
+      - name: Start Nomad dev agent
+        run: |
+          sudo /usr/local/bin/nomad agent -dev -log-level=WARN &
+          echo "Waiting for Nomad to become ready..."
+          for i in $(seq 1 30); do
+            NOMAD_ADDR=http://127.0.0.1:4646 nomad status >/dev/null 2>&1 && echo "Nomad is ready after ${i}s" && break
+            sleep 2
+          done
+
+      - name: Run pack deploy
+        env:
+          NOMAD_ADDR: http://127.0.0.1:4646
+        run: nomad-pack run . --var-file examples/minimal-dev.hcl
+
+      - name: Wait for services to be healthy
+        env:
+          NOMAD_ADDR: http://127.0.0.1:4646
+        run: |
+          SERVICES=("openstudio-db" "openstudio-redis" "openstudio-rserve")
+          DEADLINE=$((SECONDS + 300))
+
+          for svc in "${SERVICES[@]}"; do
+            echo "Waiting for service: ${svc}"
+            while true; do
+              if [ $SECONDS -ge $DEADLINE ]; then
+                echo "ERROR: Timeout waiting for ${svc} to become healthy" >&2
+                nomad job status openstudio-server-ci || true
+                exit 1
+              fi
+
+              PASSING=$(curl -sf "http://127.0.0.1:8500/v1/health/service/${svc}" \
+                | jq '[.[] | select(.Checks | all(.Status == "passing"))] | length' 2>/dev/null || echo 0)
+              if [ "${PASSING}" -ge 1 ] 2>/dev/null; then
+                echo "${svc} is healthy"
+                break
+              fi
+
+              sleep 10
+            done
+          done
+
+      - name: Dispatch test batch job
+        env:
+          NOMAD_ADDR: http://127.0.0.1:4646
+        run: |
+          nomad job run examples/test-batch.nomad
+          JOB_ID="openstudio-server-smoke-test"
+
+          echo "Waiting for ${JOB_ID} to complete..."
+          DEADLINE=$((SECONDS + 120))
+          while true; do
+            if [ $SECONDS -ge $DEADLINE ]; then
+              echo "ERROR: Timeout waiting for test job to complete" >&2
+              nomad job status "${JOB_ID}" || true
+              exit 1
+            fi
+
+            STATUS=$(nomad job status "${JOB_ID}" 2>/dev/null | awk '/^Status/{print $3}')
+            if [ "${STATUS}" = "dead" ]; then
+              break
+            fi
+            sleep 5
+          done
+
+          # Confirm all allocations completed without failure
+          FAILED=$(nomad job status "${JOB_ID}" | grep -cE '^\S.*(failed|lost)' || true)
+          if [ "${FAILED}" -gt 0 ]; then
+            echo "ERROR: Test job had failed or lost allocations" >&2
+            nomad job status "${JOB_ID}"
+            exit 1
+          fi
+          echo "Test job completed successfully"
+
+      - name: Destroy pack
+        if: always()
+        env:
+          NOMAD_ADDR: http://127.0.0.1:4646
+        run: nomad-pack destroy . --var-file examples/minimal-dev.hcl || true
