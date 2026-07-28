@@ -54,6 +54,54 @@ docker version --format '{{.Server.Version}}'
 nomad-pack version     # nomad-pack v0.1.x
 ```
 
+### Apple Silicon / ARM
+
+If you are on an Apple M-series Mac and want to run the multi-VM Vagrant dev topology (`Vagrantfile`), use one of these provider paths:
+
+1. **Parallels Desktop + vagrant-parallels (recommended)**
+   - Install Parallels Desktop 18+ from https://www.parallels.com/
+   - Install plugin:
+     ```bash
+     vagrant plugin install vagrant-parallels
+     ```
+2. **VMware Fusion + VMware Vagrant provider**
+   - Install VMware Fusion (Personal Use license available): https://www.vmware.com/products/desktop-hypervisor/workstation-and-fusion
+   - Install plugin:
+     ```bash
+     vagrant plugin install vagrant-vmware-desktop
+     ```
+3. **Lima (Apple Virtualization Framework via `vmType: vz`)**
+   - Install Lima: https://lima-vm.io/
+     ```bash
+     brew install lima
+     ```
+   - Minimal `lima.yaml` template (copy and adjust per VM: `consul`, `nomad-server`, `nomad-client`, `vault`):
+     ```yaml
+     vmType: vz
+     rosetta:
+       enabled: true
+       binfmt: true
+     cpus: 2
+     memory: "4GiB"
+     disk: "40GiB"
+     mounts:
+       - location: "~"
+         writable: true
+     provision:
+       - mode: system
+         script: |
+           #!/bin/bash
+           apt-get update
+           apt-get install -y docker.io
+     ```
+   - Start four Lima instances (one per role) and size them to mirror the Vagrant topology:
+     ```bash
+     limactl start --name consul lima.yaml
+     limactl start --name nomad-server lima.yaml
+     limactl start --name nomad-client lima.yaml
+     limactl start --name vault lima.yaml
+     ```
+
 ---
 
 ## Step 1 — Configure and Start Consul
