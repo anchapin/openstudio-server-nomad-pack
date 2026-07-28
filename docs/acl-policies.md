@@ -110,7 +110,7 @@ nomad acl token create \
   -policy teardown
 ```
 
-This is the least-privilege Nomad equivalent for teardown automation. Unlike the Helm `cluster-admin` ServiceAccount binding anti-pattern, it is namespace-scoped and grants only `read-job`, `list-jobs`, and `alloc-lifecycle`.
+This is the least-privilege Nomad equivalent for teardown automation. Unlike the Helm `cluster-admin` ServiceAccount binding anti-pattern, it is namespace-scoped and uses `policy = "deny"` with an explicit allowlist of only `read-job`, `list-jobs`, and `alloc-lifecycle`. This ensures a teardown token cannot deploy new workloads (`submit-job`), dispatch parameterized jobs, or exec into containers.
 
 Export the `SecretID` for use with the CLI or API:
 
