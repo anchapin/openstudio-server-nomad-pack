@@ -42,6 +42,12 @@ Refer to [`variables.hcl`](file:///Users/achapin/OpenStudio/openstudio-server-no
 | `redis_csi_volume` | `string` | CSI volume ID for Redis when `redis_storage_type=csi` | `"openstudio-redis"` |
 | `rserve_image` | `string` | Rserve image | `"nrel/rserve:latest"` |
 
+## Included Job Templates
+
+- `templates/openstudio-server.nomad.tpl`: Core OpenStudio Server scaffolding and MongoDB (`openstudio-db`) service.
+- `templates/redis.nomad.tpl`: Redis cache service (`openstudio-redis`) on port `6379`.
+- `templates/rserve.nomad.tpl`: Rserve service (`openstudio-rserve`) on port `6311`.
+
 ## Helm to Nomad Parity & Differences
 
 | Kubernetes / Helm | Nomad Equivalent | Status |
