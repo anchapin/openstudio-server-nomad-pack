@@ -758,3 +758,16 @@ variable "test_busybox_image_tag" {
   description = "Tag for the busybox image used in TCP check tasks."
   default     = "stable"
 }
+
+# Node class / placement variables
+variable "compute_node_class" {
+  type        = string
+  description = "Nomad node class label for CPU-intensive compute nodes. Used by the openstudio_server.compute_node_constraint helper macro."
+  default     = "compute"
+}
+
+variable "system_node_class" {
+  type        = string
+  description = "Nomad node class label for infrastructure/system nodes. Used by the openstudio_server.system_node_constraint helper macro."
+  default     = "system"
+}

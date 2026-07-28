@@ -54,6 +54,8 @@ job "[[ var "job_name" . ]]-worker" {
       attachment_mode = "file-system"
     }
     [[ end ]]
+    [[ template "openstudio_server.arch_constraint" . ]]
+
     task "worker" {
       driver = "docker"
 
