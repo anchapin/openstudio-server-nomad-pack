@@ -190,6 +190,69 @@ EOH
     [[ end ]]
   }
   
+  group "worker" {
+    count = [[ var "worker_count" . ]]
+
+    update {
+      max_parallel      = [[ var "worker_update_max_parallel" . ]]
+      health_check      = "[[ var "worker_update_health_check" . ]]"
+      min_healthy_time  = "[[ var "worker_update_min_healthy_time" . ]]"
+      healthy_deadline  = "[[ var "worker_update_healthy_deadline" . ]]"
+      progress_deadline = "[[ var "worker_update_progress_deadline" . ]]"
+      auto_revert       = [[ var "worker_update_auto_revert" . ]]
+    }
+
+    task "worker" {
+      driver = "docker"
+
+      config {
+        image = "[[ var "worker_image" . ]]"
+        logging {
+          type = "[[ var "log_driver_type" . ]]"
+          config {
+            max-size = "[[ var "log_max_size" . ]]"
+            max-file = "[[ var "log_max_files" . ]]"
+          }
+        }
+      }
+    }
+
+    [[ if var "enable_vector_collection" . ]]
+    task "vector" {
+      driver = "docker"
+
+      lifecycle {
+        hook    = "prestart"
+        sidecar = true
+      }
+
+      config {
+        image = "[[ var "vector_image" . ]]"
+        args  = ["--config", "local/vector.toml"]
+      }
+
+      template {
+        data        = <<EOH
+[sources.alloc_logs]
+type = "file"
+include = ["/alloc/logs/*.std*"]
+
+[sinks.console]
+type = "console"
+inputs = ["alloc_logs"]
+encoding.codec = "json"
+EOH
+        destination = "local/vector.toml"
+      }
+
+      resources {
+        cpu    = 100
+        memory = 64
+      }
+    }
+    [[ end ]]
+  }
+  
   group "db" {
     count = 1
     [[ if ne (var "mongodb_storage_type" .) "ephemeral" ]]
