@@ -254,12 +254,12 @@ CI fails if these files are out of sync (the `Check variables.md is up-to-date` 
 
 ### Release process
 
-1. `scripts/bump_metadata_version.sh <new-version>` — updates `pack.version` in `metadata.hcl`.
-2. Move all `[Unreleased]` entries to a new versioned section in `CHANGELOG.md`.
-3. Update `docs/compatibility.md` with the new pack version row (pack version, `app_version`, min Nomad, min Consul).
-4. PR `develop` → `main`, merge when CI passes.
-5. Tag the merge commit: `git tag v<version> && git push origin v<version>`.
-6. `release.yml` reads the version from `metadata.hcl`, creates the GitHub Release automatically.
+1. Move all `[Unreleased]` entries in `CHANGELOG.md` to a new versioned section (e.g. `[0.3.0] - YYYY-MM-DD`).
+2. Add a new row to `docs/compatibility.md` (pack version, `app_version`, min Nomad, min Consul). CI enforces this: the `Check compatibility.md is up-to-date` step fails if the current `pack.version` from `metadata.hcl` is absent from `docs/compatibility.md`.
+3. PR `develop` → `main`, merge when CI passes.
+4. `release-version-bump.yml` triggers automatically on push to `main`: it runs `scripts/bump_metadata_version.sh`, creates the git tag, and publishes the GitHub Release.
+
+For a non-patch increment (minor/major), manually run `scripts/bump_metadata_version.sh <new-version>` before opening the `develop → main` PR to set the desired version.
 
 ### ACL policies
 
@@ -322,12 +322,22 @@ Per-group constraints, affinities, and spreads are exposed as list-of-object var
 
 Node class targeting uses the named macros `openstudio_server.compute_node_constraint` and `openstudio_server.system_node_constraint`, driven by `compute_node_class` (default `"compute"`) and `system_node_class` (default `"system"`) variables.
 
+### Registry sync
+
+`packs/openstudio-server/` must mirror the root pack. CI enforces this with a 3-way check (metadata version, variable names, template file contents). To fix drift:
+
+```bash
+cp variables.hcl packs/openstudio-server/variables.hcl
+cp metadata.hcl packs/openstudio-server/metadata.hcl
+cp templates/*.tpl templates/*.nomad.tpl packs/openstudio-server/templates/
+```
+
 ### CI workflow overview
 
 | Workflow | Trigger | What it checks |
 |---|---|---|
-| `pack-validation.yml` | push to `develop`, PR to `main` | fmt, render, validate, Vagrantfile syntax, script syntax, version-bump tests, variables.md diff, Nomad dev-agent plan for all example var-files, integration test script |
+| `pack-validation.yml` | push to `develop`, PR to `main` | fmt, render, validate, Vagrantfile syntax, script syntax, version-bump tests, `variables.md` diff, README links to `docs/variables.md`, `compatibility.md` version gate, Nomad dev-agent plan for all example var-files, `packs/` registry sync, integration test script |
 | `acl-policy-validation.yml` | push/PR on `policies/**` | `nomad fmt -check policies/` |
 | `integration-test.yml` | merge to `develop` | end-to-end stack test |
 | `release.yml` | push to `main` | reads version from `metadata.hcl`, creates GitHub Release |
-| `release-version-bump.yml` | (version bump automation) | automated metadata version bumping |
+| `release-version-bump.yml` | push to `main` | auto-bumps patch version in `metadata.hcl`, creates git tag |
