@@ -1,42 +1,23 @@
-job "[[ var "job_name" . ]]" {
+job "[[ var "job_name" . ]]-redis" {
   region      = "[[ var "region" . ]]"
   datacenters = [[ var "datacenters" . | toJson ]]
   type        = "service"
 
-  # Placeholder groups mapping to openstudio-server components:
-  # web, web-background, worker, db, rserve.
-  
-  group "db" {
+  group "redis" {
     count = 1
 
-    [[ if eq (var "mongodb_storage_type" .) "host" ]]
-    volume "mongodb-data" {
-      type      = "host"
-      source    = "[[ var "mongodb_host_volume" . ]]"
-      read_only = false
-    }
-    [[ else if eq (var "mongodb_storage_type" .) "csi" ]]
-    volume "mongodb-data" {
-      type            = "csi"
-      source          = "[[ var "mongodb_csi_volume" . ]]"
-      access_mode     = "single-node-writer"
-      attachment_mode = "file-system"
-      read_only       = false
-    }
-    [[ end ]]
-    
     network {
-      port "db" {
-        to = 27017
+      port "redis" {
+        to = 6379
       }
     }
 
-    task "mongodb" {
+    task "redis" {
       driver = "docker"
 
       config {
-        image = "[[ var "db_image" . ]]"
-        ports = ["db"]
+        image = "[[ var "redis_image" . ]]"
+        ports = ["redis"]
         logging {
           type = "[[ var "log_driver_type" . ]]"
           config {
@@ -46,19 +27,11 @@ job "[[ var "job_name" . ]]" {
         }
       }
 
-      [[ if ne (var "mongodb_storage_type" .) "ephemeral" ]]
-      volume_mount {
-        volume      = "mongodb-data"
-        destination = "/data/db"
-        read_only   = false
-      }
-      [[ end ]]
-
       service {
-        name = "openstudio-db"
-        port = "db"
+        name     = "openstudio-redis"
+        port     = "redis"
         provider = "consul"
-        
+
         check {
           type     = "tcp"
           interval = "10s"
@@ -102,5 +75,4 @@ EOH
     }
     [[ end ]]
   }
-
 }
