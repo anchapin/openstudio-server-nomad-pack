@@ -12,14 +12,14 @@ variable "app_version" {
 
 variable "worker_min_replicas" {
   type        = number
-  description = "Minimum number of worker replicas."
-  default     = 1
+  description = "Minimum number of worker replicas. Aligned with Helm chart worker-hpa.yaml minReplicas: 2."
+  default     = 2
 }
 
 variable "worker_max_replicas" {
   type        = number
-  description = "Maximum number of worker replicas."
-  default     = 10
+  description = "Maximum number of worker replicas. Aligned with Helm chart worker-hpa.yaml maxReplicas: 20."
+  default     = 20
 }
 
 variable "vault_integration_enabled" {

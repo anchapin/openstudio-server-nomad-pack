@@ -33,6 +33,9 @@ worker_memory      = 128
 
 worker_count               = 1
 worker_autoscaling_enabled = false
+# Override production defaults (min:2, max:20 per Helm HPA) for lightweight e2e CI.
+worker_min_replicas        = 1
+worker_max_replicas        = 2
 worker_kill_timeout        = "9m"
 
 docker_user            = "root"
