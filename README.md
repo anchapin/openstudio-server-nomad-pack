@@ -100,6 +100,17 @@ Refer to [`variables.hcl`](file:///Users/achapin/OpenStudio/openstudio-server-no
 | `rserve_constraints` | `any` | Constraint blocks for the `rserve` group | `[]` |
 | `rserve_affinities` | `any` | Affinity blocks for the `rserve` group | `[]` |
 | `rserve_spreads` | `any` | Spread blocks for the `rserve` group | `[]` |
+| `backup_enabled` | `bool` | Enable periodic state backup job | `true` |
+| `backup_cron` | `string` | Nomad cron schedule for backup job | `"0 2 * * * *"` |
+| `backup_prohibit_overlap` | `bool` | Prevent overlapping backup runs | `true` |
+| `backup_nfs_host_volume` | `string` | Host volume name for NFS-backed state backups | `"openstudio-backups"` |
+| `backup_mount_path` | `string` | In-container backup mount path | `"/backups"` |
+| `backup_subdirectory` | `string` | Subdirectory under backup mount | `"openstudio-state"` |
+| `backup_retention_days` | `number` | Backup retention in days | `14` |
+| `mongodb_backup_uri` | `string` | MongoDB connection URI for backup/restore jobs | `"mongodb://openstudio-db.service.consul:27017"` |
+| `redis_backup_host` | `string` | Redis hostname for backup/restore jobs | `"openstudio-redis.service.consul"` |
+| `redis_backup_port` | `number` | Redis port for backup/restore jobs | `6379` |
+| `restore_enabled` | `bool` | Enable on-demand state restore job definition | `true` |
 
 ## Scheduling Helpers
 
@@ -130,6 +141,27 @@ redis_affinities = [
 - `templates/openstudio-server.nomad.tpl`: Core OpenStudio Server scaffolding and MongoDB (`openstudio-db`) service.
 - `templates/redis.nomad.tpl`: Redis cache service (`openstudio-redis`) on port `6379`.
 - `templates/rserve.nomad.tpl`: Rserve service (`openstudio-rserve`) on port `6311`.
+## Backup and Restore Batch Jobs
+
+This pack now includes:
+
+- **Periodic backup job**: `<job_name>-state-backup`
+  - Runs on `backup_cron`
+  - Writes MongoDB and Redis snapshots into `backup_nfs_host_volume`
+  - Cleans up old files based on `backup_retention_days`
+- **Parameterized restore job**: `<job_name>-state-restore`
+  - On-demand dispatch using backup file names from the backup directory
+  - Restores MongoDB from `mongodump` archive
+  - Restores Redis from serialized key dump
+
+### Restore Dispatch Example
+
+```bash
+nomad job dispatch \
+  -meta MONGO_BACKUP_FILE=mongo-20260728T060000Z.archive.gz \
+  -meta REDIS_BACKUP_FILE=redis-20260728T060000Z.dump.tsv \
+  openstudio-server-state-restore
+```
 
 ## Helm to Nomad Parity & Differences
 
