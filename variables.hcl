@@ -46,3 +46,35 @@ variable "rserve_image" {
   description = "The Rserve image name and tag."
   default     = "nrel/rserve:latest"
 }
+
+# Logging configuration variables
+variable "log_driver_type" {
+  type        = string
+  description = "The logging driver to use for the containers."
+  default     = "json-file"
+}
+
+variable "log_max_size" {
+  type        = string
+  description = "The maximum size of log files before rotation."
+  default     = "10m"
+}
+
+variable "log_max_files" {
+  type        = number
+  description = "The maximum number of log files to keep."
+  default     = 3
+}
+
+# Vector configuration variables
+variable "enable_vector_collection" {
+  type        = bool
+  description = "Enable Vector sidecar for log collection."
+  default     = true
+}
+
+variable "vector_image" {
+  type        = string
+  description = "The Vector image name and tag."
+  default     = "timberio/vector:0.30.0-alpine"
+}

@@ -21,6 +21,13 @@ job "[[ var "job_name" ]]" {
       config {
         image = "[[ var "db_image" ]]"
         ports = ["db"]
+        logging {
+          type = "[[ var "log_driver_type" ]]"
+          config {
+            max-size = "[[ var "log_max_size" ]]"
+            max-file = "[[ var "log_max_files" ]]"
+          }
+        }
       }
 
       service {
@@ -35,6 +42,41 @@ job "[[ var "job_name" ]]" {
         }
       }
     }
+
+    [[ if var "enable_vector_collection" ]]
+    task "vector" {
+      driver = "docker"
+
+      lifecycle {
+        hook    = "prestart"
+        sidecar = true
+      }
+
+      config {
+        image = "[[ var "vector_image" ]]"
+        args  = ["--config", "local/vector.toml"]
+      }
+
+      template {
+        data        = <<EOH
+[sources.alloc_logs]
+type = "file"
+include = ["/alloc/logs/*.std*"]
+
+[sinks.console]
+type = "console"
+inputs = ["alloc_logs"]
+encoding.codec = "json"
+EOH
+        destination = "local/vector.toml"
+      }
+
+      resources {
+        cpu    = 100
+        memory = 64
+      }
+    }
+    [[ end ]]
   }
 
   group "redis" {
@@ -52,6 +94,13 @@ job "[[ var "job_name" ]]" {
       config {
         image = "[[ var "redis_image" ]]"
         ports = ["redis"]
+        logging {
+          type = "[[ var "log_driver_type" ]]"
+          config {
+            max-size = "[[ var "log_max_size" ]]"
+            max-file = "[[ var "log_max_files" ]]"
+          }
+        }
       }
 
       service {
@@ -66,5 +115,40 @@ job "[[ var "job_name" ]]" {
         }
       }
     }
+
+    [[ if var "enable_vector_collection" ]]
+    task "vector" {
+      driver = "docker"
+
+      lifecycle {
+        hook    = "prestart"
+        sidecar = true
+      }
+
+      config {
+        image = "[[ var "vector_image" ]]"
+        args  = ["--config", "local/vector.toml"]
+      }
+
+      template {
+        data        = <<EOH
+[sources.alloc_logs]
+type = "file"
+include = ["/alloc/logs/*.std*"]
+
+[sinks.console]
+type = "console"
+inputs = ["alloc_logs"]
+encoding.codec = "json"
+EOH
+        destination = "local/vector.toml"
+      }
+
+      resources {
+        cpu    = 100
+        memory = 64
+      }
+    }
+    [[ end ]]
   }
 }
