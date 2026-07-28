@@ -538,6 +538,22 @@ Teams running OpenStudio Server on Kubernetes via the [NREL Helm chart](https://
 - Rollback procedure (keeping the Kubernetes deployment scaled-down during migration)
 - Known differences between Kubernetes and Nomad (service discovery, RBAC, storage, etc.)
 
+## Documentation
+
+All operational guides live in the [`docs/`](./docs/) directory. The
+**[Operations Guide](./docs/operations-guide.md)** is the recommended starting point — it links
+every topic with a brief description of what each guide covers.
+
+| Guide | Description |
+|-------|-------------|
+| [Operations Guide](./docs/operations-guide.md) | Master index: topology diagram, deployment checklist, and links to all guides |
+| [Getting Started: Single-Node Walkthrough](./docs/getting-started-single-node.md) | Zero-to-running on a developer laptop (macOS or Linux) |
+| [Storage Preparation](./docs/storage.md) | CSI plugins, host volumes, permissions, and teardown |
+| [Variable Reference](./docs/variables.md) | All pack variables with types, defaults, and override examples |
+| [Nomad ACL Policy Setup](./docs/acl-policies.md) | Operator, read-only, and CI/CD role policies |
+| [Vault Policy Setup](./docs/vault-policies.md) | Vault integration, KV v2 paths, and token TTL guidance |
+| [Kubernetes-to-Nomad Migration](./docs/migration-k8s-to-nomad.md) | Helm chart migration checklist, data migration, rollback |
+
 ## License
 
 This project is dual-licensed under either MIT or BSD-3-Clause. See:
