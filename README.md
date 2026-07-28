@@ -397,7 +397,7 @@ For full instructions — including token creation, namespace scoping, and token
 | Service | Consul `service` registration | Scaffolded |
 | HPA / KEDA ScaledObject | Nomad Autoscaler | Implemented (Worker, Prometheus target-value checks) |
 | StorageClass / PVC | Nomad CSI volumes / `host_volume` | Implemented (DB/Redis) |
-| ServiceAccount / RBAC | Nomad ACLs / Vault Roles | Planned |
+| ServiceAccount / RBAC | Nomad ACLs / Vault Roles | Implemented |
 | Helm Hooks | Nomad Lifecycle hooks / Periodic Jobs | Implemented (poststop cleanup tasks) |
 
 ## Stateful DB/Redis Storage
