@@ -8,6 +8,22 @@ job "[[ var "job_name" . ]]" {
   
   group "db" {
     count = 1
+
+    [[ if eq (var "mongodb_storage_type" .) "host" ]]
+    volume "mongodb-data" {
+      type      = "host"
+      source    = "[[ var "mongodb_host_volume" . ]]"
+      read_only = false
+    }
+    [[ else if eq (var "mongodb_storage_type" .) "csi" ]]
+    volume "mongodb-data" {
+      type            = "csi"
+      source          = "[[ var "mongodb_csi_volume" . ]]"
+      access_mode     = "single-node-writer"
+      attachment_mode = "file-system"
+      read_only       = false
+    }
+    [[ end ]]
     
     network {
       port "db" {
@@ -29,6 +45,14 @@ job "[[ var "job_name" . ]]" {
           }
         }
       }
+
+      [[ if ne (var "mongodb_storage_type" .) "ephemeral" ]]
+      volume_mount {
+        volume      = "mongodb-data"
+        destination = "/data/db"
+        read_only   = false
+      }
+      [[ end ]]
 
       service {
         name = "openstudio-db"
@@ -82,6 +106,22 @@ EOH
   group "redis" {
     count = 1
 
+    [[ if eq (var "redis_storage_type" .) "host" ]]
+    volume "redis-data" {
+      type      = "host"
+      source    = "[[ var "redis_host_volume" . ]]"
+      read_only = false
+    }
+    [[ else if eq (var "redis_storage_type" .) "csi" ]]
+    volume "redis-data" {
+      type            = "csi"
+      source          = "[[ var "redis_csi_volume" . ]]"
+      access_mode     = "single-node-writer"
+      attachment_mode = "file-system"
+      read_only       = false
+    }
+    [[ end ]]
+
     network {
       port "redis" {
         to = 6379
@@ -102,6 +142,14 @@ EOH
           }
         }
       }
+
+      [[ if ne (var "redis_storage_type" .) "ephemeral" ]]
+      volume_mount {
+        volume      = "redis-data"
+        destination = "/data"
+        read_only   = false
+      }
+      [[ end ]]
 
       service {
         name = "openstudio-redis"

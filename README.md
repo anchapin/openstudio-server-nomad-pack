@@ -29,7 +29,13 @@ Refer to [`variables.hcl`](file:///Users/achapin/OpenStudio/openstudio-server-no
 | `web_image` | `string` | Docker image for OpenStudio Web | `"nrel/openstudio-server:latest"` |
 | `worker_image` | `string` | Docker image for OpenStudio Worker | `"nrel/openstudio-server:latest"` |
 | `db_image` | `string` | MongoDB image | `"mongo:4.2"` |
+| `mongodb_storage_type` | `string` | MongoDB storage type (`ephemeral`, `host`, `csi`) | `"ephemeral"` |
+| `mongodb_host_volume` | `string` | Host volume name for MongoDB when `mongodb_storage_type=host` | `"openstudio-mongodb"` |
+| `mongodb_csi_volume` | `string` | CSI volume ID for MongoDB when `mongodb_storage_type=csi` | `"openstudio-mongodb"` |
 | `redis_image` | `string` | Redis image | `"redis:6.2-alpine"` |
+| `redis_storage_type` | `string` | Redis storage type (`ephemeral`, `host`, `csi`) | `"ephemeral"` |
+| `redis_host_volume` | `string` | Host volume name for Redis when `redis_storage_type=host` | `"openstudio-redis"` |
+| `redis_csi_volume` | `string` | CSI volume ID for Redis when `redis_storage_type=csi` | `"openstudio-redis"` |
 | `rserve_image` | `string` | Rserve image | `"nrel/rserve:latest"` |
 
 ## Helm to Nomad Parity & Differences
@@ -42,6 +48,15 @@ Refer to [`variables.hcl`](file:///Users/achapin/OpenStudio/openstudio-server-no
 | Container | Task (`docker` driver) | Scaffolded |
 | Service | Consul `service` registration | Scaffolded |
 | HPA / KEDA ScaledObject | Nomad Autoscaler | Planned |
-| StorageClass / PVC | Nomad CSI volumes / `host_volume` | Planned |
+| StorageClass / PVC | Nomad CSI volumes / `host_volume` | Implemented (DB/Redis) |
 | ServiceAccount / RBAC | Nomad ACLs / Vault Roles | Planned |
 | Helm Hooks | Nomad Lifecycle hooks / Periodic Jobs | Planned |
+
+## Stateful DB/Redis Storage
+
+By default, MongoDB and Redis run with `ephemeral` storage. To persist data, set each service to `host` or `csi`:
+
+- `mongodb_storage_type`: `host` or `csi`
+- `redis_storage_type`: `host` or `csi`
+
+Then set the matching volume name/ID via `mongodb_host_volume`/`mongodb_csi_volume` and `redis_host_volume`/`redis_csi_volume`.
