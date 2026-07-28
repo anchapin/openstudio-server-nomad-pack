@@ -569,7 +569,7 @@ variable "backup_enabled" {
 
 variable "backup_cron" {
   type        = string
-  description = "Cron expression for the periodic backup schedule."
+  description = "Cron expression for the periodic backup schedule. The value is used in a crons list in the periodic stanza."
   default     = "0 2 * * * *"
 }
 
