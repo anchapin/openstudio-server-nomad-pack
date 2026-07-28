@@ -11,6 +11,10 @@ A [Nomad Pack](https://github.com/hashicorp/nomad-pack) for deploying [OpenStudi
 
 ## Getting Started
 
+For a complete step-by-step walkthrough — including prerequisites, Nomad + Consul agent config, host volume setup, deploy commands, service verification, and common errors — see **[docs/getting-started-single-node.md](./docs/getting-started-single-node.md)**.
+
+Quick start (assumes Nomad and Consul are already running):
+
 1. Ensure your Nomad cluster is running and Consul is active.
 2. Render and run the pack:
    ```bash
