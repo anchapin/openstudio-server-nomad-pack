@@ -56,6 +56,20 @@ jobs:
           fi
           rm -f "${GENERATED_DOC}"
 
+      - name: Check compatibility.md is up-to-date
+        run: |
+          PACK_VERSION=$(grep -E '^\s*version\s*=' metadata.hcl | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+          if [ -z "${PACK_VERSION}" ]; then
+            echo "ERROR: Could not extract pack version from metadata.hcl"
+            exit 1
+          fi
+          if ! grep -qF "\`${PACK_VERSION}\`" docs/compatibility.md; then
+            echo "ERROR: Pack version ${PACK_VERSION} is not present in docs/compatibility.md."
+            echo "Add a row for this version before merging."
+            exit 1
+          fi
+          echo "OK: Pack version ${PACK_VERSION} found in docs/compatibility.md."
+
       - name: Start Nomad dev agent
         env:
           NOMAD_ADDR: http://127.0.0.1:4646

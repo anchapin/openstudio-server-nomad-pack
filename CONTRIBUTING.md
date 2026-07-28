@@ -145,3 +145,7 @@ When preparing a release, update `docs/compatibility.md` with:
 - any notes about compatibility changes
 
 This keeps operators aligned on known-good version combinations.
+
+CI validates this with the `Check compatibility.md is up-to-date` workflow step in `pack-validation.yml`, which extracts `pack.version` from `metadata.hcl` and fails if that version string is absent from `docs/compatibility.md`. This mirrors the `Check variables.md is up-to-date` gate.
+
+**Release checklist item:** After every automated version bump, add a new row to `docs/compatibility.md` before opening the PR to `main`.
