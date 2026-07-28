@@ -15,6 +15,20 @@ job "[[ var "job_name" . ]]-web" {
   }
 
   group "web" {
+    # WARNING: web_count must remain 1 (the default).
+    # The OpenStudio Server web process uses local filesystem state (e.g. uploaded
+    # analysis files under /mnt/openstudio) without a distributed file-locking scheme.
+    # Running more than one web replica causes split-brain: each allocation writes to
+    # its own private view of the filesystem, so file operations on one node are
+    # invisible to the others.  This mirrors the Helm chart constraint
+    # (web-hpa.yaml maxReplicas: 1, "NFS cannot guarantee file locking using multiple
+    # clients").
+    #
+    # To safely run web_count > 1 you must first implement one of:
+    #   a) A distributed lock manager (e.g. Redlock via Redis) wrapping every
+    #      filesystem operation in the web process, OR
+    #   b) Stateless file handling: move all persistent artefacts to object storage
+    #      (e.g. S3) and eliminate local-disk writes from the request path.
     count = [[ var "web_count" . ]]
 
     [[ if var "nfs_shared_volume_enabled" . ]]
@@ -43,11 +57,11 @@ job "[[ var "job_name" . ]]-web" {
       driver = "docker"
 
       config {
-        image   = "consul:latest"
-        command = "/bin/sh"
+        image   = "busybox:1.36"
+        command = "sh"
         args = [
-          "-c",
-          "until consul catalog services | grep -q openstudio-db && consul catalog services | grep -q openstudio-redis; do sleep 2; done",
+          "-ec",
+          "until wget -qO- \"http://consul.service.consul:8500/v1/health/service/openstudio-db?passing=true\" | grep -q '\"ServiceName\":\"openstudio-db\"'; do sleep 2; done; until wget -qO- \"http://consul.service.consul:8500/v1/health/service/openstudio-redis?passing=true\" | grep -q '\"ServiceName\":\"openstudio-redis\"'; do sleep 2; done",
         ]
       }
 
@@ -71,6 +85,12 @@ job "[[ var "job_name" . ]]-web" {
       config {
         image = "[[ var "web_image" . ]]"
         ports = ["http"]
+        [[ if ne (var "web_command" .) "" ]]
+        command = "[[ var "web_command" . ]]"
+        [[ end ]]
+        [[ if var "web_args" . ]]
+        args = [[ var "web_args" . | toJson ]]
+        [[ end ]]
         logging {
           type = "[[ var "log_driver_type" . ]]"
           config {
@@ -171,11 +191,11 @@ EOH
       driver = "docker"
 
       config {
-        image   = "consul:latest"
-        command = "/bin/sh"
+        image   = "busybox:1.36"
+        command = "sh"
         args = [
-          "-c",
-          "until consul catalog services | grep -q openstudio-db && consul catalog services | grep -q openstudio-redis && consul catalog services | grep -q openstudio-web; do sleep 2; done",
+          "-ec",
+          "until wget -qO- \"http://consul.service.consul:8500/v1/health/service/openstudio-db?passing=true\" | grep -q '\"ServiceName\":\"openstudio-db\"'; do sleep 2; done; until wget -qO- \"http://consul.service.consul:8500/v1/health/service/openstudio-redis?passing=true\" | grep -q '\"ServiceName\":\"openstudio-redis\"'; do sleep 2; done; until wget -qO- \"http://consul.service.consul:8500/v1/health/service/openstudio-web?passing=true\" | grep -q '\"ServiceName\":\"openstudio-web\"'; do sleep 2; done",
         ]
       }
 
@@ -198,6 +218,12 @@ EOH
 
       config {
         image = "[[ var "web_background_image" . ]]"
+        [[ if ne (var "web_background_command" .) "" ]]
+        command = "[[ var "web_background_command" . ]]"
+        [[ end ]]
+        [[ if var "web_background_args" . ]]
+        args = [[ var "web_background_args" . | toJson ]]
+        [[ end ]]
         logging {
           type = "[[ var "log_driver_type" . ]]"
           config {

@@ -84,10 +84,10 @@ job "[[ var "job_name" . ]]-redis" {
       [[ end ]]
 
       config {
-        ports           = ["redis"]
-        user            = "[[ var "docker_user" . ]]"
+        ports = ["redis"]
+        user = "[[ var "docker_user" . ]]"
         readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
-        cap_drop        = [[ var "docker_cap_drop" . | toJson ]]
+        cap_drop = [[ var "docker_cap_drop" . | toJson ]]
         logging {
           type = "[[ var "log_driver_type" . ]]"
           config {

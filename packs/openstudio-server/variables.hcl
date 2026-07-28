@@ -65,9 +65,21 @@ variable "web_image" {
   default     = "nrel/openstudio-server:3.11.0"
 }
 
+variable "web_command" {
+  type        = string
+  description = "Optional command override for the web task. Leave empty to use the image default entrypoint."
+  default     = ""
+}
+
+variable "web_args" {
+  type        = list(string)
+  description = "Optional args passed to web_command when set."
+  default     = []
+}
+
 variable "web_priority" {
   type        = number
-  description = "Nomad job priority for the OpenStudio Web UI job."
+  description = "Nomad job priority for the OpenStudio Web UI job (Nomad scale 1–100). Must always exceed worker_priority so the scheduler favours the web UI over workers during resource contention. Mirrors the Kubernetes high-priority PriorityClass (value 1000000) used by the Helm chart. WARNING: do not set this lower than or equal to worker_priority."
   default     = 80
 }
 
@@ -91,7 +103,7 @@ variable "web_memory_max" {
 
 variable "web_count" {
   type        = number
-  description = "The number of web task group allocations."
+  description = "The number of web task group allocations. MUST remain 1 (the default). The web process relies on local filesystem state without a distributed file-locking scheme; setting web_count > 1 causes split-brain writes across allocations. See docs/operations-guide.md §'Web replica constraint' for the root cause and the architectural changes required to relax this limit."
   default     = 1
 }
 
@@ -167,6 +179,24 @@ variable "worker_image" {
   default     = "nrel/openstudio-server:3.11.0"
 }
 
+variable "worker_command" {
+  type        = string
+  description = "Command used to start the worker task."
+  default     = "/usr/local/bin/start-workers"
+}
+
+variable "worker_args" {
+  type        = list(string)
+  description = "Optional args passed to worker_command."
+  default     = []
+}
+
+variable "worker_health_check_command" {
+  type        = string
+  description = "Shell command used by the worker service health check."
+  default     = "pgrep -f resque > /dev/null"
+}
+
 variable "worker_count" {
   type        = number
   description = "The number of worker task group allocations."
@@ -211,7 +241,7 @@ variable "worker_update_auto_revert" {
 
 variable "worker_priority" {
   type        = number
-  description = "Nomad job priority for calculation workers."
+  description = "Nomad job priority for calculation workers (Nomad scale 1–100). Must always be less than web_priority so the web UI is scheduled preferentially during resource contention. Mirrors the Kubernetes low-priority PriorityClass (value 10000) used by the Helm chart. WARNING: do not set this higher than or equal to web_priority."
   default     = 40
 }
 
@@ -311,6 +341,18 @@ variable "web_background_image" {
   default     = "nrel/openstudio-server:3.11.0"
 }
 
+variable "web_background_command" {
+  type        = string
+  description = "Optional command override for the web-background task. Leave empty to use the image default entrypoint."
+  default     = ""
+}
+
+variable "web_background_args" {
+  type        = list(string)
+  description = "Optional args passed to web_background_command when set."
+  default     = []
+}
+
 variable "web_background_count" {
   type        = number
   description = "The number of web-background tasks to run."
@@ -358,9 +400,12 @@ variable "mongodb_volume_source" {
   default     = "openstudio-mongodb"
 }
 
+# Intentionally uses redis:6.2-alpine (newer, smaller) instead of the Helm chart's
+# redis:6.0.9. Operators should align the Redis major.minor version with their
+# target OpenStudio Server release requirements.
 variable "redis_image" {
   type        = string
-  description = "The Redis image name and tag."
+  description = "The Redis image name and tag. Intentionally diverges from the Helm chart default (redis:6.0.9) by using redis:6.2-alpine; align Redis major.minor with your target OpenStudio Server release requirements."
   default     = "redis:6.2-alpine"
 }
 
@@ -422,6 +467,18 @@ variable "rserve_image" {
   type        = string
   description = "The Rserve image name and tag."
   default     = "nrel/openstudio-rserve:3.11.0"
+}
+
+variable "rserve_command" {
+  type        = string
+  description = "Optional command override for the Rserve task. Leave empty to use the image default entrypoint."
+  default     = ""
+}
+
+variable "rserve_args" {
+  type        = list(string)
+  description = "Optional args passed to rserve_command when set."
+  default     = []
 }
 
 variable "rserve_cpu" {

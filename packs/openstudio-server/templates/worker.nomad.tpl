@@ -89,7 +89,10 @@ job "[[ var "job_name" . ]]-worker" {
 
       config {
         image   = "[[ var "worker_image" . ]]"
-        command = "/usr/local/bin/start-workers"
+        command = "[[ var "worker_command" . ]]"
+        [[ if var "worker_args" . ]]
+        args = [[ var "worker_args" . | toJson ]]
+        [[ end ]]
         logging {
           type = "[[ var "log_driver_type" . ]]"
           config {
@@ -119,7 +122,7 @@ job "[[ var "job_name" . ]]-worker" {
           name     = "worker-alive"
           type     = "script"
           command  = "/bin/sh"
-          args     = ["-c", "pgrep -f resque > /dev/null"]
+          args     = ["-c", "[[ var "worker_health_check_command" . ]]"]
           interval = "30s"
           timeout  = "5s"
         }

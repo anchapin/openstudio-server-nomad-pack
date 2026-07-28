@@ -59,16 +59,22 @@ job "[[ var "job_name" . ]]-rserve" {
       [[ end ]]
 
       config {
-        image           = "[[ var "rserve_image" . ]]"
-        ports           = ["rserve"]
-        user            = "[[ var "docker_user" . ]]"
+        image = "[[ var "rserve_image" . ]]"
+        ports = ["rserve"]
+        [[ if ne (var "rserve_command" .) "" ]]
+        command = "[[ var "rserve_command" . ]]"
+        [[ end ]]
+        [[ if var "rserve_args" . ]]
+        args = [[ var "rserve_args" . | toJson ]]
+        [[ end ]]
+        user = "[[ var "docker_user" . ]]"
         readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
-        cap_drop        = [[ var "docker_cap_drop" . | toJson ]]
+        cap_drop = [[ var "docker_cap_drop" . | toJson ]]
       }
 
       service {
-        name     = "openstudio-rserve"
-        port     = "rserve"
+        name = "openstudio-rserve"
+        port = "rserve"
         provider = "consul"
         tags = [
           "ingress.domain=[[ var "ingress_domain" . ]]"
