@@ -238,6 +238,18 @@ variable "db_memory" {
   default     = 1024
 }
 
+variable "db_health_check_interval" {
+  type        = string
+  description = "Interval between Consul health checks for the MongoDB service."
+  default     = "10s"
+}
+
+variable "db_health_check_timeout" {
+  type        = string
+  description = "Timeout for Consul health checks for the MongoDB service."
+  default     = "2s"
+}
+
 variable "mongodb_storage_type" {
   type        = string
   description = "MongoDB storage type: ephemeral, host, or csi."
@@ -290,6 +302,18 @@ variable "redis_csi_volume" {
   type        = string
   description = "Nomad CSI volume ID for Redis when redis_storage_type is csi."
   default     = "openstudio-redis"
+}
+
+variable "redis_health_check_interval" {
+  type        = string
+  description = "Interval between Consul health checks for the Redis service."
+  default     = "10s"
+}
+
+variable "redis_health_check_timeout" {
+  type        = string
+  description = "Timeout for Consul health checks for the Redis service."
+  default     = "2s"
 }
 
 variable "rserve_image" {

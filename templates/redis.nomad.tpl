@@ -2,9 +2,17 @@ job "[[ var "job_name" . ]]-redis" {
   region      = "[[ var "region" . ]]"
   datacenters = [[ var "datacenters" . | toJson ]]
   type        = "service"
+  meta {
+    app_version       = "[[ var "app_version" . ]]"
+    ingress_domain    = "[[ var "ingress_domain" . ]]"
+    vault_integration = "[[ var "vault_integration_enabled" . ]]"
+  }
 
   group "redis" {
     count = 1
+    [[ template "constraints" (var "redis_constraints" .) ]]
+    [[ template "affinities" (var "redis_affinities" .) ]]
+    [[ template "spreads" (var "redis_spreads" .) ]]
 
     network {
       port "redis" {
@@ -15,9 +23,46 @@ job "[[ var "job_name" . ]]-redis" {
     task "redis" {
       driver = "docker"
 
+      [[ if var "vault_enabled" . ]]
+      [[ if var "vault_redis_role" . ]]
+      vault {
+        role = "[[ var "vault_redis_role" . ]]"
+        [[ if var "vault_policies" . ]]
+        policies = [[ var "vault_policies" . | toJson ]]
+        [[ end ]]
+        [[ if var "vault_namespace" . ]]
+        namespace = "[[ var "vault_namespace" . ]]"
+        [[ end ]]
+        change_mode = "[[ var "vault_change_mode" . ]]"
+        [[ if var "vault_change_signal" . ]]
+        change_signal = "[[ var "vault_change_signal" . ]]"
+        [[ end ]]
+        env = [[ var "vault_env" . ]]
+      }
+      [[ else if var "vault_default_role" . ]]
+      vault {
+        role = "[[ var "vault_default_role" . ]]"
+        [[ if var "vault_policies" . ]]
+        policies = [[ var "vault_policies" . | toJson ]]
+        [[ end ]]
+        [[ if var "vault_namespace" . ]]
+        namespace = "[[ var "vault_namespace" . ]]"
+        [[ end ]]
+        change_mode = "[[ var "vault_change_mode" . ]]"
+        [[ if var "vault_change_signal" . ]]
+        change_signal = "[[ var "vault_change_signal" . ]]"
+        [[ end ]]
+        env = [[ var "vault_env" . ]]
+      }
+      [[ end ]]
+      [[ end ]]
+
       config {
         image = "[[ var "redis_image" . ]]"
         ports = ["redis"]
+        user = "[[ var "docker_user" . ]]"
+        readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
+        cap_drop = [[ var "docker_cap_drop" . | toJson ]]
         logging {
           type = "[[ var "log_driver_type" . ]]"
           config {
@@ -32,12 +77,38 @@ job "[[ var "job_name" . ]]-redis" {
         port     = "redis"
         provider = "consul"
 
+        [[ if var "enable_consul_connect" . ]]
+        connect {
+          sidecar_service {
+            proxy {
+              local_service_address = "127.0.0.1"
+              local_service_port    = 6379
+            }
+          }
+        }
+        [[ end ]]
+
         check {
+          name     = "openstudio-redis-tcp"
           type     = "tcp"
-          interval = "10s"
-          timeout  = "2s"
+          interval = "[[ var "redis_health_check_interval" . ]]"
+          timeout  = "[[ var "redis_health_check_timeout" . ]]"
         }
       }
+
+      resources {
+        cpu    = [[ var "redis_cpu" . ]]
+        memory = [[ var "redis_memory" . ]]
+      }
+
+      env {
+        APP_VERSION               = "[[ var "app_version" . ]]"
+        VAULT_INTEGRATION_ENABLED = "[[ var "vault_integration_enabled" . ]]"
+      }
+
+      [[ if var "vault_integration_enabled" . ]]
+      vault {}
+      [[ end ]]
     }
 
     [[ if var "enable_vector_collection" . ]]
@@ -74,5 +145,27 @@ EOH
       }
     }
     [[ end ]]
+
+    task "cleanup-poststop" {
+      driver = "docker"
+
+      lifecycle {
+        hook = "poststop"
+      }
+
+      config {
+        image   = "[[ var "poststop_cleanup_image" . ]]"
+        command = "sh"
+        args = [
+          "-ec",
+          <<EOT
+set -eu
+[[ range var "poststop_cleanup_paths" . -]]
+rm -rf "[[ . ]]"
+[[ end -]]
+EOT
+        ]
+      }
+    }
   }
 }
