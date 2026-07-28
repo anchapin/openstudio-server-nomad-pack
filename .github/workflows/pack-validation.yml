@@ -18,4 +18,4 @@ jobs:
 
       - name: Validate Pack
         run: |
-          nomad-pack validate .
+          nomad-pack render .
