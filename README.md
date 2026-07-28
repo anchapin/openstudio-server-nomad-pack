@@ -358,6 +358,16 @@ For full instructions — including token creation, namespace scoping, and token
 | Helm Hooks (pre-delete / teardown) | `scripts/pre-teardown.sh` — blocking `nomad job stop` (no sleep required) | Implemented |
 | Helm Hooks (lifecycle / periodic) | Nomad Lifecycle hooks / Periodic Jobs | Implemented (poststop cleanup tasks) |
 
+### Intentional Divergences from Helm Chart Defaults
+
+The following defaults differ from the [NREL OpenStudio Server Helm chart](https://github.com/NREL/openstudio-server) by design. Operators migrating from Helm should review each entry and decide whether to align or keep the divergence.
+
+| Variable | This Pack Default | Helm Default | Reason | When to align |
+|----------|-------------------|--------------|--------|---------------|
+| `worker_cpu` | `2000` (MHz) | `700m` CPU (≈ 700 MHz) | Intentionally higher to support greater simulation concurrency per Nomad allocation; Nomad schedules whole CPU shares rather than fractional Kubernetes millicores. | Set to `700` only if running on a severely resource-constrained cluster where worker placement is failing. |
+| `worker_memory` | `4096` MB | `900Mi` (≈ 900 MB) | Intentionally higher to match the typical memory footprint of OpenStudio/EnergyPlus simulations running inside a single allocation; the Helm default targets container overhead only. | Reduce only after profiling actual simulation memory usage in your environment. |
+| `redis_image` | `redis:6.2-alpine` | `redis:6.0.9` | Redis 6.2 receives active security patches and bug fixes; `alpine` reduces the image size. Redis 6.0.9 is end-of-life upstream. | Align to `redis:6.0.9` only if your OpenStudio Server release explicitly requires Redis 6.0.x and you have verified compatibility concerns with 6.2. |
+
 ## Stateful DB/Redis Storage
 
 By default, MongoDB and Redis use `host_volume` storage. To change the persistence mode, set `mongodb_storage_type` and `redis_storage_type` to `host_volume`, `csi`, or `ephemeral`. Set `mongodb_volume_source` and `redis_volume_source` to the corresponding host_volume name or CSI volume ID.
