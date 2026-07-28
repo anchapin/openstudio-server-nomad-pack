@@ -66,5 +66,35 @@ for var in variables:
         )
     )
 
-output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+priority_section = """
+## Job Priority
+
+Nomad uses an integer priority on the **1–100 scale** (higher = more important).  The
+two priority variables must always satisfy `web_priority > worker_priority` so that
+the web UI is scheduled preferentially over calculation workers whenever the cluster
+is under resource pressure.
+
+| Variable | Default | Kubernetes equivalent | K8s value |
+| --- | --- | --- | --- |
+| `web_priority` | `80` | `high-priority` PriorityClass | `1000000` |
+| `worker_priority` | `40` | `low-priority` PriorityClass | `10000` |
+
+### How the mapping works
+
+The Helm chart creates two Kubernetes `PriorityClass` objects:
+
+- **`high-priority`** (value `1000000`) – assigned to the web-UI `Deployment`
+- **`low-priority`** (value `10000`) – assigned to worker `Deployments`
+
+The ratio between those values is large (100×) but what Kubernetes cares about is the
+relative ordering, not the absolute numbers.  Nomad's priority scale is 1–100 and
+achieves the same relative ordering with `web_priority = 80` (high) vs
+`worker_priority = 40` (low).
+
+> **Warning:** inverting the two values (setting `worker_priority` ≥ `web_priority`)
+> will cause the scheduler to evict or delay the web UI in favour of workers during
+> resource contention, degrading operator access to the running analysis.
+"""
+
+output_path.write_text("\n".join(lines) + "\n" + priority_section, encoding="utf-8")
 PY

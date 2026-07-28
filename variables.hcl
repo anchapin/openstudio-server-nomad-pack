@@ -79,7 +79,7 @@ variable "web_args" {
 
 variable "web_priority" {
   type        = number
-  description = "Nomad job priority for the OpenStudio Web UI job."
+  description = "Nomad job priority for the OpenStudio Web UI job (Nomad scale 1–100). Must always exceed worker_priority so the scheduler favours the web UI over workers during resource contention. Mirrors the Kubernetes high-priority PriorityClass (value 1000000) used by the Helm chart. WARNING: do not set this lower than or equal to worker_priority."
   default     = 80
 }
 
@@ -241,7 +241,7 @@ variable "worker_update_auto_revert" {
 
 variable "worker_priority" {
   type        = number
-  description = "Nomad job priority for calculation workers."
+  description = "Nomad job priority for calculation workers (Nomad scale 1–100). Must always be less than web_priority so the web UI is scheduled preferentially during resource contention. Mirrors the Kubernetes low-priority PriorityClass (value 10000) used by the Helm chart. WARNING: do not set this higher than or equal to web_priority."
   default     = 40
 }
 
