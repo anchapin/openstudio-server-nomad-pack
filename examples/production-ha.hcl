@@ -38,9 +38,9 @@ worker_process_count = "2"
 worker_count = 2
 
 worker_autoscaling_enabled  = true
-worker_autoscaling_min      = 2
-worker_autoscaling_max      = 20
-worker_autoscaling_cooldown = "3m"
+worker_min_replicas         = 2
+worker_max_replicas         = 20
+autoscaler_cooldown         = "3m"
 
 worker_update_max_parallel      = 2
 worker_update_min_healthy_time  = "1m"
@@ -56,7 +56,7 @@ mongodb_volume_source  = "openstudio-mongodb"
 
 # Spread MongoDB across datacenters for HA.
 db_spreads = [
-  { attribute = "${node.datacenter}", weight = 100 }
+  { attribute = "$${node.datacenter}", weight = 100 }
 ]
 
 # ---------- Redis ----------
@@ -67,7 +67,7 @@ redis_storage_type = "host_volume"
 redis_volume_source  = "openstudio-redis"
 
 redis_spreads = [
-  { attribute = "${node.datacenter}", weight = 100 }
+  { attribute = "$${node.datacenter}", weight = 100 }
 ]
 
 # ---------- Rserve ----------
