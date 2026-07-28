@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated stale defaults in README: `worker_autoscaling_enabled` `true` → `false`,
   `worker_max_replicas` `3` → `10`, `autoscaler_cooldown` `"2m"` → `"60m"`,
   `autoscaler_prometheus_address` `""` → `"http://prometheus:9090"` (resolves #123).
+- Removed `develop` and `master` from `release-version-bump.yml` `on.push.branches` so automated patch releases only fire on merges to `main`, preventing spurious public releases on every `develop` push (#192).
+- Updated `CONTRIBUTING.md` release process section to document the `develop → main` promotion flow (#192).
 
 ## [0.1.0] - Unreleased
 

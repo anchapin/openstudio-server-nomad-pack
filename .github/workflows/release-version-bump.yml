@@ -3,9 +3,7 @@ name: Release Version Bump and Tag
 on:
   push:
     branches:
-      - develop
       - main
-      - master
 
 permissions:
   contents: write

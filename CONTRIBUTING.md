@@ -105,17 +105,19 @@ Entries are consolidated into a versioned section by the release process.
 
 ## Release process
 
-Releases are automated via `.github/workflows/release.yml` and triggered by a tag push.
+> **Branch promotion model:** all development merges into `develop`. When a release is ready, `develop` is merged into `main`. Only pushes to `main` trigger the automated version-bump and release workflow (`release-version-bump.yml`). Pushing to `develop` — including merged feature PRs — does **not** create a public release.
+
+Releases are automated via `.github/workflows/release-version-bump.yml` and triggered by a push to `main`.
 
 To prepare a release:
 
-1. Run `scripts/bump_metadata_version.sh <new-version>` to update `metadata.hcl`.
+1. Ensure all intended changes are merged into `develop` and CI is green.
 2. Move all `[Unreleased]` entries in `CHANGELOG.md` to a new versioned section (e.g. `[0.3.0] - 2026-07-28`).
 3. Update `docs/compatibility.md` (see section below).
 4. Open a PR from `develop` → `main`, merge when CI passes.
-5. Tag the merge commit: `git tag v<new-version> && git push origin v<new-version>`.
+5. The `release-version-bump.yml` workflow automatically bumps the patch version in `metadata.hcl`, creates a git tag, and publishes the GitHub Release.
 
-The `release.yml` workflow publishes the GitHub Release automatically.
+> **Note:** `scripts/bump_metadata_version.sh <new-version>` can still be used to manually set a specific version before opening the `develop → main` PR if a non-patch increment (minor/major) is needed.
 
 ---
 
