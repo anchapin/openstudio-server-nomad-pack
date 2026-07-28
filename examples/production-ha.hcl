@@ -70,6 +70,15 @@ redis_spreads = [
   { attribute = "$${node.datacenter}", weight = 100 }
 ]
 
+# ---------- Shared NFS (web + worker) ----------
+# Recommended: OS-level NFS mount + Nomad host_volume. See docs/storage.md:
+#   nomad client.hcl host_volume "openstudio-nfs"
+#   override vars for nfs_shared_volume_enabled, nfs_volume_source, nfs_volume_mount_path
+#
+# nfs_shared_volume_enabled = true
+# nfs_volume_source         = "openstudio-nfs"
+# nfs_volume_mount_path     = "/mnt/openstudio"
+
 # ---------- Rserve ----------
 rserve_cpu    = 1000
 rserve_memory = 2048

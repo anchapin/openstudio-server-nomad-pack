@@ -17,8 +17,9 @@ This guide covers everything you need to set up persistent storage for MongoDB a
 2. [Host Volumes](#2-host-volumes)
 3. [CSI Plugin Setup](#3-csi-plugin-setup)
 4. [Persistent Volume Examples](#4-persistent-volume-examples)
-5. [Volume Permissions and Ownership](#5-volume-permissions-and-ownership)
-6. [Teardown and Cleanup](#6-teardown-and-cleanup)
+5. [NFS Shared Volume (web and worker)](#5-nfs-shared-volume-web-and-worker)
+6. [Volume Permissions and Ownership](#6-volume-permissions-and-ownership)
+7. [Teardown and Cleanup](#7-teardown-and-cleanup)
 
 ---
 
@@ -321,20 +322,84 @@ volume "mongodb" {
 }
 ```
 
-### 4.4 Shared NFS Host Volume Reference
+### 4.4 Shared NFS Volume Wiring (web/worker)
 
-If you are enabling `nfs_shared_volume_enabled = true`, use
-[`examples/volumes/openstudio-shared-host-volume.hcl`](../examples/volumes/openstudio-shared-host-volume.hcl)
-for a complete reference showing:
-
-- recommended `/etc/fstab` wiring
-- the Nomad `client.hcl` `host_volume "openstudio-nfs"` stanza
-- pack `override.hcl` values for `nfs_shared_volume_enabled`, `nfs_volume_source`, and
-  `nfs_volume_mount_path`
+When `nfs_shared_volume_enabled = true`, the `web` and `worker` task groups mount the volume
+identified by `nfs_volume_source` at `nfs_volume_mount_path`.
 
 ---
 
-## 5. Volume Permissions and Ownership
+## 5. NFS Shared Volume (web and worker)
+
+For production clusters, the recommended NFS path is:
+
+1. mount your NFS export at the OS level on every eligible Nomad client
+2. register that mount as a Nomad `host_volume`
+3. enable `nfs_shared_volume_enabled` in pack overrides
+
+This avoids running an in-cluster NFS server and works with external NFS providers (for example:
+AWS EFS, NetApp, a NAS appliance, or a dedicated NFS VM).
+
+### 5.1 Primary Recommendation: OS-level NFS + host_volume
+
+`/etc/fstab` (Linux clients):
+
+```fstab
+<nfs-host>:/exports/openstudio /mnt/openstudio nfs nfsvers=4,sync,hard,intr 0 0
+```
+
+Nomad client config (`/etc/nomad.d/client.hcl`):
+
+```hcl
+client {
+  enabled = true
+
+  host_volume "openstudio-nfs" {
+    path      = "/mnt/openstudio"
+    read_only = false
+  }
+}
+```
+
+Pack override (`override.hcl`):
+
+```hcl
+nfs_shared_volume_enabled = true
+nfs_volume_source         = "openstudio-nfs"
+nfs_volume_mount_path     = "/mnt/openstudio"
+```
+
+Single-node dev deployments can skip shared NFS entirely because `web` and `worker` can
+co-locate on the same client.
+
+For a copy/paste reference file, see
+[`examples/volumes/openstudio-shared-host-volume.hcl`](../examples/volumes/openstudio-shared-host-volume.hcl).
+
+### 5.2 Advanced: CSI NFS
+
+If you require CSI-managed lifecycle instead of a host volume, you can still use CSI NFS:
+
+1. deploy a CSI plugin (see [Section 3](#3-csi-plugin-setup))
+2. register an NFS-backed CSI volume
+3. set `nfs_volume_source` to that CSI volume ID
+
+Example CSI volume registration:
+
+```hcl
+id        = "openstudio-nfs"
+name      = "openstudio-nfs"
+type      = "csi"
+plugin_id = "nfs"
+
+capability {
+  access_mode     = "multi-node-multi-writer"
+  attachment_mode = "file-system"
+}
+```
+
+---
+
+## 6. Volume Permissions and Ownership
 
 Incorrect ownership is the most common cause of allocation failure with persistent volumes.
 
@@ -427,9 +492,9 @@ nomad job status openstudio-volume-init   # wait for status = dead (batch comple
 
 ---
 
-## 6. Teardown and Cleanup
+## 7. Teardown and Cleanup
 
-### 6.1 Stop the Pack and Purge Jobs
+### 7.1 Stop the Pack and Purge Jobs
 
 ```bash
 nomad-pack destroy .
@@ -437,7 +502,7 @@ nomad-pack destroy .
 nomad job stop -purge openstudio-server
 ```
 
-### 6.2 Remove Host Volume Data
+### 7.2 Remove Host Volume Data
 
 ```bash
 # macOS
@@ -451,7 +516,7 @@ sudo rm -rf /opt/nomad/volumes/mongodb /opt/nomad/volumes/redis
 > if the data has any value (see the [migration guide](./migration-k8s-to-nomad.md) for
 > `mongodump` instructions).
 
-### 6.3 Delete CSI Volumes
+### 7.3 Delete CSI Volumes
 
 Deregister volumes only after all allocations using them have stopped:
 
@@ -467,7 +532,7 @@ nomad volume delete openstudio-mongodb
 nomad volume delete openstudio-redis
 ```
 
-### 6.4 Remove CSI Plugin (Optional)
+### 7.4 Remove CSI Plugin (Optional)
 
 If no other workloads use the plugin:
 
