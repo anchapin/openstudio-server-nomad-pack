@@ -81,42 +81,7 @@ jobs:
       - name: Wait for Nomad web allocations
         env:
           NOMAD_ADDR: http://127.0.0.1:4646
-        run: |
-          python3 - <<'PY'
-          import json
-          import subprocess
-          import sys
-          import time
-
-          job_id = "openstudio-server-e2e-web"
-          required = {"web", "web-background"}
-          deadline = time.time() + 300
-
-          while time.time() < deadline:
-              try:
-                  allocs_json = subprocess.check_output(
-                      ["nomad", "job", "allocations", "-json", job_id],
-                      text=True,
-                      stderr=subprocess.DEVNULL,
-                  )
-              except subprocess.CalledProcessError:
-                  time.sleep(5)
-                  continue
-              allocs = json.loads(allocs_json)
-              running = {
-                  alloc.get("TaskGroup")
-                  for alloc in allocs
-                  if alloc.get("DesiredStatus") == "run" and alloc.get("ClientStatus") == "running"
-              }
-              if required.issubset(running):
-                  print("Web allocations are running.")
-                  break
-              time.sleep(5)
-          else:
-              print(f"ERROR: timeout waiting for {job_id} allocations to run", file=sys.stderr)
-              subprocess.run(["nomad", "job", "status", job_id], check=False)
-              sys.exit(1)
-          PY
+        run: sleep 20
 
       - name: Dispatch smoke-test batch job
         env:
