@@ -81,7 +81,7 @@
 | `nfs_shared_volume_enabled` | `bool` | `false` | When true, a CSI NFS shared volume is declared and mounted in both web and worker task groups. |
 | `nfs_volume_source` | `string` | `"openstudio-nfs"` | Nomad CSI volume ID for the NFS shared volume used by web and worker task groups. |
 | `nfs_volume_mount_path` | `string` | `"/mnt/openstudio"` | Mount path inside web and worker tasks where the NFS shared volume is attached. |
-| `rserve_image` | `string` | `"nrel/openstudio-rserve:latest"` | The Rserve image name and tag. |
+| `rserve_image` | `string` | `"nrel/openstudio-rserve:3.11.0"` | The Rserve image name and tag. |
 | `rserve_command` | `string` | `""` | Optional command override for the Rserve task. Leave empty to use the image default entrypoint. |
 | `rserve_args` | `list(string)` | `[]` | Optional args passed to rserve_command when set. |
 | `rserve_cpu` | `number` | `1000` | CPU shares allocated to the Rserve task. |

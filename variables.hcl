@@ -460,7 +460,7 @@ variable "nfs_volume_mount_path" {
 variable "rserve_image" {
   type        = string
   description = "The Rserve image name and tag."
-  default     = "nrel/openstudio-rserve:latest"
+  default     = "nrel/openstudio-rserve:3.11.0"
 }
 
 variable "rserve_command" {
