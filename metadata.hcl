@@ -5,5 +5,5 @@ app {
 pack {
   name        = "openstudio-server"
   description = "A Nomad pack to deploy OpenStudio Server (web, workers, db, redis, and rserve)."
-  version     = "0.1.9"
+  version     = "0.2.0"
 }

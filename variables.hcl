@@ -235,3 +235,70 @@ variable "rserve_spreads" {
   description = "Spread rules for the rserve group."
   default     = []
 }
+
+# Backup and restore jobs
+variable "backup_enabled" {
+  type        = bool
+  description = "Enable the periodic MongoDB and Redis backup batch job."
+  default     = true
+}
+
+variable "backup_cron" {
+  type        = string
+  description = "Cron expression for the periodic backup schedule."
+  default     = "0 2 * * * *"
+}
+
+variable "backup_prohibit_overlap" {
+  type        = bool
+  description = "Prevent overlapping backup runs."
+  default     = true
+}
+
+variable "backup_nfs_host_volume" {
+  type        = string
+  description = "Nomad host volume name backed by an NFS mount for state backups."
+  default     = "openstudio-backups"
+}
+
+variable "backup_mount_path" {
+  type        = string
+  description = "Path inside backup tasks where the NFS host volume is mounted."
+  default     = "/backups"
+}
+
+variable "backup_subdirectory" {
+  type        = string
+  description = "Subdirectory name under the backup mount where OpenStudio state backups are written."
+  default     = "openstudio-state"
+}
+
+variable "backup_retention_days" {
+  type        = number
+  description = "How many days of backup files to retain."
+  default     = 14
+}
+
+variable "mongodb_backup_uri" {
+  type        = string
+  description = "MongoDB URI used by backup and restore jobs."
+  default     = "mongodb://openstudio-db.service.consul:27017"
+}
+
+variable "redis_backup_host" {
+  type        = string
+  description = "Redis host used by backup and restore jobs."
+  default     = "openstudio-redis.service.consul"
+}
+
+variable "redis_backup_port" {
+  type        = number
+  description = "Redis port used by backup and restore jobs."
+  default     = 6379
+}
+
+variable "restore_enabled" {
+  type        = bool
+  description = "Enable the on-demand restore batch job definition."
+  default     = true
+}
