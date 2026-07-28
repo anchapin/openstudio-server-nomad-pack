@@ -75,6 +75,26 @@ jobs:
           NOMAD_ADDR: http://127.0.0.1:4646
         run: nomad-pack plan . --name openstudio-server
 
+      - name: Plan minimal-dev example
+        env:
+          NOMAD_ADDR: http://127.0.0.1:4646
+        run: nomad-pack plan . --name openstudio-server-minimal-dev -var-file examples/minimal-dev.hcl
+
+      - name: Plan production-ha example
+        env:
+          NOMAD_ADDR: http://127.0.0.1:4646
+        run: nomad-pack plan . --name openstudio-server-production-ha -var-file examples/production-ha.hcl
+
+      - name: Plan airgapped example
+        env:
+          NOMAD_ADDR: http://127.0.0.1:4646
+        run: nomad-pack plan . --name openstudio-server-airgapped -var-file examples/airgapped.hcl
+
+      - name: Plan with batch verification enabled
+        env:
+          NOMAD_ADDR: http://127.0.0.1:4646
+        run: nomad-pack plan . --name openstudio-server-batch-verification -var "enable_batch_verification=true"
+
       - name: Run integration validation
         env:
           NOMAD_ADDR: http://127.0.0.1:4646
