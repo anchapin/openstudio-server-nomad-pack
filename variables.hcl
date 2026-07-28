@@ -83,6 +83,84 @@ variable "web_memory" {
   default     = 1024
 }
 
+variable "web_memory_max" {
+  type        = number
+  description = "Memory hard limit (MB) for the OpenStudio Web task (Nomad memory_max)."
+  default     = 2048
+}
+
+variable "web_count" {
+  type        = number
+  description = "The number of web task group allocations."
+  default     = 1
+}
+
+variable "web_port" {
+  type        = number
+  description = "Host-side static port mapped to the web container HTTP port."
+  default     = 80
+}
+
+variable "web_health_check_interval" {
+  type        = string
+  description = "Interval between Consul health checks for the web service."
+  default     = "10s"
+}
+
+variable "web_health_check_timeout" {
+  type        = string
+  description = "Timeout for Consul health checks for the web service."
+  default     = "2s"
+}
+
+variable "web_update_max_parallel" {
+  type        = number
+  description = "Maximum number of web allocations updated in parallel."
+  default     = 1
+}
+
+variable "web_update_health_check" {
+  type        = string
+  description = "Health check mode for web rolling updates."
+  default     = "checks"
+}
+
+variable "web_update_min_healthy_time" {
+  type        = string
+  description = "How long a web allocation must remain healthy before promotion."
+  default     = "30s"
+}
+
+variable "web_update_healthy_deadline" {
+  type        = string
+  description = "Maximum time for a web allocation to become healthy."
+  default     = "5m"
+}
+
+variable "web_update_progress_deadline" {
+  type        = string
+  description = "Maximum time for the web rolling update to make progress."
+  default     = "10m"
+}
+
+variable "web_update_auto_revert" {
+  type        = bool
+  description = "Automatically revert a web deployment if the update fails."
+  default     = true
+}
+
+variable "web_background_cpu" {
+  type        = number
+  description = "CPU shares allocated to the OpenStudio web-background task."
+  default     = 500
+}
+
+variable "web_background_memory" {
+  type        = number
+  description = "Memory (MB) allocated to the OpenStudio web-background task."
+  default     = 1024
+}
+
 variable "worker_image" {
   type        = string
   description = "The image name and tag for the OpenStudio Server worker container."
