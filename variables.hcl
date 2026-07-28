@@ -455,6 +455,8 @@ variable "verification_targets" {
     "redis=openstudio-redis.service.consul:6379",
     "rserve=openstudio-rserve.service.consul:6311",
   ]
+}
+
 # Vault integration variables
 variable "vault_enabled" {
   type        = bool
