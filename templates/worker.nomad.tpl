@@ -112,6 +112,8 @@ job "[[ var "job_name" . ]]-worker" {
         memory = [[ var "worker_memory" . ]]
       }
 
+      kill_timeout = "[[ var "worker_kill_timeout" . ]]"
+
       service {
         name     = "openstudio-worker"
         provider = "consul"
