@@ -13,7 +13,13 @@ job "[[ var "job_name" . ]]-state-restore" {
     count = 1
 
     volume "state_backups" {
+      [[ if eq (var "backup_volume_type" .) "csi" ]]
+      type            = "csi"
+      access_mode     = "multi-node-multi-writer"
+      attachment_mode = "file-system"
+      [[ else ]]
       type      = "host"
+      [[ end ]]
       source    = "[[ var "backup_nfs_host_volume" . ]]"
       read_only = true
     }

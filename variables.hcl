@@ -656,9 +656,15 @@ variable "backup_prohibit_overlap" {
   default     = true
 }
 
+variable "backup_volume_type" {
+  type        = string
+  description = "Storage backend for the backup and restore state volume. Use \"host_volume\" (default) for a Nomad host volume or \"csi\" for a CSI-managed volume."
+  default     = "host_volume"
+}
+
 variable "backup_nfs_host_volume" {
   type        = string
-  description = "Nomad host volume name backed by an NFS mount for state backups."
+  description = "Nomad volume source for state backups. For host_volume this is the host volume name; for csi this is the CSI volume ID."
   default     = "openstudio-backups"
 }
 
