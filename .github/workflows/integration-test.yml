@@ -30,16 +30,13 @@ jobs:
 
       - name: Start Nomad dev agent
         run: |
-          # Enable routing of loopback-sourced packets through docker0 so that
-          # Consul TCP health checks (originating from 127.0.0.1) can reach
-          # Docker bridge containers via Docker's iptables DNAT rules.
-          sudo sysctl -w net.ipv4.conf.all.route_localnet=1
           sudo /usr/local/bin/nomad agent -dev -log-level=WARN &
           echo "Waiting for Nomad to become ready..."
           for i in $(seq 1 30); do
-            NOMAD_ADDR=http://127.0.0.1:4646 nomad status >/dev/null 2>&1 && echo "Nomad is ready after ${i}s" && break
+            curl -sf http://127.0.0.1:4646/v1/agent/self >/dev/null 2>&1 && echo "Nomad is ready after $((i * 2))s" && break
             sleep 2
           done
+          curl -sf http://127.0.0.1:4646/v1/agent/self >/dev/null || { echo "ERROR: Nomad did not become ready in 60s"; exit 1; }
 
       - name: Run pack deploy
         env:
