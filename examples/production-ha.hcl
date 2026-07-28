@@ -1,0 +1,106 @@
+# Production HA override — multi-datacenter, HA resources, Vault enabled.
+#
+# Usage:
+#   nomad-pack run -var-file examples/production-ha.hcl .
+#
+# Prerequisites:
+#   - Vault cluster integrated with Nomad (vault_enabled = true)
+#   - MongoDB and Redis host volumes provisioned on all Nomad clients
+#   - NFS-backed host volume "openstudio-backups" mounted on backup-eligible clients
+#   - Nomad Autoscaler configured with Prometheus data source
+
+# ---------- Identity ----------
+job_name    = "openstudio-server"
+app_version = "3.7.0"
+region      = "us-east-1"
+datacenters = ["dc1", "dc2", "dc3"]
+
+# ---------- Images ----------
+web_image            = "nrel/openstudio-server:3.7.0"
+web_background_image = "nrel/openstudio-server:3.7.0"
+worker_image         = "nrel/openstudio-server:3.7.0"
+rserve_image         = "nrel/openstudio-rserve:3.7.0"
+
+# ---------- Web ----------
+web_priority = 90
+web_cpu      = 1000
+web_memory   = 2048
+
+web_background_count = 2
+
+# ---------- Worker (autoscaling) ----------
+worker_priority      = 60
+worker_cpu           = 4000
+worker_memory        = 8192
+worker_process_count = "2"
+
+# Static seed count; autoscaler owns the actual count.
+worker_count = 2
+
+worker_autoscaling_enabled  = true
+worker_autoscaling_min      = 2
+worker_autoscaling_max      = 20
+worker_autoscaling_cooldown = "3m"
+
+worker_update_max_parallel      = 2
+worker_update_min_healthy_time  = "1m"
+worker_update_healthy_deadline  = "10m"
+worker_update_progress_deadline = "20m"
+
+# ---------- MongoDB ----------
+db_cpu    = 2000
+db_memory = 4096
+
+mongodb_storage_type = "host"
+mongodb_host_volume  = "openstudio-mongodb"
+
+# Spread MongoDB across datacenters for HA.
+db_spreads = [
+  { attribute = "${node.datacenter}", weight = 100 }
+]
+
+# ---------- Redis ----------
+redis_cpu    = 500
+redis_memory = 1024
+
+redis_storage_type = "host"
+redis_host_volume  = "openstudio-redis"
+
+redis_spreads = [
+  { attribute = "${node.datacenter}", weight = 100 }
+]
+
+# ---------- Rserve ----------
+rserve_cpu    = 1000
+rserve_memory = 2048
+
+# ---------- Logging ----------
+log_max_size  = "50m"
+log_max_files = 5
+
+# ---------- Consul Connect mTLS ----------
+enable_consul_connect = true
+
+# ---------- Vault ----------
+vault_integration_enabled = true
+vault_enabled             = true
+vault_default_role        = "openstudio-server"
+vault_db_role             = "openstudio-db"
+vault_redis_role          = "openstudio-redis"
+vault_rserve_role         = "openstudio-rserve"
+vault_vector_role         = "openstudio-vector"
+vault_policies            = ["openstudio-kv-read"]
+vault_change_mode         = "restart"
+
+# Pull MongoDB credentials from Vault rather than environment variables.
+enable_vault_mongo_secrets = true
+vault_mongo_secret_path    = "secret/data/prod/openstudio/mongodb"
+vault_mongo_username_key   = "username"
+vault_mongo_password_key   = "password"
+
+# ---------- Backups ----------
+backup_enabled          = true
+backup_cron             = "0 0 2 * * *"
+backup_nfs_host_volume  = "openstudio-backups"
+backup_retention_days   = 30
+restore_enabled         = true
