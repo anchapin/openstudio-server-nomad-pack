@@ -321,6 +321,17 @@ volume "mongodb" {
 }
 ```
 
+### 4.4 Shared NFS Host Volume Reference
+
+If you are enabling `nfs_shared_volume_enabled = true`, use
+[`examples/volumes/openstudio-shared-host-volume.hcl`](../examples/volumes/openstudio-shared-host-volume.hcl)
+for a complete reference showing:
+
+- recommended `/etc/fstab` wiring
+- the Nomad `client.hcl` `host_volume "openstudio-nfs"` stanza
+- pack `override.hcl` values for `nfs_shared_volume_enabled`, `nfs_volume_source`, and
+  `nfs_volume_mount_path`
+
 ---
 
 ## 5. Volume Permissions and Ownership
