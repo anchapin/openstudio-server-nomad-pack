@@ -91,6 +91,12 @@ Refer to [`variables.hcl`](file:///Users/achapin/OpenStudio/openstudio-server-no
 | `web_image` | `string` | Docker image for OpenStudio Web | `"nrel/openstudio-server:latest"` |
 | `worker_image` | `string` | Docker image for OpenStudio Worker | `"nrel/openstudio-server:latest"` |
 | `worker_count` | `number` | Number of Nomad worker allocations | `1` |
+| `worker_update_max_parallel` | `number` | Maximum workers updated concurrently | `1` |
+| `worker_update_health_check` | `string` | Worker update health check mode | `"task_states"` |
+| `worker_update_min_healthy_time` | `string` | Minimum healthy time before worker promotion | `"30s"` |
+| `worker_update_healthy_deadline` | `string` | Deadline for worker allocations to become healthy | `"5m"` |
+| `worker_update_progress_deadline` | `string` | Deadline for the worker rollout to make progress | `"10m"` |
+| `worker_update_auto_revert` | `bool` | Automatically revert failed worker rollout | `true` |
 | `worker_priority` | `number` | Nomad priority for calculation workers | `40` |
 | `worker_queues` | `string` | Queue list for worker processing | `"requeued,simulations"` |
 | `worker_process_count` | `string` | Worker container `COUNT` env value | `"1"` |

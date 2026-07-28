@@ -95,6 +95,42 @@ variable "worker_count" {
   default     = 1
 }
 
+variable "worker_update_max_parallel" {
+  type        = number
+  description = "Maximum number of worker allocations updated in parallel."
+  default     = 1
+}
+
+variable "worker_update_health_check" {
+  type        = string
+  description = "Health check mode for worker rolling updates."
+  default     = "task_states"
+}
+
+variable "worker_update_min_healthy_time" {
+  type        = string
+  description = "How long a worker allocation must remain healthy before promotion."
+  default     = "30s"
+}
+
+variable "worker_update_healthy_deadline" {
+  type        = string
+  description = "Maximum time for a worker allocation to become healthy."
+  default     = "5m"
+}
+
+variable "worker_update_progress_deadline" {
+  type        = string
+  description = "Maximum time for the worker rolling update to make progress."
+  default     = "10m"
+}
+
+variable "worker_update_auto_revert" {
+  type        = bool
+  description = "Automatically revert a worker deployment if the update fails."
+  default     = true
+}
+
 variable "worker_priority" {
   type        = number
   description = "Nomad job priority for calculation workers."
