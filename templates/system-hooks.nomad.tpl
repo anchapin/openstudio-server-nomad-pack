@@ -2,6 +2,7 @@
 job "[[ var "job_name" . ]]-system-hooks" {
   region      = "[[ var "region" . ]]"
   datacenters = [[ var "datacenters" . | toJson ]]
+  namespace   = "[[ var "nomad_namespace" . ]]"
   type        = "system"
 
   # Only schedule on nodes that have the Docker driver enabled.

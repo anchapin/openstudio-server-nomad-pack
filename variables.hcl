@@ -40,6 +40,12 @@ variable "ingress_tls_enabled" {
   default     = false
 }
 
+variable "nomad_namespace" {
+  type        = string
+  description = "The Nomad namespace in which all pack jobs are registered. Use 'default' for the built-in namespace."
+  default     = "default"
+}
+
 variable "region" {
   type        = string
   description = "The Nomad region where the job will be deployed."

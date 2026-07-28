@@ -1,6 +1,7 @@
 job "[[ var "job_name" . ]]-web" {
   region      = "[[ var "region" . ]]"
   datacenters = [[ var "datacenters" . | toJson ]]
+  namespace   = "[[ var "nomad_namespace" . ]]"
   type        = "service"
   priority    = [[ var "web_priority" . ]]
 

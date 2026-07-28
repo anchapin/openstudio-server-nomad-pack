@@ -2,6 +2,7 @@
 job "[[ var "job_name" . ]]-state-restore" {
   region      = "[[ var "region" . ]]"
   datacenters = [[ var "datacenters" . | toJson ]]
+  namespace   = "[[ var "nomad_namespace" . ]]"
   type        = "batch"
 
   parameterized {

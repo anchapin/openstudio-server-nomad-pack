@@ -34,6 +34,7 @@
 | `app_version` | `string` | `"latest"` | Application version tag used for OpenStudio Server component images. | `"3.7.0"` |
 | `region` | `string` | `"global"` | The Nomad region where the job will be deployed. | `"us-east-1"` |
 | `datacenters` | `list(string)` | `["dc1"]` | A list of datacenters in the region eligible for task placement. | `["dc1","dc2","dc3"]` |
+| `nomad_namespace` | `string` | `"default"` | The Nomad namespace in which all pack jobs are registered. | `"production"` |
 | `ingress_domain` | `string` | `"service.consul"` | Domain suffix used when constructing service hostnames. | `"internal.example.com"` |
 
 ---
