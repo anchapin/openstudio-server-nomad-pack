@@ -6,6 +6,8 @@ on:
     paths:
       - 'templates/**'
       - 'variables.hcl'
+      - 'examples/e2e-test.hcl'
+      - '.github/workflows/integration-test.yml'
 
 jobs:
   integration-test:
@@ -32,3 +34,123 @@ jobs:
         run: |
           nomad-pack render . --var-file examples/minimal-dev.hcl
           echo "Template rendering succeeded"
+
+  e2e-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Nomad
+        env:
+          NOMAD_VERSION: "1.7.7"
+        run: |
+          curl -fsSL "https://releases.hashicorp.com/nomad/${NOMAD_VERSION}/nomad_${NOMAD_VERSION}_linux_amd64.zip" -o nomad.zip
+          unzip -q nomad.zip
+          sudo mv nomad /usr/local/bin/
+          nomad --version
+
+      - name: Setup Nomad Pack
+        uses: hashicorp/setup-nomad-pack@main
+
+      - name: Start Nomad dev agent
+        run: |
+          nomad agent -dev -bind=127.0.0.1 -log-level=WARN &
+          for i in $(seq 1 45); do
+            if NOMAD_ADDR=http://127.0.0.1:4646 nomad status >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+          NOMAD_ADDR=http://127.0.0.1:4646 nomad status >/dev/null 2>&1
+
+      - name: Deploy with lightweight e2e stubs
+        env:
+          NOMAD_ADDR: http://127.0.0.1:4646
+        run: nomad-pack run . --var-file examples/e2e-test.hcl
+
+      - name: Wait for Consul health checks
+        env:
+          NOMAD_ADDR: http://127.0.0.1:4646
+        run: |
+          SERVICES=(
+            "openstudio-db"
+            "openstudio-redis"
+            "openstudio-rserve"
+            "openstudio-web"
+            "openstudio-web-background"
+            "openstudio-worker"
+          )
+          DEADLINE=$((SECONDS + 300))
+
+          for svc in "${SERVICES[@]}"; do
+            echo "Waiting for passing Consul checks: ${svc}"
+            while true; do
+              if [ $SECONDS -ge $DEADLINE ]; then
+                echo "ERROR: Timeout waiting for ${svc}" >&2
+                nomad job status openstudio-server-e2e-web || true
+                nomad job status openstudio-server-e2e-worker || true
+                nomad job status openstudio-server-e2e-db || true
+                nomad job status openstudio-server-e2e-redis || true
+                nomad job status openstudio-server-e2e-rserve || true
+                exit 1
+              fi
+
+              if curl -fsS "http://127.0.0.1:8500/v1/health/service/${svc}?passing=1" | grep -q "\"ServiceName\":\"${svc}\""; then
+                echo "${svc} is passing"
+                break
+              fi
+              sleep 5
+            done
+          done
+
+      - name: Dispatch smoke-test batch job
+        env:
+          NOMAD_ADDR: http://127.0.0.1:4646
+        run: |
+          nomad job run examples/test-batch.nomad
+
+          python3 - <<'PY'
+          import json
+          import subprocess
+          import time
+          import sys
+
+          job_id = "openstudio-server-smoke-test"
+          deadline = time.time() + 180
+
+          while time.time() < deadline:
+              data = json.loads(subprocess.check_output(["nomad", "job", "status", "-json", job_id], text=True))
+              if data.get("Status") == "dead":
+                  break
+              time.sleep(5)
+          else:
+              print(f"ERROR: timeout waiting for {job_id} to finish", file=sys.stderr)
+              subprocess.run(["nomad", "job", "status", job_id], check=False)
+              sys.exit(1)
+
+          allocs = json.loads(subprocess.check_output(["nomad", "job", "allocations", "-json", job_id], text=True))
+          if not allocs:
+              print(f"ERROR: no allocations found for {job_id}", file=sys.stderr)
+              sys.exit(1)
+
+          failed = [a for a in allocs if a.get("ClientStatus") not in {"complete"}]
+          if failed:
+              print("ERROR: smoke test allocation failures detected", file=sys.stderr)
+              for alloc in failed:
+                  print(
+                      f"{alloc.get('ID')} status={alloc.get('ClientStatus')} desired={alloc.get('DesiredStatus')}",
+                      file=sys.stderr,
+                  )
+              sys.exit(1)
+
+          print("Smoke-test batch job completed successfully.")
+          PY
+
+      - name: Destroy e2e deployment
+        if: always()
+        env:
+          NOMAD_ADDR: http://127.0.0.1:4646
+        run: nomad-pack destroy . --var-file examples/e2e-test.hcl || true

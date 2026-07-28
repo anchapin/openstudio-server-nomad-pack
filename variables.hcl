@@ -65,6 +65,18 @@ variable "web_image" {
   default     = "nrel/openstudio-server:latest"
 }
 
+variable "web_command" {
+  type        = string
+  description = "Optional command override for the web task. Leave empty to use the image default entrypoint."
+  default     = ""
+}
+
+variable "web_args" {
+  type        = list(string)
+  description = "Optional args passed to web_command when set."
+  default     = []
+}
+
 variable "web_priority" {
   type        = number
   description = "Nomad job priority for the OpenStudio Web UI job."
@@ -165,6 +177,24 @@ variable "worker_image" {
   type        = string
   description = "The image name and tag for the OpenStudio Server worker container."
   default     = "nrel/openstudio-server:latest"
+}
+
+variable "worker_command" {
+  type        = string
+  description = "Command used to start the worker task."
+  default     = "/usr/local/bin/start-workers"
+}
+
+variable "worker_args" {
+  type        = list(string)
+  description = "Optional args passed to worker_command."
+  default     = []
+}
+
+variable "worker_health_check_command" {
+  type        = string
+  description = "Shell command used by the worker service health check."
+  default     = "pgrep -f resque > /dev/null"
 }
 
 variable "worker_count" {
@@ -293,6 +323,18 @@ variable "web_background_image" {
   default     = "nrel/openstudio-server:latest"
 }
 
+variable "web_background_command" {
+  type        = string
+  description = "Optional command override for the web-background task. Leave empty to use the image default entrypoint."
+  default     = ""
+}
+
+variable "web_background_args" {
+  type        = list(string)
+  description = "Optional args passed to web_background_command when set."
+  default     = []
+}
+
 variable "web_background_count" {
   type        = number
   description = "The number of web-background tasks to run."
@@ -407,6 +449,18 @@ variable "rserve_image" {
   type        = string
   description = "The Rserve image name and tag."
   default     = "nrel/openstudio-rserve:latest"
+}
+
+variable "rserve_command" {
+  type        = string
+  description = "Optional command override for the Rserve task. Leave empty to use the image default entrypoint."
+  default     = ""
+}
+
+variable "rserve_args" {
+  type        = list(string)
+  description = "Optional args passed to rserve_command when set."
+  default     = []
 }
 
 variable "rserve_cpu" {
