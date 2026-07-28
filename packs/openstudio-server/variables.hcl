@@ -368,7 +368,7 @@ variable "web_background_count" {
 }
 variable "db_image" {
   type        = string
-  description = "The MongoDB database image name and tag."
+  description = "The MongoDB database image name and tag. BREAKING UPGRADE NOTE: persisted data volumes created on mongo:4.2 must be migrated in sequence 4.2 -> 4.4 -> 5.0 -> 6.0.7; do not skip major versions. See docs/upgrading.md for the full procedure."
   default     = "mongo:6.0.7"
 }
 
