@@ -29,6 +29,30 @@ variable "worker_image" {
   default     = "nrel/openstudio-server:latest"
 }
 
+variable "worker_count" {
+  type        = number
+  description = "The number of worker task group allocations."
+  default     = 1
+}
+
+variable "worker_priority" {
+  type        = number
+  description = "Nomad job priority for calculation workers."
+  default     = 40
+}
+
+variable "worker_queues" {
+  type        = string
+  description = "Comma-separated queue list processed by worker tasks."
+  default     = "requeued,simulations"
+}
+
+variable "worker_process_count" {
+  type        = string
+  description = "COUNT environment variable passed to worker containers."
+  default     = "1"
+}
+
 variable "db_image" {
   type        = string
   description = "The MongoDB database image name and tag."

@@ -28,6 +28,10 @@ Refer to [`variables.hcl`](file:///Users/achapin/OpenStudio/openstudio-server-no
 | `datacenters` | `list(string)` | Eligible datacenters | `["dc1"]` |
 | `web_image` | `string` | Docker image for OpenStudio Web | `"nrel/openstudio-server:latest"` |
 | `worker_image` | `string` | Docker image for OpenStudio Worker | `"nrel/openstudio-server:latest"` |
+| `worker_count` | `number` | Number of Nomad worker allocations | `1` |
+| `worker_priority` | `number` | Nomad priority for calculation workers | `40` |
+| `worker_queues` | `string` | Queue list for worker processing | `"requeued,simulations"` |
+| `worker_process_count` | `string` | Worker container `COUNT` env value | `"1"` |
 | `db_image` | `string` | MongoDB image | `"mongo:4.2"` |
 | `redis_image` | `string` | Redis image | `"redis:6.2-alpine"` |
 | `rserve_image` | `string` | Rserve image | `"nrel/rserve:latest"` |
@@ -38,7 +42,7 @@ Refer to [`variables.hcl`](file:///Users/achapin/OpenStudio/openstudio-server-no
 | --- | --- | --- |
 | Helm chart | Nomad Pack | Scaffolded |
 | `values.yaml` | `variables.hcl` | Scaffolded |
-| Deployment/Pod | Job & Task Groups | Scaffolded (DB, Redis) |
+| Deployment/Pod | Job & Task Groups | Scaffolded (DB, Redis, Worker) |
 | Container | Task (`docker` driver) | Scaffolded |
 | Service | Consul `service` registration | Scaffolded |
 | HPA / KEDA ScaledObject | Nomad Autoscaler | Planned |
