@@ -1,6 +1,6 @@
-job "[[ var "job_name" ]]-rserve" {
-  region      = "[[ var "region" ]]"
-  datacenters = [[ var "datacenters" | toJSON ]]
+job "[[ var "job_name" . ]]-rserve" {
+  region      = "[[ var "region" . ]]"
+  datacenters = [[ var "datacenters" . | toJson ]]
   type        = "service"
 
   group "rserve" {
@@ -16,7 +16,7 @@ job "[[ var "job_name" ]]-rserve" {
       driver = "docker"
 
       config {
-        image = "[[ var "rserve_image" ]]"
+        image = "[[ var "rserve_image" . ]]"
         ports = ["rserve"]
       }
 
