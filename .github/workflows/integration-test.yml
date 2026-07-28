@@ -9,6 +9,9 @@ on:
       - 'examples/e2e-test.hcl'
       - '.github/workflows/integration-test.yml'
 
+env:
+  NOMAD_VERSION: "1.7.7"
+
 jobs:
   integration-test:
     runs-on: ubuntu-latest
@@ -18,14 +21,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Nomad
-        env:
-          NOMAD_VERSION: "1.7.7"
-        run: |
-          curl -fsSL "https://releases.hashicorp.com/nomad/${NOMAD_VERSION}/nomad_${NOMAD_VERSION}_linux_amd64.zip" -o nomad.zip
-          unzip -q nomad.zip
-          sudo mv nomad /usr/local/bin/
-          nomad --version
+      - name: Setup Nomad
+        uses: hashicorp/setup-nomad@6e88df50dd00f3737f04fddde2bf2bd446e313dd  # main
+        with:
+          version: ${{ env.NOMAD_VERSION }}
 
       - name: Setup Nomad Pack
         uses: hashicorp/setup-nomad-pack@7828b76610ea4c670afa01a1c84fbd9175b186b1  # main
@@ -43,14 +42,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Nomad
-        env:
-          NOMAD_VERSION: "1.7.7"
-        run: |
-          curl -fsSL "https://releases.hashicorp.com/nomad/${NOMAD_VERSION}/nomad_${NOMAD_VERSION}_linux_amd64.zip" -o nomad.zip
-          unzip -q nomad.zip
-          sudo mv nomad /usr/local/bin/
-          nomad --version
+      - name: Setup Nomad
+        uses: hashicorp/setup-nomad@6e88df50dd00f3737f04fddde2bf2bd446e313dd  # main
+        with:
+          version: ${{ env.NOMAD_VERSION }}
 
       - name: Setup Nomad Pack
         uses: hashicorp/setup-nomad-pack@7828b76610ea4c670afa01a1c84fbd9175b186b1  # main
