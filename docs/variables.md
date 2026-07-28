@@ -1,356 +1,146 @@
 # Variable Reference
 
-> **Source of truth:** [`variables.hcl`](../variables.hcl)  
-> All defaults listed here are taken directly from that file. If the table and `variables.hcl` ever disagree, `variables.hcl` wins.
-
-## Table of Contents
-
-1. [Core / Identity](#core--identity)
-2. [Images](#images)
-3. [Web](#web)
-4. [Worker](#worker)
-5. [Worker Autoscaling](#worker-autoscaling)
-6. [MongoDB (DB)](#mongodb-db)
-7. [Redis](#redis)
-8. [Rserve](#rserve)
-9. [Logging](#logging)
-10. [Vector Sidecar](#vector-sidecar)
-11. [Consul Connect](#consul-connect)
-12. [Vault Integration](#vault-integration)
-13. [Vault-Backed MongoDB Secrets](#vault-backed-mongodb-secrets)
-14. [Docker Runtime Hardening](#docker-runtime-hardening)
-15. [Scheduling Helpers](#scheduling-helpers)
-16. [Backup & Restore](#backup--restore)
-17. [Batch Verification](#batch-verification)
-18. [Variable Interactions](#variable-interactions)
-
----
-
-## Core / Identity
-
-| Variable | Type | Default | Description | Example Override |
-|---|---|---|---|---|
-| `job_name` | `string` | `"openstudio-server"` | The name of the Nomad job. | `"openstudio-server-prod"` |
-| `app_version` | `string` | `"latest"` | Application version tag used for OpenStudio Server component images. | `"3.7.0"` |
-| `region` | `string` | `"global"` | The Nomad region where the job will be deployed. | `"us-east-1"` |
-| `datacenters` | `list(string)` | `["dc1"]` | A list of datacenters in the region eligible for task placement. | `["dc1","dc2","dc3"]` |
-| `nomad_namespace` | `string` | `"default"` | The Nomad namespace in which all pack jobs are registered. | `"production"` |
-| `ingress_domain` | `string` | `"service.consul"` | Domain suffix used when constructing service hostnames. | `"internal.example.com"` |
-
----
-
-## Images
-
-| Variable | Type | Default | Description | Example Override |
-|---|---|---|---|---|
-| `web_image` | `string` | `"nrel/openstudio-server:latest"` | Docker image for the OpenStudio Server web container. | `"registry.internal/openstudio-server:3.7.0"` |
-| `web_background_image` | `string` | `"nrel/openstudio-server:latest"` | Docker image for the OpenStudio Server web-background container. | `"registry.internal/openstudio-server:3.7.0"` |
-| `worker_image` | `string` | `"nrel/openstudio-server:latest"` | Docker image for the OpenStudio Server worker container. | `"registry.internal/openstudio-server:3.7.0"` |
-| `db_image` | `string` | `"mongo:4.2"` | MongoDB image. | `"registry.internal/mongo:4.2"` |
-| `redis_image` | `string` | `"redis:6.2-alpine"` | Redis image. | `"registry.internal/redis:6.2-alpine"` |
-| `rserve_image` | `string` | `"nrel/openstudio-rserve:latest"` | Rserve image. | `"registry.internal/openstudio-rserve:latest"` |
-| `vector_image` | `string` | `"timberio/vector:0.30.0-alpine"` | Vector log-collector sidecar image. | `"registry.internal/vector:0.30.0-alpine"` |
-| `poststop_cleanup_image` | `string` | `"alpine:3.20"` | Image used by poststop cleanup lifecycle tasks. | `"registry.internal/alpine:3.20"` |
-| `verification_image` | `string` | `"busybox:1.36"` | Image used for batch connectivity verification checks. | `"registry.internal/busybox:1.36"` |
-
----
-
-## Web
-
-| Variable | Type | Default | Description | Example Override |
-|---|---|---|---|---|
-| `web_priority` | `number` | `80` | Nomad job priority for the OpenStudio Web UI job. | `90` |
-| `web_cpu` | `number` | `500` | CPU shares allocated to the OpenStudio Web task. | `1000` |
-| `web_memory` | `number` | `1024` | Memory (MB) allocated to the OpenStudio Web task. | `2048` |
-| `web_background_count` | `number` | `1` | Number of web-background tasks to run. | `2` |
-
----
-
-## Worker
-
-| Variable | Type | Default | Description | Example Override |
-|---|---|---|---|---|
-| `worker_count` | `number` | `1` | Number of Nomad worker task group allocations. See [Variable Interactions](#variable-interactions). | `4` |
-| `worker_priority` | `number` | `40` | Nomad job priority for calculation workers. | `60` |
-| `worker_cpu` | `number` | `2000` | CPU shares allocated to the OpenStudio worker task. | `4000` |
-| `worker_memory` | `number` | `4096` | Memory (MB) allocated to the OpenStudio worker task. | `8192` |
-| `worker_queues` | `string` | `"requeued,simulations"` | Comma-separated queue list processed by worker tasks. | `"requeued,simulations,batch"` |
-| `worker_process_count` | `string` | `"1"` | `COUNT` environment variable passed to worker containers. | `"2"` |
-| `worker_update_max_parallel` | `number` | `1` | Maximum number of worker allocations updated in parallel during rolling updates. | `2` |
-| `worker_update_health_check` | `string` | `"task_states"` | Health check mode for worker rolling updates (`task_states` or `checks`). | `"checks"` |
-| `worker_update_min_healthy_time` | `string` | `"30s"` | How long a worker allocation must remain healthy before promotion. | `"1m"` |
-| `worker_update_healthy_deadline` | `string` | `"5m"` | Maximum time for a worker allocation to become healthy. | `"10m"` |
-| `worker_update_progress_deadline` | `string` | `"10m"` | Maximum time for the worker rolling update to make progress. | `"20m"` |
-| `worker_update_auto_revert` | `bool` | `true` | Automatically revert a worker deployment if the update fails. | `false` |
-
----
-
-## Worker Autoscaling
-
-| Variable | Type | Default | Description | Example Override |
-|---|---|---|---|---|
-| `worker_autoscaling_enabled` | `bool` | `false` | Enable Nomad Autoscaler integration for the worker task group. When `false` (default), the `scaling` block is omitted and `worker_count` controls the fixed allocation count. | `true` |
-| `worker_min_replicas` | `number` | `1` | Minimum worker allocations. Used as the initial `count` and as the autoscaler lower bound when autoscaling is enabled. | `2` |
-| `worker_max_replicas` | `number` | `10` | Maximum worker allocations when autoscaling is enabled. | `20` |
-| `autoscaler_prometheus_address` | `string` | `"http://prometheus:9090"` | Address of the Prometheus server queried by the Nomad Autoscaler APM plugin. | `"http://prometheus.service.consul:9090"` |
-| `autoscaler_cooldown` | `string` | `"5m"` | Cooldown duration between consecutive autoscaling actions. | `"2m"` |
-| `worker_queue_requeued_query` | `string` | `"sum(openstudio_worker_queue_depth{queue=\"requeued\"})"` | Prometheus query for requeued queue backlog depth. | Custom PromQL |
-| `worker_queue_requeued_target` | `number` | `1` | Target requeued queue depth per worker allocation. | `2` |
-| `worker_queue_simulations_query` | `string` | `"sum(openstudio_worker_queue_depth{queue=\"simulations\"})"` | Prometheus query for simulations queue backlog depth. | Custom PromQL |
-| `worker_queue_simulations_target` | `number` | `5` | Target simulations queue depth per worker allocation. | `10` |
-
-### Prometheus metric requirements
-
-The autoscaler evaluates two Prometheus queries by default:
-
-| Queue | Default PromQL | Meaning |
-|---|---|---|
-| `requeued` | `sum(openstudio_worker_queue_depth{queue="requeued"})` | Jobs re-enqueued after transient failure |
-| `simulations` | `sum(openstudio_worker_queue_depth{queue="simulations"})` | Active simulation jobs waiting for a worker |
-
-These metrics must be exposed by the OpenStudio Server application and scraped by Prometheus. If a metric is absent (returns no series), the Nomad Autoscaler will not emit scale events — this is the safe default behaviour.
-
-### Enabling autoscaling
-
-```hcl
-# override.hcl — pass to nomad-pack with --var-file
-worker_autoscaling_enabled    = true
-worker_min_replicas           = 1
-worker_max_replicas           = 20
-autoscaler_prometheus_address = "http://prometheus.service.consul:9090"
-autoscaler_cooldown           = "5m"
-```
-
-The Nomad Autoscaler agent must be running separately and configured to target the same Nomad cluster. See the [Nomad Autoscaler documentation](https://developer.hashicorp.com/nomad/tools/autoscaling).
-
----
-
-## MongoDB (DB)
-
-| Variable | Type | Default | Description | Example Override |
-|---|---|---|---|---|
-| `db_cpu` | `number` | `500` | CPU shares allocated to the MongoDB task. | `1000` |
-| `db_memory` | `number` | `1024` | Memory (MB) allocated to the MongoDB task. | `4096` |
-| `db_health_check_interval` | `string` | `"10s"` | Interval between Consul health checks for the MongoDB service. | `"30s"` |
-| `db_health_check_timeout` | `string` | `"2s"` | Timeout for Consul health checks for the MongoDB service. | `"5s"` |
-| `mongodb_storage_type` | `string` | `"host_volume"` | MongoDB storage type: `host_volume`, `csi`, or `ephemeral`. Use `ephemeral` to disable persistent volume wiring. | `"csi"` |
-| `mongodb_volume_source` | `string` | `"openstudio-mongodb"` | Nomad host_volume name or CSI volume ID for MongoDB persistent storage. | `"mongo-data-vol"` |
-| `mongodb_backup_uri` | `string` | `"mongodb://openstudio-db.service.consul:27017"` | MongoDB connection URI used by backup and restore jobs. | `"mongodb://user:pass@mongo.internal:27017"` |
-
----
-
-## Redis
-
-| Variable | Type | Default | Description | Example Override |
-|---|---|---|---|---|
-| `redis_cpu` | `number` | `250` | CPU shares allocated to the Redis task. | `500` |
-| `redis_memory` | `number` | `512` | Memory (MB) allocated to the Redis task. | `1024` |
-| `redis_storage_type` | `string` | `"host_volume"` | Redis storage type: `host_volume`, `csi`, or `ephemeral`. Use `ephemeral` to disable persistent volume wiring. | `"csi"` |
-| `redis_volume_source` | `string` | `"openstudio-redis"` | Nomad host_volume name or CSI volume ID for Redis persistent storage. | `"redis-data-vol"` |
-| `redis_health_check_interval` | `string` | `"10s"` | Interval between Consul health checks for the Redis service. | `"30s"` |
-| `redis_health_check_timeout` | `string` | `"2s"` | Timeout for Consul health checks for the Redis service. | `"5s"` |
-| `nfs_shared_volume_enabled` | `bool` | `false` | When `true`, a CSI NFS shared volume is declared and mounted in both web and worker task groups. | `true` |
-| `nfs_volume_source` | `string` | `"openstudio-nfs"` | Nomad CSI volume ID for the NFS shared volume. | `"openstudio-nfs-prod"` |
-| `nfs_volume_mount_path` | `string` | `"/mnt/openstudio"` | Mount path inside web and worker tasks for the NFS shared volume. | `"/data/shared"` |
-| `redis_backup_host` | `string` | `"openstudio-redis.service.consul"` | Redis hostname used by backup and restore jobs. | `"redis.internal"` |
-| `redis_backup_port` | `number` | `6379` | Redis port used by backup and restore jobs. | `6380` |
-
----
-
-## Rserve
-
-| Variable | Type | Default | Description | Example Override |
-|---|---|---|---|---|
-| `rserve_cpu` | `number` | `500` | CPU shares allocated to the Rserve task. | `1000` |
-| `rserve_memory` | `number` | `1024` | Memory (MB) allocated to the Rserve task. | `2048` |
-| `rserve_health_check_interval` | `string` | `"10s"` | Interval between Consul health checks for the Rserve service. | `"30s"` |
-| `rserve_health_check_timeout` | `string` | `"2s"` | Timeout for Consul health checks for the Rserve service. | `"5s"` |
-
----
-
-## Logging
-
-| Variable | Type | Default | Description | Example Override |
-|---|---|---|---|---|
-| `log_driver_type` | `string` | `"json-file"` | The Docker logging driver for all containers. | `"journald"` |
-| `log_max_size` | `string` | `"10m"` | Maximum size of log files before rotation. | `"50m"` |
-| `log_max_files` | `number` | `3` | Maximum number of rotated log files to retain. | `5` |
-
----
-
-## Vector Sidecar
-
-| Variable | Type | Default | Description | Example Override |
-|---|---|---|---|---|
-| `enable_vector_collection` | `bool` | `true` | Enable Vector sidecar for log collection and forwarding. | `false` |
-
----
-
-## Consul Connect
-
-| Variable | Type | Default | Description | Example Override |
-|---|---|---|---|---|
-| `enable_consul_connect` | `bool` | `false` | Enable Consul Connect sidecar proxies for mTLS service-to-service communication. | `true` |
-
----
-
-## Vault Integration
-
-> **See also:** [docs/vault-policies.md](./vault-policies.md) for full setup instructions.
-
-| Variable | Type | Default | Description | Example Override |
-|---|---|---|---|---|
-| `vault_integration_enabled` | `bool` | `false` | Enable Nomad Vault integration stanzas for tasks. | `true` |
-| `vault_enabled` | `bool` | `false` | Enable task-level Vault role authorization blocks in Nomad tasks. | `true` |
-| `vault_default_role` | `string` | `""` | Default Vault role for all tasks when no task-specific role is set. | `"openstudio-server"` |
-| `vault_db_role` | `string` | `""` | Vault role override for the MongoDB task. | `"openstudio-db"` |
-| `vault_redis_role` | `string` | `""` | Vault role override for the Redis task. | `"openstudio-redis"` |
-| `vault_rserve_role` | `string` | `""` | Vault role override for the Rserve task. | `"openstudio-rserve"` |
-| `vault_vector_role` | `string` | `""` | Vault role override for Vector sidecar tasks. | `"openstudio-vector"` |
-| `vault_policies` | `list(string)` | `[]` | Additional Vault policies to attach to Nomad-issued Vault tokens. | `["openstudio-kv-read"]` |
-| `vault_namespace` | `string` | `""` | Vault Enterprise namespace for task token requests. | `"engineering/openstudio"` |
-| `vault_change_mode` | `string` | `"restart"` | How tasks react to Vault token or secret changes (`restart`, `noop`, or `signal`). | `"signal"` |
-| `vault_change_signal` | `string` | `"SIGHUP"` | Signal sent to tasks when `vault_change_mode = "signal"`. | `"SIGUSR1"` |
-| `vault_env` | `bool` | `true` | Expose Vault token to tasks as environment variables. | `false` |
-
----
-
-## Vault-Backed MongoDB Secrets
-
-| Variable | Type | Default | Description | Example Override |
-|---|---|---|---|---|
-| `enable_vault_mongo_secrets` | `bool` | `false` | Enable dynamic MongoDB credential mapping from Vault into MongoDB task environment variables. See [Variable Interactions](#variable-interactions). | `true` |
-| `vault_mongo_secret_path` | `string` | `"secret/data/openstudio/mongodb"` | Vault KV v2 path containing MongoDB credentials. | `"secret/data/prod/openstudio/mongodb"` |
-| `vault_mongo_username_key` | `string` | `"username"` | Key in the Vault secret data payload containing the MongoDB username. | `"mongo_user"` |
-| `vault_mongo_password_key` | `string` | `"password"` | Key in the Vault secret data payload containing the MongoDB password. | `"mongo_pass"` |
-
----
-
-## Docker Runtime Hardening
-
-| Variable | Type | Default | Description | Example Override |
-|---|---|---|---|---|
-| `docker_user` | `string` | `"1000:1000"` | UID:GID used to run containers (non-root). | `"1001:1001"` |
-| `docker_readonly_rootfs` | `bool` | `true` | Enable Docker read-only root filesystem for all containers. | `false` |
-| `docker_cap_drop` | `list(string)` | `["ALL"]` | Linux capabilities dropped from Docker containers. | `["NET_RAW","SYS_ADMIN"]` |
-| `poststop_cleanup_paths` | `list(string)` | `["/alloc/tmp/analysis", "/alloc/tmp/openstudio/analysis"]` | Directories removed by poststop cleanup lifecycle tasks when allocations stop. | `["/alloc/tmp/analysis"]` |
-
----
-
-## Scheduling Helpers
-
-These variables accept Nomad `constraint`, `affinity`, and `spread` stanza objects.  
-Each entry is a map with the fields accepted by the corresponding Nomad stanza type.
-
-| Variable | Type | Default | Description | Example Override |
-|---|---|---|---|---|
-| `db_constraints` | `any` | `[]` | Placement constraints for the `db` task group. | See example below |
-| `db_affinities` | `any` | `[]` | Placement affinities for the `db` task group. | See example below |
-| `db_spreads` | `any` | `[]` | Spread rules for the `db` task group. | See example below |
-| `redis_constraints` | `any` | `[]` | Placement constraints for the `redis` task group. | See example below |
-| `redis_affinities` | `any` | `[]` | Placement affinities for the `redis` task group. | See example below |
-| `redis_spreads` | `any` | `[]` | Spread rules for the `redis` task group. | See example below |
-| `rserve_constraints` | `any` | `[]` | Placement constraints for the `rserve` task group. | See example below |
-| `rserve_affinities` | `any` | `[]` | Placement affinities for the `rserve` task group. | See example below |
-| `rserve_spreads` | `any` | `[]` | Spread rules for the `rserve` task group. | See example below |
-
-**Example:**
-
-```hcl
-db_constraints = [
-  { attribute = "${attr.kernel.name}", operator = "=", value = "linux" }
-]
-
-db_affinities = [
-  { attribute = "${meta.storage_tier}", operator = "=", value = "ssd", weight = 100 }
-]
-
-db_spreads = [
-  { attribute = "${node.datacenter}", weight = 100 }
-]
-```
-
----
-
-## Backup & Restore
-
-| Variable | Type | Default | Description | Example Override |
-|---|---|---|---|---|
-| `backup_enabled` | `bool` | `true` | Enable the periodic MongoDB and Redis backup batch job. | `false` |
-| `backup_cron` | `string` | `"0 2 * * * *"` | Nomad/cron expression for the periodic backup schedule (6-field: second-first). | `"0 0 1 * * *"` |
-| `backup_prohibit_overlap` | `bool` | `true` | Prevent overlapping backup runs. | `false` |
-| `backup_nfs_host_volume` | `string` | `"openstudio-backups"` | Nomad host volume name backed by an NFS mount for state backups. | `"nfs-backups"` |
-| `backup_mount_path` | `string` | `"/backups"` | Path inside backup tasks where the NFS host volume is mounted. | `"/mnt/backups"` |
-| `backup_subdirectory` | `string` | `"openstudio-state"` | Subdirectory under the backup mount where OpenStudio state backups are written. | `"prod/openstudio-state"` |
-| `backup_retention_days` | `number` | `14` | Number of days of backup files to retain before deletion. | `30` |
-| `restore_enabled` | `bool` | `true` | Enable the on-demand parameterized restore batch job definition. | `false` |
-
----
-
-## Batch Verification
-
-| Variable | Type | Default | Description | Example Override |
-|---|---|---|---|---|
-| `enable_batch_verification` | `bool` | `false` | Enable standalone batch connectivity verification job. | `true` |
-| `verification_targets` | `list(string)` | `["db=openstudio-db.service.consul:27017","redis=openstudio-redis.service.consul:6379","rserve=openstudio-rserve.service.consul:6311"]` | Connectivity targets in `component=host:port` format. | See example below |
-
-**Example:**
-
-```hcl
-enable_batch_verification = true
-verification_targets = [
-  "db=openstudio-db.service.consul:27017",
-  "redis=openstudio-redis.service.consul:6379",
-  "rserve=openstudio-rserve.service.consul:6311",
-]
-```
-
----
-
-## Variable Interactions
-
-### `worker_count` vs. `worker_autoscaling_enabled`
-
-`worker_count` sets the **static** desired count when `worker_autoscaling_enabled = false` (the default).  
-When `worker_autoscaling_enabled = true`, the Nomad Autoscaler policy takes ownership of
-the count — `worker_count` serves only as the initial allocation seed and `worker_min_replicas`
-/ `worker_max_replicas` become the binding limits. Setting `worker_count` higher than
-`worker_max_replicas` results in the autoscaler immediately scaling down.
-
-```
-worker_autoscaling_enabled = false  →  worker_count is the fixed allocation count
-worker_autoscaling_enabled = true   →  worker_min_replicas ≤ actual count ≤ worker_max_replicas
-```
-
-### `vault_integration_enabled` vs. `vault_enabled`
-
-These two variables serve related but distinct purposes:
-
-| Variable | Effect |
-|---|---|
-| `vault_integration_enabled` | Adds Vault `token` / `change_mode` stanzas for environment-variable-based token injection. |
-| `vault_enabled` | Adds Nomad `vault { role = "..." }` blocks for role-based token acquisition (Nomad ≥ 1.4 style). |
-
-For most modern clusters, enable both. Enabling only `vault_enabled` is sufficient for Nomad ≥ 1.7.
-
-### `enable_vault_mongo_secrets` and plaintext credential variables
-
-When `enable_vault_mongo_secrets = true`, the MongoDB task renders a Nomad `template` block that
-pulls `MONGO_INITDB_ROOT_USERNAME` and `MONGO_INITDB_ROOT_PASSWORD` directly from Vault at the
-path specified by `vault_mongo_secret_path`. **Do not** hardcode credentials anywhere else in the
-pack variables when this feature is active — use Vault as the single source of truth.
-
-This feature requires `vault_integration_enabled = true` (or `vault_enabled = true`) to be set so
-that Nomad tasks have a valid Vault token.
-
-### `mongodb_storage_type` / `redis_storage_type` and matching volume variables
-
-Setting the storage type to `host_volume` or `csi` uses `mongodb_volume_source` / `redis_volume_source` as the volume source name:
-
-| Storage type | MongoDB variable | Redis variable |
-|---|---|---|
-| `host_volume` (default) | `mongodb_volume_source` | `redis_volume_source` |
-| `csi` | `mongodb_volume_source` | `redis_volume_source` |
-| `ephemeral` | *(none required)* | *(none required)* |
-
-The volume must already exist on the Nomad clients (host_volume) or be registered as a Nomad CSI volume before deploying the pack.
+> **Auto-generated:** `scripts/generate-vars-doc.sh` from `variables.hcl`.
+> Do not edit this file manually.
+
+| Variable | Type | Default | Description |
+| --- | --- | --- | --- |
+| `job_name` | `string` | `"openstudio-server"` | The name of the Nomad job. |
+| `app_version` | `string` | `"latest"` | Application version tag used for OpenStudio Server component images. |
+| `worker_min_replicas` | `number` | `1` | Minimum number of worker replicas. |
+| `worker_max_replicas` | `number` | `10` | Maximum number of worker replicas. |
+| `vault_integration_enabled` | `bool` | `false` | Enable Nomad Vault integration stanzas for tasks. |
+| `ingress_domain` | `string` | `"localhost"` | Ingress domain used when constructing service hostnames and Traefik router rules. |
+| `ingress_tls_enabled` | `bool` | `false` | When true, adds Traefik TLS router tags for the websecure entrypoint on the web service. |
+| `nomad_namespace` | `string` | `"default"` | The Nomad namespace in which all pack jobs are registered. Use 'default' for the built-in namespace. |
+| `region` | `string` | `"global"` | The Nomad region where the job will be deployed. |
+| `datacenters` | `list(string)` | `["dc1"]` | A list of datacenters in the region which are eligible for task placement. |
+| `web_image` | `string` | `"nrel/openstudio-server:latest"` | The image name and tag for the OpenStudio Server web container. |
+| `web_priority` | `number` | `80` | Nomad job priority for the OpenStudio Web UI job. |
+| `web_cpu` | `number` | `500` | CPU shares allocated to the OpenStudio Web task. |
+| `web_memory` | `number` | `1024` | Memory (MB) allocated to the OpenStudio Web task. |
+| `web_memory_max` | `number` | `2048` | Memory hard limit (MB) for the OpenStudio Web task (Nomad memory_max). |
+| `web_count` | `number` | `1` | The number of web task group allocations. |
+| `web_port` | `number` | `80` | Host-side static port mapped to the web container HTTP port. |
+| `web_health_check_interval` | `string` | `"10s"` | Interval between Consul health checks for the web service. |
+| `web_health_check_timeout` | `string` | `"2s"` | Timeout for Consul health checks for the web service. |
+| `web_update_max_parallel` | `number` | `1` | Maximum number of web allocations updated in parallel. |
+| `web_update_health_check` | `string` | `"checks"` | Health check mode for web rolling updates. |
+| `web_update_min_healthy_time` | `string` | `"30s"` | How long a web allocation must remain healthy before promotion. |
+| `web_update_healthy_deadline` | `string` | `"5m"` | Maximum time for a web allocation to become healthy. |
+| `web_update_progress_deadline` | `string` | `"10m"` | Maximum time for the web rolling update to make progress. |
+| `web_update_auto_revert` | `bool` | `true` | Automatically revert a web deployment if the update fails. |
+| `web_background_cpu` | `number` | `500` | CPU shares allocated to the OpenStudio web-background task. |
+| `web_background_memory` | `number` | `1024` | Memory (MB) allocated to the OpenStudio web-background task. |
+| `worker_image` | `string` | `"nrel/openstudio-server:latest"` | The image name and tag for the OpenStudio Server worker container. |
+| `worker_count` | `number` | `1` | The number of worker task group allocations. |
+| `worker_update_max_parallel` | `number` | `1` | Maximum number of worker allocations updated in parallel. |
+| `worker_update_health_check` | `string` | `"task_states"` | Health check mode for worker rolling updates. |
+| `worker_update_min_healthy_time` | `string` | `"30s"` | How long a worker allocation must remain healthy before promotion. |
+| `worker_update_healthy_deadline` | `string` | `"5m"` | Maximum time for a worker allocation to become healthy. |
+| `worker_update_progress_deadline` | `string` | `"10m"` | Maximum time for the worker rolling update to make progress. |
+| `worker_update_auto_revert` | `bool` | `true` | Automatically revert a worker deployment if the update fails. |
+| `worker_priority` | `number` | `40` | Nomad job priority for calculation workers. |
+| `worker_queues` | `string` | `"requeued,simulations"` | Comma-separated queue list processed by worker tasks. |
+| `worker_process_count` | `string` | `"1"` | COUNT environment variable passed to worker containers. |
+| `worker_cpu` | `number` | `2000` | CPU shares allocated to the OpenStudio worker task. |
+| `worker_memory` | `number` | `4096` | Memory (MB) allocated to the OpenStudio worker task. |
+| `worker_autoscaling_enabled` | `bool` | `false` | Enable Nomad Autoscaler integration for the worker task group. When false (default), the scaling block is omitted and worker_count controls the fixed allocation count. |
+| `autoscaler_prometheus_address` | `string` | `"http://prometheus:9090"` | Address of the Prometheus server used by the Nomad Autoscaler APM plugin to evaluate scaling checks. |
+| `autoscaler_cooldown` | `string` | `"5m"` | Cooldown duration between worker autoscaling actions (e.g. '5m', '2m'). |
+| `worker_queue_requeued_query` | `string` | `"sum(openstudio_worker_queue_depth{queue=\"requeued\"})"` | Prometheus query for requeued backlog depth. |
+| `worker_queue_requeued_target` | `number` | `1` | Target queue depth for requeued jobs per worker allocation. |
+| `worker_queue_simulations_query` | `string` | `"sum(openstudio_worker_queue_depth{queue=\"simulations\"})"` | Prometheus query for simulations backlog depth. |
+| `worker_queue_simulations_target` | `number` | `5` | Target queue depth for simulation jobs per worker allocation. |
+| `web_background_image` | `string` | `"nrel/openstudio-server:latest"` | The image name and tag for the OpenStudio Server web-background container. |
+| `web_background_count` | `number` | `1` | The number of web-background tasks to run. |
+| `db_image` | `string` | `"mongo:4.2"` | The MongoDB database image name and tag. |
+| `db_cpu` | `number` | `500` | CPU shares allocated to the MongoDB task. |
+| `db_memory` | `number` | `1024` | Memory (MB) allocated to the MongoDB task. |
+| `db_health_check_interval` | `string` | `"10s"` | Interval between Consul health checks for the MongoDB service. |
+| `db_health_check_timeout` | `string` | `"2s"` | Timeout for Consul health checks for the MongoDB service. |
+| `mongodb_storage_type` | `string` | `"host_volume"` | MongoDB storage type: host_volume, csi, or ephemeral. Use ephemeral to disable persistent volume wiring. |
+| `mongodb_volume_source` | `string` | `"openstudio-mongodb"` | Nomad volume source name for MongoDB persistent storage (host_volume name or CSI volume ID). |
+| `redis_image` | `string` | `"redis:6.2-alpine"` | The Redis image name and tag. |
+| `redis_cpu` | `number` | `250` | CPU shares allocated to the Redis task. |
+| `redis_memory` | `number` | `512` | Memory (MB) allocated to the Redis task. |
+| `redis_storage_type` | `string` | `"host_volume"` | Redis storage type: host_volume, csi, or ephemeral. Use ephemeral to disable persistent volume wiring. |
+| `redis_volume_source` | `string` | `"openstudio-redis"` | Nomad volume source name for Redis persistent storage (host_volume name or CSI volume ID). |
+| `redis_health_check_interval` | `string` | `"10s"` | Interval between Consul health checks for the Redis service. |
+| `redis_health_check_timeout` | `string` | `"2s"` | Timeout for Consul health checks for the Redis service. |
+| `nfs_shared_volume_enabled` | `bool` | `false` | When true, a CSI NFS shared volume is declared and mounted in both web and worker task groups. |
+| `nfs_volume_source` | `string` | `"openstudio-nfs"` | Nomad CSI volume ID for the NFS shared volume used by web and worker task groups. |
+| `nfs_volume_mount_path` | `string` | `"/mnt/openstudio"` | Mount path inside web and worker tasks where the NFS shared volume is attached. |
+| `rserve_image` | `string` | `"nrel/openstudio-rserve:latest"` | The Rserve image name and tag. |
+| `rserve_cpu` | `number` | `500` | CPU shares allocated to the Rserve task. |
+| `rserve_memory` | `number` | `1024` | Memory (MB) allocated to the Rserve task. |
+| `rserve_health_check_interval` | `string` | `"10s"` | Interval between Consul health checks for the Rserve service. |
+| `rserve_health_check_timeout` | `string` | `"2s"` | Timeout for Consul health checks for the Rserve service. |
+| `enable_consul_connect` | `bool` | `false` | Enable Consul Connect sidecar proxies for mTLS service-to-service communication. |
+| `log_driver_type` | `string` | `"json-file"` | The logging driver to use for the containers. |
+| `log_max_size` | `string` | `"10m"` | The maximum size of log files before rotation. |
+| `log_max_files` | `number` | `3` | The maximum number of log files to keep. |
+| `enable_vector_collection` | `bool` | `true` | Enable Vector sidecar for log collection. |
+| `vector_image` | `string` | `"timberio/vector:0.30.0-alpine"` | The Vector image name and tag. |
+| `enable_vault_mongo_secrets` | `bool` | `false` | Enable dynamic MongoDB credential mapping from Vault into MongoDB task environment variables. |
+| `vault_mongo_secret_path` | `string` | `"secret/data/openstudio/mongodb"` | Vault secret path for MongoDB credentials (for example: secret/data/openstudio/mongodb). |
+| `vault_mongo_username_key` | `string` | `"username"` | Key in the Vault secret data payload containing the MongoDB username. |
+| `vault_mongo_password_key` | `string` | `"password"` | Key in the Vault secret data payload containing the MongoDB password. |
+| `db_constraints` | `any` | `[]` | Placement constraints for the db group. |
+| `db_affinities` | `any` | `[]` | Placement affinities for the db group. |
+| `db_spreads` | `any` | `[]` | Spread rules for the db group. |
+| `redis_constraints` | `any` | `[]` | Placement constraints for the redis group. |
+| `redis_affinities` | `any` | `[]` | Placement affinities for the redis group. |
+| `redis_spreads` | `any` | `[]` | Spread rules for the redis group. |
+| `rserve_constraints` | `any` | `[]` | Placement constraints for the rserve group. |
+| `rserve_affinities` | `any` | `[]` | Placement affinities for the rserve group. |
+| `rserve_spreads` | `any` | `[]` | Spread rules for the rserve group. |
+| `backup_enabled` | `bool` | `true` | Enable the periodic MongoDB and Redis backup batch job. |
+| `backup_cron` | `string` | `"0 2 * * * *"` | Cron expression for the periodic backup schedule. |
+| `backup_prohibit_overlap` | `bool` | `true` | Prevent overlapping backup runs. |
+| `backup_nfs_host_volume` | `string` | `"openstudio-backups"` | Nomad host volume name backed by an NFS mount for state backups. |
+| `backup_mount_path` | `string` | `"/backups"` | Path inside backup tasks where the NFS host volume is mounted. |
+| `backup_subdirectory` | `string` | `"openstudio-state"` | Subdirectory name under the backup mount where OpenStudio state backups are written. |
+| `backup_retention_days` | `number` | `14` | How many days of backup files to retain. |
+| `mongodb_backup_uri` | `string` | `"mongodb://openstudio-db.service.consul:27017"` | MongoDB URI used by backup and restore jobs. |
+| `redis_backup_host` | `string` | `"openstudio-redis.service.consul"` | Redis host used by backup and restore jobs. |
+| `redis_backup_port` | `number` | `6379` | Redis port used by backup and restore jobs. |
+| `restore_enabled` | `bool` | `true` | Enable the on-demand restore batch job definition. |
+| `docker_user` | `string` | `"1000:1000"` | UID:GID to run containers as (non-root). |
+| `docker_readonly_rootfs` | `bool` | `true` | Enable Docker read-only root filesystem. |
+| `docker_cap_drop` | `list(string)` | `["ALL"]` | Linux capabilities to drop from Docker containers. |
+| `enable_image_prepull` | `bool` | `true` | When true, renders the system-hooks job that pre-pulls all heavy images on every eligible node before scheduling. |
+| `prepull_kill_timeout` | `string` | `"600s"` | kill_timeout applied to every task in the image pre-pull system job. Must be >= 10 minutes to allow large image layers to be pulled. |
+| `poststop_cleanup_image` | `string` | `"alpine:3.20"` | The image used for poststop cleanup lifecycle tasks. |
+| `poststop_cleanup_paths` | `list(string)` | `[ "/alloc/tmp/analysis", "/alloc/tmp/openstudio/analysis", ]` | Directories removed by poststop cleanup lifecycle tasks when allocations stop. |
+| `enable_batch_verification` | `bool` | `false` | Enable standalone batch connectivity verification job. |
+| `verification_image` | `string` | `"busybox:1.36"` | The image used for batch connectivity verification checks. |
+| `verification_targets` | `list(string)` | `[ "db=openstudio-db.service.consul:27017", "redis=openstudio-redis.service.consul:6379", "rserve=openstudio-rserve.service.consul:6311", ]` | Connectivity targets in component=host:port format for batch verification. |
+| `vault_policy` | `string` | `"openstudio-server"` | Name of the Vault policy granted to all OpenStudio Server tasks when vault_integration_enabled is true. |
+| `vault_kv_mongodb_path` | `string` | `"secret/data/openstudio/mongodb"` | Vault KV v2 path for MongoDB credentials (must contain a 'password' key). |
+| `vault_kv_redis_path` | `string` | `"secret/data/openstudio/redis"` | Vault KV v2 path for Redis credentials (must contain a 'password' key). |
+| `vault_kv_app_path` | `string` | `"secret/data/openstudio/app"` | Vault KV v2 path for application secrets (must contain a 'secret_key_base' key). |
+| `mongo_password` | `string` | `""` | Plaintext MongoDB password used when vault_integration_enabled is false. |
+| `redis_password` | `string` | `""` | Plaintext Redis password used when vault_integration_enabled is false. |
+| `app_secret_key_base` | `string` | `""` | Plaintext application secret key base used when vault_integration_enabled is false. |
+| `vault_enabled` | `bool` | `false` | Enable Vault role-based authorization blocks in Nomad tasks. |
+| `vault_default_role` | `string` | `""` | Default Vault role used by tasks when a task-specific role is not set. |
+| `vault_db_role` | `string` | `""` | Vault role override for the MongoDB task. |
+| `vault_redis_role` | `string` | `""` | Vault role override for the Redis task. |
+| `vault_rserve_role` | `string` | `""` | Vault role override for the Rserve task. |
+| `vault_vector_role` | `string` | `""` | Vault role override for Vector sidecar tasks. |
+| `vault_policies` | `list(string)` | `[]` | Additional Vault policies to attach to Nomad-issued Vault tokens. |
+| `vault_namespace` | `string` | `""` | Vault namespace used for task token requests (Enterprise Vault). |
+| `vault_change_mode` | `string` | `"restart"` | How tasks react to Vault token or secret changes. |
+| `vault_change_signal` | `string` | `"SIGHUP"` | Signal sent to tasks when vault_change_mode is set to signal. |
+| `vault_env` | `bool` | `true` | Expose Vault token to tasks as environment variables. |
+| `test_web_port` | `number` | `80` | Port for the HTTP health check against openstudio-web.service.consul. |
+| `test_redis_port` | `number` | `6379` | Port for the TCP check against openstudio-redis.service.consul. |
+| `test_mongo_port` | `number` | `27017` | Port for the TCP check against openstudio-db.service.consul (MongoDB). |
+| `test_rserve_port` | `number` | `6311` | Port for the TCP check against openstudio-rserve.service.consul. |
+| `test_timeout_seconds` | `number` | `10` | Per-check timeout in seconds passed to curl --max-time and nc -w. |
+| `test_retry_count` | `number` | `3` | Number of curl retries for the web HTTP health check. |
+| `test_curl_image_tag` | `string` | `"latest"` | Tag for the curlimages/curl image used in the web HTTP check task. |
+| `test_busybox_image_tag` | `string` | `"stable"` | Tag for the busybox image used in TCP check tasks. |
+| `compute_node_class` | `string` | `"compute"` | Nomad node class label for CPU-intensive compute nodes. Used by the openstudio_server.compute_node_constraint helper macro. |
+| `system_node_class` | `string` | `"system"` | Nomad node class label for infrastructure/system nodes. Used by the openstudio_server.system_node_constraint helper macro. |
