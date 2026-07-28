@@ -1,17 +1,16 @@
 name: Nomad Pack Validation
 
 on:
-  push:
-    branches: [ develop ]
   pull_request:
     branches: [ develop ]
+  workflow_dispatch:
 
 jobs:
   integration:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Setup Nomad
         uses: hashicorp/setup-nomad@main
@@ -19,9 +18,14 @@ jobs:
       - name: Setup Nomad Pack
         uses: hashicorp/setup-nomad-pack@main
 
+      - name: Check pack formatting
+        run: nomad-pack fmt -check -recursive .
+
+      - name: Validate pack rendering
+        run: nomad-pack render .
+
       - name: Validate Vagrantfile Syntax
-        run: |
-          ruby -c Vagrantfile
+        run: ruby -c Vagrantfile
 
       - name: Validate Provisioning Scripts
         run: |
