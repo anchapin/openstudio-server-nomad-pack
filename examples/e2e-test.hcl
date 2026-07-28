@@ -34,6 +34,10 @@ worker_memory      = 128
 worker_count               = 1
 worker_autoscaling_enabled = false
 
+docker_user            = ""
+docker_readonly_rootfs = false
+docker_cap_drop        = []
+
 db_image             = "mongo:7-slim"
 redis_image          = "redis:7-alpine"
 rserve_image         = "alpine:3.18"
