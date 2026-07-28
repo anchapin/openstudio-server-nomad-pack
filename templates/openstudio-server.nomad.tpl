@@ -1,6 +1,6 @@
-job "[[ var "job_name" ]]" {
-  region      = "[[ var "region" ]]"
-  datacenters = [[ var "datacenters" | toJSON ]]
+job "[[ var "job_name" . ]]" {
+  region      = "[[ var "region" . ]]"
+  datacenters = [[ var "datacenters" . | toJson ]]
   type        = "service"
 
   # Placeholder groups mapping to openstudio-server components:
@@ -19,7 +19,7 @@ job "[[ var "job_name" ]]" {
       driver = "docker"
 
       config {
-        image = "[[ var "db_image" ]]"
+        image = "[[ var "db_image" . ]]"
         ports = ["db"]
       }
 
@@ -50,7 +50,7 @@ job "[[ var "job_name" ]]" {
       driver = "docker"
 
       config {
-        image = "[[ var "redis_image" ]]"
+        image = "[[ var "redis_image" . ]]"
         ports = ["redis"]
       }
 
