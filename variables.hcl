@@ -10,18 +10,6 @@ variable "app_version" {
   default     = "latest"
 }
 
-variable "mongodb_storage_type" {
-  type        = string
-  description = "Nomad volume type for MongoDB persistence (for example, host or csi). Use ephemeral to disable persistent volume wiring."
-  default     = "host"
-}
-
-variable "mongodb_volume_source" {
-  type        = string
-  description = "Nomad volume source name for MongoDB persistent storage."
-  default     = "openstudio-mongodb"
-}
-
 variable "worker_min_replicas" {
   type        = number
   description = "Minimum number of worker replicas."
@@ -252,19 +240,13 @@ variable "db_health_check_timeout" {
 
 variable "mongodb_storage_type" {
   type        = string
-  description = "MongoDB storage type: ephemeral, host, or csi."
-  default     = "ephemeral"
+  description = "MongoDB storage type: host_volume, csi, or ephemeral. Use ephemeral to disable persistent volume wiring."
+  default     = "host_volume"
 }
 
-variable "mongodb_host_volume" {
+variable "mongodb_volume_source" {
   type        = string
-  description = "Nomad client host_volume name for MongoDB when mongodb_storage_type is host."
-  default     = "openstudio-mongodb"
-}
-
-variable "mongodb_csi_volume" {
-  type        = string
-  description = "Nomad CSI volume ID for MongoDB when mongodb_storage_type is csi."
+  description = "Nomad volume source name for MongoDB persistent storage (host_volume name or CSI volume ID)."
   default     = "openstudio-mongodb"
 }
 
@@ -288,19 +270,13 @@ variable "redis_memory" {
 
 variable "redis_storage_type" {
   type        = string
-  description = "Redis storage type: ephemeral, host, or csi."
-  default     = "ephemeral"
+  description = "Redis storage type: host_volume, csi, or ephemeral. Use ephemeral to disable persistent volume wiring."
+  default     = "host_volume"
 }
 
-variable "redis_host_volume" {
+variable "redis_volume_source" {
   type        = string
-  description = "Nomad client host_volume name for Redis when redis_storage_type is host."
-  default     = "openstudio-redis"
-}
-
-variable "redis_csi_volume" {
-  type        = string
-  description = "Nomad CSI volume ID for Redis when redis_storage_type is csi."
+  description = "Nomad volume source name for Redis persistent storage (host_volume name or CSI volume ID)."
   default     = "openstudio-redis"
 }
 
@@ -314,6 +290,24 @@ variable "redis_health_check_timeout" {
   type        = string
   description = "Timeout for Consul health checks for the Redis service."
   default     = "2s"
+}
+
+variable "nfs_shared_volume_enabled" {
+  type        = bool
+  description = "When true, a CSI NFS shared volume is declared and mounted in both web and worker task groups."
+  default     = false
+}
+
+variable "nfs_volume_source" {
+  type        = string
+  description = "Nomad CSI volume ID for the NFS shared volume used by web and worker task groups."
+  default     = "openstudio-nfs"
+}
+
+variable "nfs_volume_mount_path" {
+  type        = string
+  description = "Mount path inside web and worker tasks where the NFS shared volume is attached."
+  default     = "/mnt/openstudio"
 }
 
 variable "rserve_image" {

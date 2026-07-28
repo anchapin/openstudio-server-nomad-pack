@@ -14,6 +14,23 @@ job "[[ var "job_name" . ]]-redis" {
     [[ template "affinities" (var "redis_affinities" .) ]]
     [[ template "spreads" (var "redis_spreads" .) ]]
 
+    [[ if ne (var "redis_storage_type" .) "ephemeral" ]]
+    [[ if eq (var "redis_storage_type" .) "csi" ]]
+    volume "redis-data" {
+      type            = "csi"
+      source          = "[[ var "redis_volume_source" . ]]"
+      access_mode     = "single-node-writer"
+      attachment_mode = "file-system"
+    }
+    [[ else ]]
+    volume "redis-data" {
+      type      = "host"
+      source    = "[[ var "redis_volume_source" . ]]"
+      read_only = false
+    }
+    [[ end ]]
+    [[ end ]]
+
     network {
       port "redis" {
         to = 6379
@@ -57,8 +74,15 @@ job "[[ var "job_name" . ]]-redis" {
       [[ end ]]
       [[ end ]]
 
+      [[ if ne (var "redis_storage_type" .) "ephemeral" ]]
+      volume_mount {
+        volume      = "redis-data"
+        destination = "/data"
+        read_only   = false
+      }
+      [[ end ]]
+
       config {
-        image = "[[ var "redis_image" . ]]"
         ports = ["redis"]
         user = "[[ var "docker_user" . ]]"
         readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]

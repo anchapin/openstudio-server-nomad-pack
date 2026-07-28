@@ -132,9 +132,8 @@ The Nomad Autoscaler agent must be running separately and configured to target t
 | `db_memory` | `number` | `1024` | Memory (MB) allocated to the MongoDB task. | `4096` |
 | `db_health_check_interval` | `string` | `"10s"` | Interval between Consul health checks for the MongoDB service. | `"30s"` |
 | `db_health_check_timeout` | `string` | `"2s"` | Timeout for Consul health checks for the MongoDB service. | `"5s"` |
-| `mongodb_storage_type` | `string` | `"ephemeral"` | MongoDB storage type: `ephemeral`, `host`, or `csi`. Use `host` or `csi` for persistent data. | `"host"` |
-| `mongodb_host_volume` | `string` | `"openstudio-mongodb"` | Nomad client `host_volume` name for MongoDB when `mongodb_storage_type = "host"`. | `"mongo-data-vol"` |
-| `mongodb_csi_volume` | `string` | `"openstudio-mongodb"` | Nomad CSI volume ID for MongoDB when `mongodb_storage_type = "csi"`. | `"mongo-csi-vol"` |
+| `mongodb_storage_type` | `string` | `"host_volume"` | MongoDB storage type: `host_volume`, `csi`, or `ephemeral`. Use `ephemeral` to disable persistent volume wiring. | `"csi"` |
+| `mongodb_volume_source` | `string` | `"openstudio-mongodb"` | Nomad host_volume name or CSI volume ID for MongoDB persistent storage. | `"mongo-data-vol"` |
 | `mongodb_backup_uri` | `string` | `"mongodb://openstudio-db.service.consul:27017"` | MongoDB connection URI used by backup and restore jobs. | `"mongodb://user:pass@mongo.internal:27017"` |
 
 ---
@@ -145,11 +144,13 @@ The Nomad Autoscaler agent must be running separately and configured to target t
 |---|---|---|---|---|
 | `redis_cpu` | `number` | `250` | CPU shares allocated to the Redis task. | `500` |
 | `redis_memory` | `number` | `512` | Memory (MB) allocated to the Redis task. | `1024` |
-| `redis_storage_type` | `string` | `"ephemeral"` | Redis storage type: `ephemeral`, `host`, or `csi`. | `"host"` |
-| `redis_host_volume` | `string` | `"openstudio-redis"` | Nomad client `host_volume` name for Redis when `redis_storage_type = "host"`. | `"redis-data-vol"` |
-| `redis_csi_volume` | `string` | `"openstudio-redis"` | Nomad CSI volume ID for Redis when `redis_storage_type = "csi"`. | `"redis-csi-vol"` |
+| `redis_storage_type` | `string` | `"host_volume"` | Redis storage type: `host_volume`, `csi`, or `ephemeral`. Use `ephemeral` to disable persistent volume wiring. | `"csi"` |
+| `redis_volume_source` | `string` | `"openstudio-redis"` | Nomad host_volume name or CSI volume ID for Redis persistent storage. | `"redis-data-vol"` |
 | `redis_health_check_interval` | `string` | `"10s"` | Interval between Consul health checks for the Redis service. | `"30s"` |
 | `redis_health_check_timeout` | `string` | `"2s"` | Timeout for Consul health checks for the Redis service. | `"5s"` |
+| `nfs_shared_volume_enabled` | `bool` | `false` | When `true`, a CSI NFS shared volume is declared and mounted in both web and worker task groups. | `true` |
+| `nfs_volume_source` | `string` | `"openstudio-nfs"` | Nomad CSI volume ID for the NFS shared volume. | `"openstudio-nfs-prod"` |
+| `nfs_volume_mount_path` | `string` | `"/mnt/openstudio"` | Mount path inside web and worker tasks for the NFS shared volume. | `"/data/shared"` |
 | `redis_backup_host` | `string` | `"openstudio-redis.service.consul"` | Redis hostname used by backup and restore jobs. | `"redis.internal"` |
 | `redis_backup_port` | `number` | `6379` | Redis port used by backup and restore jobs. | `6380` |
 
@@ -343,12 +344,12 @@ that Nomad tasks have a valid Vault token.
 
 ### `mongodb_storage_type` / `redis_storage_type` and matching volume variables
 
-Setting the storage type to `host` or `csi` requires the corresponding volume variable to be set:
+Setting the storage type to `host_volume` or `csi` uses `mongodb_volume_source` / `redis_volume_source` as the volume source name:
 
 | Storage type | MongoDB variable | Redis variable |
 |---|---|---|
-| `host` | `mongodb_host_volume` | `redis_host_volume` |
-| `csi` | `mongodb_csi_volume` | `redis_csi_volume` |
+| `host_volume` (default) | `mongodb_volume_source` | `redis_volume_source` |
+| `csi` | `mongodb_volume_source` | `redis_volume_source` |
 | `ephemeral` | *(none required)* | *(none required)* |
 
-The volume must already exist on the Nomad clients before deploying the pack.
+The volume must already exist on the Nomad clients (host_volume) or be registered as a Nomad CSI volume before deploying the pack.

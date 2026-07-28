@@ -51,8 +51,8 @@ worker_update_progress_deadline = "20m"
 db_cpu    = 2000
 db_memory = 4096
 
-mongodb_storage_type = "host"
-mongodb_host_volume  = "openstudio-mongodb"
+mongodb_storage_type = "host_volume"
+mongodb_volume_source  = "openstudio-mongodb"
 
 # Spread MongoDB across datacenters for HA.
 db_spreads = [
@@ -63,8 +63,8 @@ db_spreads = [
 redis_cpu    = 500
 redis_memory = 1024
 
-redis_storage_type = "host"
-redis_host_volume  = "openstudio-redis"
+redis_storage_type = "host_volume"
+redis_volume_source  = "openstudio-redis"
 
 redis_spreads = [
   { attribute = "${node.datacenter}", weight = 100 }

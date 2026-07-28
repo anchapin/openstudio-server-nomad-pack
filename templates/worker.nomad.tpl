@@ -45,8 +45,24 @@ job "[[ var "job_name" . ]]-worker" {
       }
     }
     [[ end ]]
+    [[ if var "nfs_shared_volume_enabled" . ]]
+    volume "nfs-shared" {
+      type            = "csi"
+      source          = "[[ var "nfs_volume_source" . ]]"
+      access_mode     = "multi-node-multi-writer"
+      attachment_mode = "file-system"
+    }
+    [[ end ]]
     task "worker" {
       driver = "docker"
+
+      [[ if var "nfs_shared_volume_enabled" . ]]
+      volume_mount {
+        volume      = "nfs-shared"
+        destination = "[[ var "nfs_volume_mount_path" . ]]"
+        read_only   = false
+      }
+      [[ end ]]
 
       config {
         image   = "[[ var "worker_image" . ]]"

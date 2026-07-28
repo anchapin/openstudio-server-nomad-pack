@@ -228,10 +228,10 @@ job_name    = "openstudio-server-dev"
 datacenters = ["dc1"]
 
 # Persistent host volumes (must match host_volume names in nomad-dev.hcl)
-mongodb_storage_type = "host"
-mongodb_host_volume  = "openstudio-mongodb"
-redis_storage_type   = "host"
-redis_host_volume    = "openstudio-redis"
+mongodb_storage_type  = "host_volume"
+mongodb_volume_source = "openstudio-mongodb"
+redis_storage_type    = "host_volume"
+redis_volume_source   = "openstudio-redis"
 
 # Minimal resources for a developer laptop
 web_cpu      = 300

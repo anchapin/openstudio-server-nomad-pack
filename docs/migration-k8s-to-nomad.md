@@ -119,10 +119,10 @@ Nomad Pack variable names (`variables.hcl`).
 | `resources.requests.memory` (mongo)           | `db_memory`                      | |
 | `resources.requests.cpu` (redis)              | `redis_cpu`                      | |
 | `resources.requests.memory` (redis)           | `redis_memory`                   | |
-| `persistence.storageClass` (mongo)            | `mongodb_storage_type`           | `host` or `csi` |
-| `persistence.existingClaim` / PVC name (mongo)| `mongodb_host_volume` / `mongodb_csi_volume` | |
-| `persistence.storageClass` (redis)            | `redis_storage_type`             | `host` or `csi` |
-| `persistence.existingClaim` / PVC name (redis)| `redis_host_volume` / `redis_csi_volume` | |
+| `persistence.storageClass` (mongo)            | `mongodb_storage_type`           | `host_volume` or `csi` |
+| `persistence.existingClaim` / PVC name (mongo)| `mongodb_volume_source`          | |
+| `persistence.storageClass` (redis)            | `redis_storage_type`             | `host_volume` or `csi` |
+| `persistence.existingClaim` / PVC name (redis)| `redis_volume_source`            | |
 | `ingress.hosts[0].host`                       | `ingress_domain`                 | |
 | `nameOverride` / `fullnameOverride`           | `job_name`                       | |
 | `appVersion` / `image.tag`                    | `app_version`                    | |
@@ -263,8 +263,8 @@ CSI volume and writing files via a shell task.
 
 ```hcl
 # override.hcl
-redis_storage_type = "host"          # or "csi"
-redis_host_volume  = "openstudio-redis"
+redis_storage_type  = "host_volume"  # or "csi"
+redis_volume_source = "openstudio-redis"
 ```
 
 Redis will load the RDB file automatically on startup from the mounted volume path.
