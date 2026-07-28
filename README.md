@@ -163,6 +163,7 @@ The raw variable declarations and defaults live in [`variables.hcl`](./variables
 | --- | --- | --- | --- |
 | `job_name` | `string` | The name of the Nomad job | `"openstudio-server"` |
 | `app_version` | `string` | Version tag for OpenStudio Server components | `"latest"` |
+| `nomad_namespace` | `string` | Nomad namespace in which all pack jobs are registered | `"default"` |
 | `mongodb_storage_type` | `string` | MongoDB storage type (`host_volume`, `csi`, or `ephemeral`) | `"host_volume"` |
 | `mongodb_volume_source` | `string` | Nomad host_volume name or CSI volume ID for MongoDB data | `"openstudio-mongodb"` |
 | `redis_storage_type` | `string` | Redis storage type (`host_volume`, `csi`, or `ephemeral`) | `"host_volume"` |

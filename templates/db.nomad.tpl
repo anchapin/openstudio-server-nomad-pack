@@ -1,6 +1,7 @@
 job "[[ var "job_name" . ]]-db" {
   region      = "[[ var "region" . ]]"
   datacenters = [[ var "datacenters" . | toJson ]]
+  namespace   = "[[ var "nomad_namespace" . ]]"
   type        = "service"
   meta {
     app_version       = "[[ var "app_version" . ]]"

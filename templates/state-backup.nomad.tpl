@@ -2,6 +2,7 @@
 job "[[ var "job_name" . ]]-state-backup" {
   region      = "[[ var "region" . ]]"
   datacenters = [[ var "datacenters" . | toJson ]]
+  namespace   = "[[ var "nomad_namespace" . ]]"
   type        = "batch"
 
   periodic {

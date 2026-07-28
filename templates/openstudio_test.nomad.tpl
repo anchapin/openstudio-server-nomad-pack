@@ -1,6 +1,7 @@
 job "[[ var "job_name" . ]]-test" {
   region      = "[[ var "region" . ]]"
   datacenters = [[ var "datacenters" . | toJson ]]
+  namespace   = "[[ var "nomad_namespace" . ]]"
   type        = "batch"
 
   parameterized {
