@@ -37,6 +37,20 @@ job "[[ var "job_name" . ]]" {
         }
       }
 
+      [[ if var "enable_vault_mongo_secrets" . ]]
+      template {
+        destination = "secrets/mongodb.env"
+        env         = true
+        change_mode = "restart"
+        data = <<EOH
+{{ with secret "[[ var "vault_mongo_secret_path" . ]]" }}
+MONGO_INITDB_ROOT_USERNAME={{ index .Data.data "[[ var "vault_mongo_username_key" . ]]" }}
+MONGO_INITDB_ROOT_PASSWORD={{ index .Data.data "[[ var "vault_mongo_password_key" . ]]" }}
+{{ end }}
+EOH
+      }
+      [[ end ]]
+
       service {
         name     = "openstudio-web"
         port     = "http"

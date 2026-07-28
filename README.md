@@ -103,6 +103,10 @@ Refer to [`variables.hcl`](file:///Users/achapin/OpenStudio/openstudio-server-no
 | `redis_host_volume` | `string` | Host volume name for Redis when `redis_storage_type=host` | `"openstudio-redis"` |
 | `redis_csi_volume` | `string` | CSI volume ID for Redis when `redis_storage_type=csi` | `"openstudio-redis"` |
 | `rserve_image` | `string` | Rserve image | `"nrel/rserve:latest"` |
+| `enable_vault_mongo_secrets` | `bool` | Enable Vault template rendering for MongoDB credentials. | `false` |
+| `vault_mongo_secret_path` | `string` | Vault path containing MongoDB credentials. | `"secret/data/openstudio/mongodb"` |
+| `vault_mongo_username_key` | `string` | Vault secret data key for MongoDB username. | `"username"` |
+| `vault_mongo_password_key` | `string` | Vault secret data key for MongoDB password. | `"password"` |
 | `poststop_cleanup_image` | `string` | Image used by poststop cleanup tasks | `"alpine:3.20"` |
 | `poststop_cleanup_paths` | `list(string)` | Directories removed during poststop cleanup | `["/alloc/tmp/analysis", "/alloc/tmp/openstudio/analysis"]` |
 | `docker_user` | `string` | Non-root UID:GID used by Docker tasks | `"1000:1000"` |
@@ -132,6 +136,13 @@ Refer to [`variables.hcl`](file:///Users/achapin/OpenStudio/openstudio-server-no
 | `enable_batch_verification` | `bool` | Enable standalone batch connectivity verification job | `false` |
 | `verification_image` | `string` | Image used to run batch verification checks | `"busybox:1.36"` |
 | `verification_targets` | `list(string)` | Connectivity targets in `component=host:port` format | `["db=openstudio-db.service.consul:27017","redis=openstudio-redis.service.consul:6379","rserve=openstudio-rserve.service.consul:6311"]` |
+
+## Vault MongoDB Secret Mapping
+
+When `enable_vault_mongo_secrets` is enabled, the MongoDB task renders a Nomad template from Vault and maps secret values into:
+
+- `MONGO_INITDB_ROOT_USERNAME`
+- `MONGO_INITDB_ROOT_PASSWORD`
 
 ## Scheduling Helpers
 
