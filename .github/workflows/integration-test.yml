@@ -78,33 +78,36 @@ jobs:
           NOMAD_ADDR: http://127.0.0.1:4646
         run: nomad-pack run --detach . --var-file examples/e2e-test.hcl
 
-      - name: Wait for Consul health checks
+      - name: Wait for Nomad web allocations
         env:
           NOMAD_ADDR: http://127.0.0.1:4646
         run: |
-          SERVICES=(
-            "openstudio-web"
-            "openstudio-web-background"
-          )
-          DEADLINE=$((SECONDS + 300))
+          python3 - <<'PY'
+          import json
+          import subprocess
+          import sys
+          import time
 
-          for svc in "${SERVICES[@]}"; do
-            echo "Waiting for passing Consul checks: ${svc}"
-            while true; do
-              if [ $SECONDS -ge $DEADLINE ]; then
-                echo "ERROR: Timeout waiting for ${svc}" >&2
-                nomad job status openstudio-server-e2e-web || true
-                nomad job status openstudio-server-e2e-worker || true
-                exit 1
-              fi
+          job_id = "openstudio-server-e2e-web"
+          required = {"web", "web-background"}
+          deadline = time.time() + 300
 
-              if curl -fsS "http://127.0.0.1:8500/v1/health/service/${svc}?passing=1" | grep -q "\"ServiceName\":\"${svc}\""; then
-                echo "${svc} is passing"
-                break
-              fi
-              sleep 5
-            done
-          done
+          while time.time() < deadline:
+              allocs = json.loads(subprocess.check_output(["nomad", "job", "allocations", "-json", job_id], text=True))
+              running = {
+                  alloc.get("TaskGroup")
+                  for alloc in allocs
+                  if alloc.get("DesiredStatus") == "run" and alloc.get("ClientStatus") == "running"
+              }
+              if required.issubset(running):
+                  print("Web allocations are running.")
+                  break
+              time.sleep(5)
+          else:
+              print(f"ERROR: timeout waiting for {job_id} allocations to run", file=sys.stderr)
+              subprocess.run(["nomad", "job", "status", job_id], check=False)
+              sys.exit(1)
+          PY
 
       - name: Dispatch smoke-test batch job
         env:
