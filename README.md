@@ -23,6 +23,43 @@ The pack currently renders separate jobs for:
 - `<job_name>-rserve`
 - `<job_name>` (OpenStudio placeholder job with Redis scaffold)
 
+## Local Integration Testing (Vagrant + Consul/Nomad/Vault)
+
+This repository includes a local multi-VM playground for validating Nomad Pack changes against a real micro-cluster.
+
+### Prerequisites
+
+- Vagrant
+- VirtualBox (or another provider compatible with this `Vagrantfile`)
+
+### Bring up the environment
+
+```bash
+vagrant up
+```
+
+This creates:
+
+- `consul` (`192.168.56.10`) running a Consul server + UI
+- `nomad-server` (`192.168.56.11`) running a Nomad server
+- `nomad-client` (`192.168.56.12`) running a Nomad client with Docker
+- `vault` (`192.168.56.13`) running Vault in dev mode (`root` token)
+
+### Smoke checks
+
+```bash
+vagrant ssh consul -c "consul members"
+vagrant ssh nomad-server -c "nomad server members"
+vagrant ssh nomad-client -c "nomad node status"
+vagrant ssh vault -c "VAULT_ADDR=http://127.0.0.1:8200 VAULT_TOKEN=root vault status"
+```
+
+### Tear down
+
+```bash
+vagrant destroy -f
+```
+
 ## Configuration Variables
 
 Refer to [`variables.hcl`](file:///Users/achapin/OpenStudio/openstudio-server-nomad-pack/variables.hcl) for the list of configuration parameters and defaults.
