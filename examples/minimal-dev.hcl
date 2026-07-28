@@ -24,8 +24,11 @@ worker_cpu  = 1000
 worker_memory = 2048
 
 # One worker, no autoscaling.
+# Override production defaults (min:2, max:20 per Helm HPA) for resource-constrained dev.
 worker_count               = 1
 worker_autoscaling_enabled = false
+worker_min_replicas        = 1
+worker_max_replicas        = 2
 
 # Disable sidecars and optional features to minimise image-pull time.
 enable_vector_collection  = false

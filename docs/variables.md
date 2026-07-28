@@ -7,8 +7,8 @@
 | --- | --- | --- | --- |
 | `job_name` | `string` | `"openstudio-server"` | The name of the Nomad job. |
 | `app_version` | `string` | `"latest"` | Application version tag used for OpenStudio Server component images. |
-| `worker_min_replicas` | `number` | `1` | Minimum number of worker replicas. |
-| `worker_max_replicas` | `number` | `10` | Maximum number of worker replicas. |
+| `worker_min_replicas` | `number` | `2` | Minimum number of worker replicas. Aligned with Helm chart worker-hpa.yaml minReplicas: 2. |
+| `worker_max_replicas` | `number` | `20` | Maximum number of worker replicas. Aligned with Helm chart worker-hpa.yaml maxReplicas: 20. |
 | `vault_integration_enabled` | `bool` | `false` | Enable Nomad Vault integration stanzas for tasks. |
 | `ingress_domain` | `string` | `"localhost"` | Ingress domain used when constructing service hostnames and Traefik router rules. |
 | `ingress_tls_enabled` | `bool` | `false` | When true, adds Traefik TLS router tags for the websecure entrypoint on the web service. |
