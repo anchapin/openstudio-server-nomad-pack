@@ -15,10 +15,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Setup Nomad
-        uses: hashicorp/setup-nomad@main
+        uses: hashicorp/setup-nomad@6e88df50dd00f3737f04fddde2bf2bd446e313dd # main (v1.0.0)
 
       - name: Validate ACL Policy Syntax
         run: |
