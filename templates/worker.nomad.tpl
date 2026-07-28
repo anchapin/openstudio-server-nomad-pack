@@ -26,6 +26,11 @@ job "[[ var "job_name" . ]]-worker" {
         QUEUES = "[[ var "worker_queues" . ]]"
         COUNT  = "[[ var "worker_process_count" . ]]"
       }
+
+      resources {
+        cpu    = [[ var "worker_cpu" . ]]
+        memory = [[ var "worker_memory" . ]]
+      }
     }
 
     [[ if var "enable_vector_collection" . ]]

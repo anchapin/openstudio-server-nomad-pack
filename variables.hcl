@@ -65,6 +65,24 @@ variable "web_image" {
   default     = "nrel/openstudio-server:latest"
 }
 
+variable "web_priority" {
+  type        = number
+  description = "Nomad job priority for the OpenStudio Web UI job."
+  default     = 80
+}
+
+variable "web_cpu" {
+  type        = number
+  description = "CPU shares allocated to the OpenStudio Web task."
+  default     = 500
+}
+
+variable "web_memory" {
+  type        = number
+  description = "Memory (MB) allocated to the OpenStudio Web task."
+  default     = 1024
+}
+
 variable "worker_image" {
   type        = string
   description = "The image name and tag for the OpenStudio Server worker container."
@@ -95,10 +113,34 @@ variable "worker_process_count" {
   default     = "1"
 }
 
+variable "worker_cpu" {
+  type        = number
+  description = "CPU shares allocated to the OpenStudio worker task."
+  default     = 2000
+}
+
+variable "worker_memory" {
+  type        = number
+  description = "Memory (MB) allocated to the OpenStudio worker task."
+  default     = 4096
+}
+
 variable "db_image" {
   type        = string
   description = "The MongoDB database image name and tag."
   default     = "mongo:4.2"
+}
+
+variable "db_cpu" {
+  type        = number
+  description = "CPU shares allocated to the MongoDB task."
+  default     = 500
+}
+
+variable "db_memory" {
+  type        = number
+  description = "Memory (MB) allocated to the MongoDB task."
+  default     = 1024
 }
 
 variable "mongodb_storage_type" {
@@ -125,6 +167,18 @@ variable "redis_image" {
   default     = "redis:6.2-alpine"
 }
 
+variable "redis_cpu" {
+  type        = number
+  description = "CPU shares allocated to the Redis task."
+  default     = 250
+}
+
+variable "redis_memory" {
+  type        = number
+  description = "Memory (MB) allocated to the Redis task."
+  default     = 512
+}
+
 variable "redis_storage_type" {
   type        = string
   description = "Redis storage type: ephemeral, host, or csi."
@@ -147,6 +201,18 @@ variable "rserve_image" {
   type        = string
   description = "The Rserve image name and tag."
   default     = "nrel/rserve:latest"
+}
+
+variable "rserve_cpu" {
+  type        = number
+  description = "CPU shares allocated to the Rserve task."
+  default     = 500
+}
+
+variable "rserve_memory" {
+  type        = number
+  description = "Memory (MB) allocated to the Rserve task."
+  default     = 1024
 }
 
 variable "enable_consul_connect" {

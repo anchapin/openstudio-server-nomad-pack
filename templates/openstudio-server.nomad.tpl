@@ -65,6 +65,11 @@ job "[[ var "job_name" . ]]" {
           timeout  = "2s"
         }
       }
+
+      resources {
+        cpu    = [[ var "db_cpu" . ]]
+        memory = [[ var "db_memory" . ]]
+      }
     }
 
     [[ if var "enable_vector_collection" . ]]
@@ -306,6 +311,11 @@ EOH
           interval = "10s"
           timeout  = "2s"
         }
+      }
+
+      resources {
+        cpu    = [[ var "redis_cpu" . ]]
+        memory = [[ var "redis_memory" . ]]
       }
     }
 
