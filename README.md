@@ -32,6 +32,29 @@ Refer to [`variables.hcl`](file:///Users/achapin/OpenStudio/openstudio-server-no
 | `redis_image` | `string` | Redis image | `"redis:6.2-alpine"` |
 | `rserve_image` | `string` | Rserve image | `"nrel/rserve:latest"` |
 
+## Nomad ACL Policies
+
+Pre-built ACL policy HCL files are provided in the [`policies/`](./policies/) directory. Apply them with `nomad acl policy apply` before deploying the pack on an ACL-enabled cluster.
+
+| File | Role | Use When |
+| --- | --- | --- |
+| [`policies/operator.hcl`](./policies/operator.hcl) | Full deploy/stop/read | Cluster operators running `nomad-pack run/stop` and inspecting logs |
+| [`policies/readonly.hcl`](./policies/readonly.hcl) | Read-only status & logs | Monitoring dashboards, support staff, and observability tools |
+| [`policies/cicd.hcl`](./policies/cicd.hcl) | Minimal CI/CD service token | Automated pipelines that render, plan, run, and stop jobs |
+
+### Applying a Policy
+
+Replace `<policy-name>` and `<file>` with the desired values:
+
+```sh
+nomad acl policy apply \
+  -name operator \
+  -description "OpenStudio Server operator role" \
+  - < policies/operator.hcl
+```
+
+Policies use the `openstudio` namespace by default. Update the `namespace` block label in the HCL file if your cluster uses a different namespace.
+
 ## Helm to Nomad Parity & Differences
 
 | Kubernetes / Helm | Nomad Equivalent | Status |
