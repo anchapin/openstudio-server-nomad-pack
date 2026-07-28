@@ -544,6 +544,18 @@ variable "docker_cap_drop" {
   default     = ["ALL"]
 }
 
+variable "enable_image_prepull" {
+  type        = bool
+  description = "When true, renders the system-hooks job that pre-pulls all heavy images on every eligible node before scheduling."
+  default     = true
+}
+
+variable "prepull_kill_timeout" {
+  type        = string
+  description = "kill_timeout applied to every task in the image pre-pull system job. Must be >= 10 minutes to allow large image layers to be pulled."
+  default     = "600s"
+}
+
 variable "poststop_cleanup_image" {
   type        = string
   description = "The image used for poststop cleanup lifecycle tasks."
