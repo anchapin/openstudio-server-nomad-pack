@@ -76,7 +76,7 @@ jobs:
       - name: Deploy with lightweight e2e stubs
         env:
           NOMAD_ADDR: http://127.0.0.1:4646
-        run: nomad-pack run . --var-file examples/e2e-test.hcl
+        run: nomad-pack run --detach . --var-file examples/e2e-test.hcl
 
       - name: Wait for Consul health checks
         env:
