@@ -355,7 +355,7 @@ variable "web_background_count" {
 variable "db_image" {
   type        = string
   description = "The MongoDB database image name and tag."
-  default     = "mongo:4.2"
+  default     = "mongo:6.0.7"
 }
 
 variable "db_cpu" {

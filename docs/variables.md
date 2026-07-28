@@ -64,7 +64,7 @@
 | `web_background_command` | `string` | `""` | Optional command override for the web-background task. Leave empty to use the image default entrypoint. |
 | `web_background_args` | `list(string)` | `[]` | Optional args passed to web_background_command when set. |
 | `web_background_count` | `number` | `1` | The number of web-background tasks to run. |
-| `db_image` | `string` | `"mongo:4.2"` | The MongoDB database image name and tag. |
+| `db_image` | `string` | `"mongo:6.0.7"` | The MongoDB database image name and tag. |
 | `db_cpu` | `number` | `1000` | CPU shares allocated to the MongoDB task. |
 | `db_memory` | `number` | `4096` | Memory (MB) allocated to the MongoDB task. |
 | `db_health_check_interval` | `string` | `"10s"` | Interval between Consul health checks for the MongoDB service. |
@@ -184,3 +184,23 @@ achieves the same relative ordering with `web_priority = 80` (high) vs
 > **Warning:** inverting the two values (setting `worker_priority` ≥ `web_priority`)
 > will cause the scheduler to evict or delay the web UI in favour of workers during
 > resource contention, degrading operator access to the running analysis.
+
+## Migration Notes
+
+### `db_image`: MongoDB 4.2 → 6.0 upgrade path
+
+The default value of `db_image` was changed from `mongo:4.2` to `mongo:6.0.7` to align with the
+reference Helm chart and to move off an end-of-life image (MongoDB 4.2 reached EOL in April 2024).
+
+**Fresh deployments** can start directly with `mongo:6.0.7` — no action required.
+
+**Existing deployments with persisted MongoDB volumes** must upgrade in sequence because MongoDB does
+not support skipping major versions:
+
+1. `mongo:4.2` → `mongo:4.4` — start the new container, wait for startup, verify data.
+2. `mongo:4.4` → `mongo:5.0` — repeat.
+3. `mongo:5.0` → `mongo:6.0.7` — repeat.
+
+Skipping steps will result in MongoDB refusing to start due to incompatible on-disk storage formats.
+Refer to the [MongoDB Upgrade documentation](https://www.mongodb.com/docs/manual/release-notes/6.0-upgrade-standalone/)
+for full details.

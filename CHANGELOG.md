@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING** Bumped `db_image` default from `mongo:4.2` to `mongo:6.0.7` to align with the
+  reference Helm chart and remove the end-of-life MongoDB 4.2 image (EOL April 2024, known CVEs).
+  Operators with **persisted MongoDB volumes** must upgrade in sequence: 4.2 → 4.4 → 5.0 → 6.0.
+  Fresh deployments are unaffected and can start directly on `mongo:6.0.7`.
+  See `docs/variables.md` for the full migration guide. (Resolves [#124](https://github.com/anchapin/openstudio-server-nomad-pack/issues/124))
+
 ### Fixed
 
 - Replaced phantom autoscaling variable names in README variable reference table
