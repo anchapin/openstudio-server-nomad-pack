@@ -43,11 +43,11 @@ job "[[ var "job_name" . ]]-web" {
       driver = "docker"
 
       config {
-        image   = "consul:latest"
-        command = "/bin/sh"
+        image   = "busybox:1.36"
+        command = "sh"
         args = [
-          "-c",
-          "until consul catalog services | grep -q openstudio-db && consul catalog services | grep -q openstudio-redis; do sleep 2; done",
+          "-ec",
+          "until wget -qO- \"http://consul.service.consul:8500/v1/health/service/openstudio-db?passing=true\" | grep -q '\"ServiceName\":\"openstudio-db\"'; do sleep 2; done; until wget -qO- \"http://consul.service.consul:8500/v1/health/service/openstudio-redis?passing=true\" | grep -q '\"ServiceName\":\"openstudio-redis\"'; do sleep 2; done",
         ]
       }
 
@@ -71,6 +71,12 @@ job "[[ var "job_name" . ]]-web" {
       config {
         image = "[[ var "web_image" . ]]"
         ports = ["http"]
+        [[ if ne (var "web_command" .) "" ]]
+        command = "[[ var "web_command" . ]]"
+        [[ end ]]
+        [[ if var "web_args" . ]]
+        args = [[ var "web_args" . | toJson ]]
+        [[ end ]]
         logging {
           type = "[[ var "log_driver_type" . ]]"
           config {
@@ -171,11 +177,11 @@ EOH
       driver = "docker"
 
       config {
-        image   = "consul:latest"
-        command = "/bin/sh"
+        image   = "busybox:1.36"
+        command = "sh"
         args = [
-          "-c",
-          "until consul catalog services | grep -q openstudio-db && consul catalog services | grep -q openstudio-redis && consul catalog services | grep -q openstudio-web; do sleep 2; done",
+          "-ec",
+          "until wget -qO- \"http://consul.service.consul:8500/v1/health/service/openstudio-db?passing=true\" | grep -q '\"ServiceName\":\"openstudio-db\"'; do sleep 2; done; until wget -qO- \"http://consul.service.consul:8500/v1/health/service/openstudio-redis?passing=true\" | grep -q '\"ServiceName\":\"openstudio-redis\"'; do sleep 2; done; until wget -qO- \"http://consul.service.consul:8500/v1/health/service/openstudio-web?passing=true\" | grep -q '\"ServiceName\":\"openstudio-web\"'; do sleep 2; done",
         ]
       }
 
@@ -198,6 +204,12 @@ EOH
 
       config {
         image = "[[ var "web_background_image" . ]]"
+        [[ if ne (var "web_background_command" .) "" ]]
+        command = "[[ var "web_background_command" . ]]"
+        [[ end ]]
+        [[ if var "web_background_args" . ]]
+        args = [[ var "web_background_args" . | toJson ]]
+        [[ end ]]
         logging {
           type = "[[ var "log_driver_type" . ]]"
           config {
