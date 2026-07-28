@@ -23,6 +23,12 @@ The pack currently renders separate jobs for:
 - `<job_name>-rserve`
 - `<job_name>` (OpenStudio placeholder job with Redis scaffold)
 
+## Pack Registry Layout Scaffold
+
+This repository now includes the registry-aligned scaffold at:
+
+- `packs/openstudio-server/templates`
+
 ## Local Integration Testing (Vagrant + Consul/Nomad/Vault)
 
 This repository includes a local multi-VM playground for validating Nomad Pack changes against a real micro-cluster.
