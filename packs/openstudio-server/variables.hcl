@@ -105,7 +105,7 @@ variable "web_memory_max" {
 
 variable "web_count" {
   type        = number
-  description = "The number of web task group allocations. MUST remain 1 (the default). The web process relies on local filesystem state without a distributed file-locking scheme; setting web_count > 1 causes split-brain writes across allocations. See docs/operations-guide.md §'Web replica constraint' for the root cause and the architectural changes required to relax this limit."
+  description = "The number of web task group allocations. MUST remain 1 (the default). The OpenStudio Server web process writes uploaded analysis artefacts to local container filesystem without a distributed file-locking scheme. When nfs_shared_volume_enabled = true, NFS provides a shared filesystem but does NOT guarantee POSIX file-locking across multiple simultaneous web writers — each allocation still has its own isolated view of open file handles. Setting web_count > 1 therefore causes split-brain: requests routed to replica B cannot find files written by replica A. This mirrors the Kubernetes Helm chart constraint (web-hpa.yaml maxReplicas: 1). To safely run web_count > 1 you must first implement either: (a) a distributed lock manager such as Redlock via Redis wrapping every filesystem operation, or (b) stateless file handling by moving all persistent artefacts to object storage (e.g. S3/MinIO). See docs/storage.md §'Web Replica Constraint' for details."
   default     = 1
 }
 
@@ -656,9 +656,15 @@ variable "backup_prohibit_overlap" {
   default     = true
 }
 
+variable "backup_volume_type" {
+  type        = string
+  description = "Storage backend for the backup and restore state volume. Use \"host_volume\" (default) for a Nomad host volume or \"csi\" for a CSI-managed volume."
+  default     = "host_volume"
+}
+
 variable "backup_nfs_host_volume" {
   type        = string
-  description = "Nomad host volume name backed by an NFS mount for state backups."
+  description = "Nomad volume source for state backups. For host_volume this is the host volume name; for csi this is the CSI volume ID."
   default     = "openstudio-backups"
 }
 
