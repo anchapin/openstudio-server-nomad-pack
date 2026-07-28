@@ -22,6 +22,24 @@ job "[[ var "job_name" . ]]" {
       }
     }
 
+    task "wait-for-dependencies" {
+      driver = "docker"
+
+      lifecycle {
+        hook    = "prestart"
+        sidecar = false
+      }
+
+      config {
+        image   = "busybox:1.36"
+        command = "sh"
+        args = [
+          "-ec",
+          "until wget -qO- \"http://consul.service.consul:8500/v1/health/service/openstudio-db?passing=true\" | grep -q '\"ServiceName\":\"openstudio-db\"'; do echo 'waiting for openstudio-db to be healthy in Consul'; sleep 5; done; until wget -qO- \"http://consul.service.consul:8500/v1/health/service/openstudio-redis?passing=true\" | grep -q '\"ServiceName\":\"openstudio-redis\"'; do echo 'waiting for openstudio-redis to be healthy in Consul'; sleep 5; done"
+        ]
+      }
+    }
+
     task "web" {
       driver = "docker"
 

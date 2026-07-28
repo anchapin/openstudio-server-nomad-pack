@@ -67,6 +67,13 @@ GitHub Actions validates pull requests targeting `develop` with:
 - `nomad-pack fmt -check -recursive .`
 - `nomad-pack render .`
 
+## Startup Dependency Checks
+
+The `web` task group includes a `prestart` init task that blocks web container startup until both backing services are registered as healthy in Consul:
+
+- `openstudio-db`
+- `openstudio-redis`
+
 ## Configuration Variables
 
 Refer to [`variables.hcl`](file:///Users/achapin/OpenStudio/openstudio-server-nomad-pack/variables.hcl) for the list of configuration parameters and defaults.
