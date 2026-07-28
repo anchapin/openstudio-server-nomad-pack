@@ -91,6 +91,39 @@ Refer to [`variables.hcl`](file:///Users/achapin/OpenStudio/openstudio-server-no
 | `redis_host_volume` | `string` | Host volume name for Redis when `redis_storage_type=host` | `"openstudio-redis"` |
 | `redis_csi_volume` | `string` | CSI volume ID for Redis when `redis_storage_type=csi` | `"openstudio-redis"` |
 | `rserve_image` | `string` | Rserve image | `"nrel/rserve:latest"` |
+| `db_constraints` | `any` | Constraint blocks for the `db` group | `[]` |
+| `db_affinities` | `any` | Affinity blocks for the `db` group | `[]` |
+| `db_spreads` | `any` | Spread blocks for the `db` group | `[]` |
+| `redis_constraints` | `any` | Constraint blocks for the `redis` group | `[]` |
+| `redis_affinities` | `any` | Affinity blocks for the `redis` group | `[]` |
+| `redis_spreads` | `any` | Spread blocks for the `redis` group | `[]` |
+| `rserve_constraints` | `any` | Constraint blocks for the `rserve` group | `[]` |
+| `rserve_affinities` | `any` | Affinity blocks for the `rserve` group | `[]` |
+| `rserve_spreads` | `any` | Spread blocks for the `rserve` group | `[]` |
+
+## Scheduling Helpers
+
+`templates/_helpers.tpl` defines reusable scheduling helpers for `constraint`, `affinity`, and `spread` stanzas.  
+To target host environments, set group-level scheduling inputs, for example:
+
+```hcl
+db_constraints = [
+  {
+    attribute = "${attr.kernel.name}"
+    operator  = "="
+    value     = "linux"
+  }
+]
+
+redis_affinities = [
+  {
+    attribute = "${attr.cpu.arch}"
+    operator  = "="
+    value     = "amd64"
+    weight    = 80
+  }
+]
+```
 
 ## Included Job Templates
 

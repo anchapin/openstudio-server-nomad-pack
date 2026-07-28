@@ -15,7 +15,6 @@ job "[[ var "job_name" . ]]" {
   
   group "db" {
     count = 1
-
     [[ if ne (var "mongodb_storage_type" .) "ephemeral" ]]
     volume "mongodb_data" {
       type      = "[[ var "mongodb_storage_type" . ]]"
@@ -23,6 +22,9 @@ job "[[ var "job_name" . ]]" {
       read_only = false
     }
     [[ end ]]
+    [[ template "constraints" (var "db_constraints" .) ]]
+    [[ template "affinities" (var "db_affinities" .) ]]
+    [[ template "spreads" (var "db_spreads" .) ]]
     
     network {
       port "db" {
@@ -121,6 +123,9 @@ EOH
 
   group "redis" {
     count = 1
+    [[ template "constraints" (var "redis_constraints" .) ]]
+    [[ template "affinities" (var "redis_affinities" .) ]]
+    [[ template "spreads" (var "redis_spreads" .) ]]
 
     network {
       port "redis" {
