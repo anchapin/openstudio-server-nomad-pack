@@ -268,6 +268,8 @@ nomad acl policy apply \
 
 Policies use the `openstudio` namespace by default. Update the `namespace` block label in the HCL file if your cluster uses a different namespace.
 
+For full instructions — including token creation, namespace scoping, and token rotation — see **[docs/acl-policies.md](./docs/acl-policies.md)**.
+
 ## Helm to Nomad Parity & Differences
 
 | Kubernetes / Helm | Nomad Equivalent | Status |
@@ -333,6 +335,8 @@ When `vault_enabled` is `true`, this pack renders task-level Nomad `vault` block
 - Use `vault_default_role` to apply one role to all tasks.
 - Override specific tasks with `vault_db_role`, `vault_redis_role`, `vault_rserve_role`, and `vault_vector_role`.
 - Optionally set `vault_policies`, `vault_namespace`, `vault_change_mode`, `vault_change_signal`, and `vault_env` to control token behavior.
+
+For full setup instructions — including Vault policy HCL, KV v2 path conventions, Nomad ↔ Vault integration configuration, token TTL guidance, and both legacy and Nomad ≥ 1.7 `vault` block syntax — see **[docs/vault-policies.md](./docs/vault-policies.md)**.
 
 ## License
 
