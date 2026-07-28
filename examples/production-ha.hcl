@@ -38,6 +38,7 @@ worker_process_count = "2"
 worker_count = 2
 
 worker_autoscaling_enabled  = true
+worker_autoscaling_cpu_enabled = true
 worker_min_replicas         = 2
 worker_max_replicas         = 20
 autoscaler_cooldown         = "3m"

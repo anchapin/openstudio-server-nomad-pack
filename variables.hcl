@@ -245,6 +245,18 @@ variable "worker_autoscaling_enabled" {
   default     = false
 }
 
+variable "worker_autoscaling_cpu_enabled" {
+  type        = bool
+  description = "Enable the built-in Nomad APM CPU autoscaling check for workers (avg_cpu target-value strategy)."
+  default     = true
+}
+
+variable "worker_cpu_target_utilization" {
+  type        = number
+  description = "Target worker CPU utilization percentage used by the nomad-apm avg_cpu scaling check."
+  default     = 50
+}
+
 variable "nomad_autoscaler_enabled" {
   type        = bool
   description = "Render an optional Nomad Autoscaler daemon job stub. When false (default), the autoscaler job template is omitted."

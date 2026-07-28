@@ -27,6 +27,17 @@ job "[[ var "job_name" . ]]-worker" {
         cooldown            = "[[ var "autoscaler_cooldown" . ]]"
         evaluation_interval = "30s"
 
+        [[ if var "worker_autoscaling_cpu_enabled" . ]]
+        check "cpu-utilization" {
+          source = "nomad-apm"
+          query  = "avg_cpu"
+
+          strategy "target-value" {
+            target = [[ var "worker_cpu_target_utilization" . ]]
+          }
+        }
+        [[ end ]]
+
         check "queue-requeued-depth" {
           source = "prometheus"
           query  = [[ var "worker_queue_requeued_query" . | toJson ]]
