@@ -87,8 +87,8 @@ job "[[ var "job_name" . ]]-rserve" {
         check {
           name     = "openstudio-rserve-tcp"
           type     = "tcp"
-          interval = "10s"
-          timeout  = "2s"
+          interval = "[[ var "rserve_health_check_interval" . ]]"
+          timeout  = "[[ var "rserve_health_check_timeout" . ]]"
         }
       }
 
@@ -106,6 +106,41 @@ job "[[ var "job_name" . ]]-rserve" {
       vault {}
       [[ end ]]
     }
+
+    [[ if var "enable_vector_collection" . ]]
+    task "vector" {
+      driver = "docker"
+
+      lifecycle {
+        hook    = "prestart"
+        sidecar = true
+      }
+
+      config {
+        image = "[[ var "vector_image" . ]]"
+        args  = ["--config", "local/vector.toml"]
+      }
+
+      template {
+        data        = <<EOH
+[sources.alloc_logs]
+type = "file"
+include = ["/alloc/logs/*.std*"]
+
+[sinks.console]
+type = "console"
+inputs = ["alloc_logs"]
+encoding.codec = "json"
+EOH
+        destination = "local/vector.toml"
+      }
+
+      resources {
+        cpu    = 100
+        memory = 64
+      }
+    }
+    [[ end ]]
 
     task "cleanup-poststop" {
       driver = "docker"

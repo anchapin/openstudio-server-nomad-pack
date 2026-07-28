@@ -310,6 +310,18 @@ variable "rserve_memory" {
   default     = 1024
 }
 
+variable "rserve_health_check_interval" {
+  type        = string
+  description = "Interval between Consul health checks for the Rserve service."
+  default     = "10s"
+}
+
+variable "rserve_health_check_timeout" {
+  type        = string
+  description = "Timeout for Consul health checks for the Rserve service."
+  default     = "2s"
+}
+
 variable "enable_consul_connect" {
   type        = bool
   description = "Enable Consul Connect sidecar proxies for mTLS service-to-service communication."
