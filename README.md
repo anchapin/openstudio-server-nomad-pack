@@ -620,6 +620,11 @@ every topic with a brief description of what each guide covers.
 | [Vault Policy Setup](./docs/vault-policies.md) | Vault integration, KV v2 paths, and token TTL guidance |
 | [Kubernetes-to-Nomad Migration](./docs/migration-k8s-to-nomad.md) | Helm chart migration checklist, data migration, rollback |
 
+## Contributing
+
+See **[CONTRIBUTING.md](./CONTRIBUTING.md)** for branch strategy, local testing steps,
+PR process, changelog guidelines, and release instructions.
+
 ## License
 
 This project is dual-licensed under either MIT or BSD-3-Clause. See:
