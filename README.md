@@ -14,8 +14,14 @@ A [Nomad Pack](https://github.com/hashicorp/nomad-pack) for deploying [OpenStudi
 1. Ensure your Nomad cluster is running and Consul is active.
 2. Render and run the pack:
    ```bash
+   nomad-pack render .
    nomad-pack run .
    ```
+
+The pack currently renders separate jobs for:
+- `<job_name>-db` (MongoDB, registered in Consul as `openstudio-db`)
+- `<job_name>-rserve`
+- `<job_name>` (OpenStudio placeholder job with Redis scaffold)
 
 ## Configuration Variables
 
