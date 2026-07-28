@@ -46,6 +46,7 @@
 | `worker_cpu` | `number` | `2000` | CPU shares allocated to the OpenStudio worker task. These defaults are intentionally higher than Helm to support higher simulation concurrency per Nomad allocation. |
 | `worker_memory` | `number` | `4096` | Memory (MB) allocated to the OpenStudio worker task. These defaults are intentionally higher than Helm to support higher simulation concurrency per Nomad allocation. |
 | `worker_autoscaling_enabled` | `bool` | `false` | Enable Nomad Autoscaler integration for the worker task group. When false (default), the scaling block is omitted and worker_count controls the fixed allocation count. |
+| `nomad_autoscaler_enabled` | `bool` | `false` | Render an optional Nomad Autoscaler daemon job stub. When false (default), the autoscaler job template is omitted. |
 | `autoscaler_prometheus_address` | `string` | `"http://prometheus:9090"` | Address of the Prometheus server used by the Nomad Autoscaler APM plugin to evaluate scaling checks. |
 | `autoscaler_cooldown` | `string` | `"5m"` | Cooldown duration between worker autoscaling actions (e.g. '5m', '2m'). |
 | `worker_queue_requeued_query` | `string` | `"sum(openstudio_worker_queue_depth{queue=\"requeued\"})"` | Prometheus query for requeued backlog depth. |

@@ -107,6 +107,17 @@ Step-by-step migration from the [NREL openstudio-server Helm chart](https://gith
 
 ---
 
+## Worker Autoscaling Prerequisite
+
+> [!IMPORTANT]
+> **Prerequisite: Nomad Autoscaler daemon must be deployed before enabling worker autoscaling.**  
+> If `worker_autoscaling_enabled = true` but the daemon is not running, Nomad silently ignores the `scaling` block and worker count remains fixed.  
+> Recommended path: deploy the [official Nomad Autoscaler pack](https://developer.hashicorp.com/nomad/tools/autoscaling/deployment/nomad).
+
+This pack also ships an optional stub at `templates/nomad-autoscaler.nomad.tpl` gated by `nomad_autoscaler_enabled = false`. The stub defaults to the `nomad-apm` source and includes comments showing where to add an optional Prometheus source.
+
+---
+
 ## Quick-Reference: Pack Variables
 
 | Variable | Default | What it does |
@@ -137,6 +148,7 @@ Before running `nomad-pack run` for the first time:
 - [ ] Docker can pull required images on every Nomad client node
 - [ ] If ACLs are enabled: operator token exported as `NOMAD_TOKEN`
 - [ ] If Vault is enabled: secrets written to the correct KV v2 paths and Nomad policies applied
+- [ ] If `worker_autoscaling_enabled = true`: Nomad Autoscaler is deployed and running
 
 ---
 
