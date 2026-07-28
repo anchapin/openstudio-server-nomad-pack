@@ -18,7 +18,7 @@
 | `web_image` | `string` | `"nrel/openstudio-server:3.11.0"` | The image name and tag for the OpenStudio Server web container. |
 | `web_command` | `string` | `""` | Optional command override for the web task. Leave empty to use the image default entrypoint. |
 | `web_args` | `list(string)` | `[]` | Optional args passed to web_command when set. |
-| `web_priority` | `number` | `80` | Nomad job priority for the OpenStudio Web UI job. |
+| `web_priority` | `number` | `80` | Nomad job priority for the OpenStudio Web UI job (Nomad scale 1–100). Must always exceed worker_priority so the scheduler favours the web UI over workers during resource contention. Mirrors the Kubernetes high-priority PriorityClass (value 1000000) used by the Helm chart. WARNING: do not set this lower than or equal to worker_priority. |
 | `web_cpu` | `number` | `1000` | CPU shares allocated to the OpenStudio Web task. |
 | `web_memory` | `number` | `2048` | Memory (MB) allocated to the OpenStudio Web task. |
 | `web_memory_max` | `number` | `2048` | Memory hard limit (MB) for the OpenStudio Web task (Nomad memory_max). |
@@ -45,7 +45,7 @@
 | `worker_update_healthy_deadline` | `string` | `"5m"` | Maximum time for a worker allocation to become healthy. |
 | `worker_update_progress_deadline` | `string` | `"10m"` | Maximum time for the worker rolling update to make progress. |
 | `worker_update_auto_revert` | `bool` | `true` | Automatically revert a worker deployment if the update fails. |
-| `worker_priority` | `number` | `40` | Nomad job priority for calculation workers. |
+| `worker_priority` | `number` | `40` | Nomad job priority for calculation workers (Nomad scale 1–100). Must always be less than web_priority so the web UI is scheduled preferentially during resource contention. Mirrors the Kubernetes low-priority PriorityClass (value 10000) used by the Helm chart. WARNING: do not set this higher than or equal to web_priority. |
 | `worker_queues` | `string` | `"requeued,simulations"` | Comma-separated queue list processed by worker tasks. |
 | `worker_process_count` | `string` | `"1"` | COUNT environment variable passed to worker containers. |
 | `worker_cpu` | `number` | `2000` | CPU shares allocated to the OpenStudio worker task. These defaults are intentionally higher than Helm to support higher simulation concurrency per Nomad allocation. |
@@ -156,3 +156,31 @@
 | `test_busybox_image_tag` | `string` | `"stable"` | Tag for the busybox image used in TCP check tasks. |
 | `compute_node_class` | `string` | `"compute"` | Nomad node class label for CPU-intensive compute nodes. Used by the openstudio_server.compute_node_constraint helper macro. |
 | `system_node_class` | `string` | `"system"` | Nomad node class label for infrastructure/system nodes. Used by the openstudio_server.system_node_constraint helper macro. |
+
+## Job Priority
+
+Nomad uses an integer priority on the **1–100 scale** (higher = more important).  The
+two priority variables must always satisfy `web_priority > worker_priority` so that
+the web UI is scheduled preferentially over calculation workers whenever the cluster
+is under resource pressure.
+
+| Variable | Default | Kubernetes equivalent | K8s value |
+| --- | --- | --- | --- |
+| `web_priority` | `80` | `high-priority` PriorityClass | `1000000` |
+| `worker_priority` | `40` | `low-priority` PriorityClass | `10000` |
+
+### How the mapping works
+
+The Helm chart creates two Kubernetes `PriorityClass` objects:
+
+- **`high-priority`** (value `1000000`) – assigned to the web-UI `Deployment`
+- **`low-priority`** (value `10000`) – assigned to worker `Deployments`
+
+The ratio between those values is large (100×) but what Kubernetes cares about is the
+relative ordering, not the absolute numbers.  Nomad's priority scale is 1–100 and
+achieves the same relative ordering with `web_priority = 80` (high) vs
+`worker_priority = 40` (low).
+
+> **Warning:** inverting the two values (setting `worker_priority` ≥ `web_priority`)
+> will cause the scheduler to evict or delay the web UI in favour of workers during
+> resource contention, degrading operator access to the running analysis.
