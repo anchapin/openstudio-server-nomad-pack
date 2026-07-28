@@ -302,3 +302,22 @@ variable "restore_enabled" {
   description = "Enable the on-demand restore batch job definition."
   default     = true
 }
+
+# Docker runtime hardening variables
+variable "docker_user" {
+  type        = string
+  description = "UID:GID to run containers as (non-root)."
+  default     = "1000:1000"
+}
+
+variable "docker_readonly_rootfs" {
+  type        = bool
+  description = "Enable Docker read-only root filesystem."
+  default     = true
+}
+
+variable "docker_cap_drop" {
+  type        = list(string)
+  description = "Linux capabilities to drop from Docker containers."
+  default     = ["ALL"]
+}

@@ -128,6 +128,9 @@ EOH
       config {
         image = "[[ var "db_image" . ]]"
         ports = ["db"]
+        user = "[[ var "docker_user" . ]]"
+        readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
+        cap_drop = [[ var "docker_cap_drop" . | toJson ]]
         logging {
           type = "[[ var "log_driver_type" . ]]"
           config {
@@ -188,6 +191,9 @@ EOH
       config {
         image = "[[ var "vector_image" . ]]"
         args  = ["--config", "local/vector.toml"]
+        user = "[[ var "docker_user" . ]]"
+        readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
+        cap_drop = [[ var "docker_cap_drop" . | toJson ]]
       }
 
       template {
@@ -230,6 +236,9 @@ EOH
       config {
         image = "[[ var "redis_image" . ]]"
         ports = ["redis"]
+        user = "[[ var "docker_user" . ]]"
+        readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
+        cap_drop = [[ var "docker_cap_drop" . | toJson ]]
         logging {
           type = "[[ var "log_driver_type" . ]]"
           config {
@@ -268,6 +277,9 @@ EOH
       config {
         image = "[[ var "vector_image" . ]]"
         args  = ["--config", "local/vector.toml"]
+        user = "[[ var "docker_user" . ]]"
+        readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
+        cap_drop = [[ var "docker_cap_drop" . | toJson ]]
       }
 
       template {

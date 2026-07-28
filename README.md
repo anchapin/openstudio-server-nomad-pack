@@ -103,6 +103,9 @@ Refer to [`variables.hcl`](file:///Users/achapin/OpenStudio/openstudio-server-no
 | `redis_host_volume` | `string` | Host volume name for Redis when `redis_storage_type=host` | `"openstudio-redis"` |
 | `redis_csi_volume` | `string` | CSI volume ID for Redis when `redis_storage_type=csi` | `"openstudio-redis"` |
 | `rserve_image` | `string` | Rserve image | `"nrel/rserve:latest"` |
+| `docker_user` | `string` | Non-root UID:GID used by Docker tasks | `"1000:1000"` |
+| `docker_readonly_rootfs` | `bool` | Enables Docker read-only root filesystem | `true` |
+| `docker_cap_drop` | `list(string)` | Linux capabilities dropped from Docker tasks | `["ALL"]` |
 | `db_constraints` | `any` | Constraint blocks for the `db` group | `[]` |
 | `db_affinities` | `any` | Affinity blocks for the `db` group | `[]` |
 | `db_spreads` | `any` | Spread blocks for the `db` group | `[]` |
