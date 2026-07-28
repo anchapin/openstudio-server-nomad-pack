@@ -149,6 +149,12 @@ variable "rserve_image" {
   default     = "nrel/rserve:latest"
 }
 
+variable "enable_consul_connect" {
+  type        = bool
+  description = "Enable Consul Connect sidecar proxies for mTLS service-to-service communication."
+  default     = true
+}
+
 # Logging configuration variables
 variable "log_driver_type" {
   type        = string

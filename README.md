@@ -126,6 +126,7 @@ Refer to [`variables.hcl`](file:///Users/achapin/OpenStudio/openstudio-server-no
 | `redis_backup_host` | `string` | Redis hostname for backup/restore jobs | `"openstudio-redis.service.consul"` |
 | `redis_backup_port` | `number` | Redis port for backup/restore jobs | `6379` |
 | `restore_enabled` | `bool` | Enable on-demand state restore job definition | `true` |
+| `enable_consul_connect` | `bool` | Enable Consul Connect sidecar proxies for mTLS service-to-service communication | `true` |
 
 ## Scheduling Helpers
 
@@ -177,6 +178,15 @@ nomad job dispatch \
   -meta REDIS_BACKUP_FILE=redis-20260728T060000Z.dump.tsv \
   openstudio-server-state-restore
 ```
+
+## Consul Connect mTLS Service Mesh
+
+When `enable_consul_connect = true`, the pack configures Consul Connect sidecar proxies for:
+- `openstudio-db` on port `27017`
+- `openstudio-redis` on port `6379`
+- `openstudio-rserve` on port `6311`
+
+These sidecars enforce mutual TLS for service-to-service traffic through the Connect mesh.
 
 ## Helm to Nomad Parity & Differences
 

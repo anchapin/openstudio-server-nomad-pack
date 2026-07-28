@@ -39,6 +39,17 @@ job "[[ var "job_name" . ]]-rserve" {
           "ingress.domain=[[ var "ingress_domain" . ]]"
         ]
 
+        [[ if var "enable_consul_connect" . ]]
+        connect {
+          sidecar_service {
+            proxy {
+              local_service_address = "127.0.0.1"
+              local_service_port    = 6311
+            }
+          }
+        }
+        [[ end ]]
+
         check {
           name     = "openstudio-rserve-tcp"
           type     = "tcp"
