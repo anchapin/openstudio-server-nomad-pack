@@ -24,6 +24,9 @@ jobs:
       - name: Validate pack rendering
         run: nomad-pack render .
 
+      - name: Validate batch verification rendering
+        run: nomad-pack render . -var "enable_batch_verification=true"
+
       - name: Validate Vagrantfile Syntax
         run: ruby -c Vagrantfile
 

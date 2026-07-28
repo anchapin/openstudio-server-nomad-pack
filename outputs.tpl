@@ -6,3 +6,7 @@ Consul Service URLs:
 
 Traefik Router URL:
 - Web UI: http://[[ var "job_name" . ]].[[ var "ingress_domain" . ]]
+
+Batch Verification:
+- Enable job: nomad-pack run . -var "enable_batch_verification=true"
+- Metrics lines: batch_verification_result / batch_verification_summary
