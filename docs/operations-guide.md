@@ -152,6 +152,9 @@ Step-by-step migration from the [NREL openstudio-server Helm chart](https://gith
 > **Prerequisite: Nomad Autoscaler daemon must be deployed before enabling worker autoscaling.**  
 > If `worker_autoscaling_enabled = true` but the daemon is not running, Nomad silently ignores the `scaling` block and worker count remains fixed.  
 > Recommended path: deploy the [official Nomad Autoscaler pack](https://developer.hashicorp.com/nomad/tools/autoscaling/deployment/nomad).
+>
+> **CPU scaling (`worker_autoscaling_cpu_enabled`) uses the `nomad-apm` source** and reads metrics directly from the Nomad API — no Prometheus is required.  
+> **Prometheus is required only for queue-depth scaling** (`worker_queue_requeued_query` / `worker_queue_simulations_query`). You can enable CPU autoscaling without a Prometheus stack.
 
 This pack also ships an optional stub at `templates/nomad-autoscaler.nomad.tpl` gated by `nomad_autoscaler_enabled = false`. The stub defaults to the `nomad-apm` source and includes comments showing where to add an optional Prometheus source.
 

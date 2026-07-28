@@ -7,7 +7,8 @@
 #   - Vault cluster integrated with Nomad (vault_enabled = true)
 #   - MongoDB and Redis host volumes provisioned on all Nomad clients
 #   - NFS-backed host volume "openstudio-backups" mounted on backup-eligible clients
-#   - Nomad Autoscaler configured with Prometheus data source
+#   - Nomad Autoscaler daemon deployed (required for all worker autoscaling)
+#   - Prometheus (required only for queue-depth scaling; CPU scaling uses nomad-apm and needs no external metrics)
 
 # ---------- Identity ----------
 job_name    = "openstudio-server"
@@ -38,7 +39,7 @@ worker_process_count = "2"
 worker_count = 2
 
 worker_autoscaling_enabled  = true
-worker_autoscaling_cpu_enabled = true
+worker_autoscaling_cpu_enabled = true  # Uses nomad-apm (built-in Nomad API driver); no Prometheus required
 worker_min_replicas         = 2
 worker_max_replicas         = 20
 autoscaler_cooldown         = "60m"
