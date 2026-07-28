@@ -62,7 +62,7 @@
 | `db_health_check_timeout` | `string` | `"2s"` | Timeout for Consul health checks for the MongoDB service. |
 | `mongodb_storage_type` | `string` | `"host_volume"` | MongoDB storage type: host_volume, csi, or ephemeral. Use ephemeral to disable persistent volume wiring. |
 | `mongodb_volume_source` | `string` | `"openstudio-mongodb"` | Nomad volume source name for MongoDB persistent storage (host_volume name or CSI volume ID). |
-| `redis_image` | `string` | `"redis:6.2-alpine"` | The Redis image name and tag. |
+| `redis_image` | `string` | `"redis:6.2-alpine"` | The Redis image name and tag. Intentionally diverges from the Helm chart default (redis:6.0.9) by using redis:6.2-alpine; align Redis major.minor with your target OpenStudio Server release requirements. |
 | `redis_cpu` | `number` | `250` | CPU shares allocated to the Redis task. |
 | `redis_memory` | `number` | `1024` | Memory (MB) allocated to the Redis task. |
 | `redis_storage_type` | `string` | `"host_volume"` | Redis storage type: host_volume, csi, or ephemeral. Use ephemeral to disable persistent volume wiring. |
