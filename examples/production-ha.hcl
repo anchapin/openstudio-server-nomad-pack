@@ -77,13 +77,15 @@ redis_spreads = [
 # Prerequisites: see examples/volumes/openstudio-shared-host-volume.hcl for the
 #   required fstab entry and client.hcl host_volume stanza before deploying.
 # Note: web_count MUST remain 1 — NFS provides shared filesystem access but does
-#   NOT add distributed file-locking; multiple web replicas cause split-brain
-#   writes. See docs/operations-guide.md §'Web replica constraint'.
+#   NOT guarantee POSIX file-locking across multiple simultaneous writers; multiple
+#   web replicas cause split-brain writes. This mirrors the Helm chart constraint
+#   (web-hpa.yaml maxReplicas: 1). See docs/storage.md §'Web Replica Constraint'.
 nfs_shared_volume_enabled = true
 nfs_volume_source         = "openstudio-nfs"
 nfs_volume_mount_path     = "/mnt/openstudio"
 
 # web_count must stay 1 (NFS does not provide distributed file-locking).
+# See docs/storage.md §'Web Replica Constraint' for details and upgrade path.
 web_count = 1
 
 # ---------- Rserve ----------

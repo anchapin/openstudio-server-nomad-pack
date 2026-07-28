@@ -331,6 +331,27 @@ identified by `nfs_volume_source` at `nfs_volume_mount_path`.
 
 ## 5. NFS Shared Volume (web and worker)
 
+> ⚠️ **Web Replica Constraint — `web_count` MUST remain 1**
+>
+> NFS provides a **shared filesystem**, but it does **not** guarantee POSIX file-locking across
+> multiple simultaneous writers. The OpenStudio Server web process writes uploaded analysis
+> artefacts directly to the mounted path with no distributed file-locking scheme.
+>
+> Setting `web_count = 2` (or higher) with a shared NFS volume causes **split-brain**:
+> each web allocation has its own isolated view of open file handles, so files written by
+> replica A are invisible to requests routed to replica B.
+>
+> This mirrors the constraint in the upstream Kubernetes Helm chart — `templates/web/web-hpa.yaml`
+> sets `maxReplicas: 1` with the comment *"NFS cannot guarantee file locking using multiple
+> clients"*.
+>
+> **To safely raise `web_count` above 1, one of the following must be implemented first:**
+> - A distributed lock manager (e.g. [Redlock](https://redis.io/docs/manual/patterns/distributed-locks/) via Redis) wrapping every filesystem operation in the web process, **or**
+> - Stateless file handling: move all persistent artefacts to object storage (e.g. S3/MinIO) and
+>   eliminate local-disk writes from the request path.
+>
+> Until then, always keep `web_count = 1` regardless of whether NFS is enabled.
+
 For production clusters, the recommended NFS path is:
 
 1. mount your NFS export at the OS level on every eligible Nomad client

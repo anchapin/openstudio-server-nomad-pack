@@ -22,7 +22,7 @@
 | `web_cpu` | `number` | `1000` | CPU shares allocated to the OpenStudio Web task. |
 | `web_memory` | `number` | `2048` | Memory (MB) allocated to the OpenStudio Web task. |
 | `web_memory_max` | `number` | `2048` | Memory hard limit (MB) for the OpenStudio Web task (Nomad memory_max). |
-| `web_count` | `number` | `1` | The number of web task group allocations. MUST remain 1 (the default). The web process relies on local filesystem state without a distributed file-locking scheme; setting web_count > 1 causes split-brain writes across allocations. See docs/operations-guide.md §'Web replica constraint' for the root cause and the architectural changes required to relax this limit. |
+| `web_count` | `number` | `1` | The number of web task group allocations. MUST remain 1 (the default). The OpenStudio Server web process writes uploaded analysis artefacts to local container filesystem without a distributed file-locking scheme. When nfs_shared_volume_enabled = true, NFS provides a shared filesystem but does NOT guarantee POSIX file-locking across multiple simultaneous web writers — each allocation still has its own isolated view of open file handles. Setting web_count > 1 therefore causes split-brain: requests routed to replica B cannot find files written by replica A. This mirrors the Kubernetes Helm chart constraint (web-hpa.yaml maxReplicas: 1). To safely run web_count > 1 you must first implement either: (a) a distributed lock manager such as Redlock via Redis wrapping every filesystem operation, or (b) stateless file handling by moving all persistent artefacts to object storage (e.g. S3/MinIO). See docs/storage.md §'Web Replica Constraint' for details. |
 | `web_port` | `number` | `80` | Host-side static port mapped to the web container HTTP port. |
 | `web_health_check_interval` | `string` | `"10s"` | Interval between Consul health checks for the web service. |
 | `web_health_check_timeout` | `string` | `"2s"` | Timeout for Consul health checks for the web service. |
@@ -50,7 +50,7 @@
 | `worker_process_count` | `string` | `"1"` | COUNT environment variable passed to worker containers. |
 | `worker_cpu` | `number` | `2000` | CPU shares allocated to the OpenStudio worker task. These defaults are intentionally higher than Helm to support higher simulation concurrency per Nomad allocation. |
 | `worker_memory` | `number` | `4096` | Memory (MB) allocated to the OpenStudio worker task. These defaults are intentionally higher than Helm to support higher simulation concurrency per Nomad allocation. |
-| `worker_kill_timeout` | `string` | `"5200s"` | Grace period Nomad grants the worker task to finish in-flight work before force-killing it on drain or update. Matches Helm `terminationGracePeriodSeconds: 5200`. **WARNING:** reducing this below the longest simulation duration will result in data loss on node drains and rolling updates. |
+| `worker_kill_timeout` | `string` | `"5200s"` | Grace period Nomad grants the worker task to finish in-flight work before force-killing it on drain or update. Must be >= the longest expected simulation run. Matches Helm terminationGracePeriodSeconds: 5200. WARNING: reducing this below the longest simulation duration will result in data loss on node drains and rolling updates. |
 | `worker_autoscaling_enabled` | `bool` | `false` | Enable Nomad Autoscaler integration for the worker task group. When false (default), the scaling block is omitted and worker_count controls the fixed allocation count. |
 | `worker_autoscaling_cpu_enabled` | `bool` | `true` | Enable the built-in Nomad APM CPU autoscaling check for workers (avg_cpu target-value strategy). |
 | `worker_cpu_target_utilization` | `number` | `50` | Target worker CPU utilization percentage used by the nomad-apm avg_cpu scaling check. |
@@ -109,7 +109,7 @@
 | `rserve_affinities` | `any` | `[]` | Placement affinities for the rserve group. |
 | `rserve_spreads` | `any` | `[]` | Spread rules for the rserve group. |
 | `backup_enabled` | `bool` | `true` | Enable the periodic MongoDB and Redis backup batch job. |
-| `backup_cron` | `string` | `"0 2 * * * *"` | Cron expression for the periodic backup schedule. |
+| `backup_cron` | `string` | `"0 2 * * * *"` | Cron expression for the periodic backup schedule. The value is used in a crons list in the periodic stanza. |
 | `backup_prohibit_overlap` | `bool` | `true` | Prevent overlapping backup runs. |
 | `backup_nfs_host_volume` | `string` | `"openstudio-backups"` | Nomad host volume name backed by an NFS mount for state backups. |
 | `backup_mount_path` | `string` | `"/backups"` | Path inside backup tasks where the NFS host volume is mounted. |
@@ -185,23 +185,3 @@ achieves the same relative ordering with `web_priority = 80` (high) vs
 > **Warning:** inverting the two values (setting `worker_priority` ≥ `web_priority`)
 > will cause the scheduler to evict or delay the web UI in favour of workers during
 > resource contention, degrading operator access to the running analysis.
-
-## Migration Notes
-
-### `db_image`: MongoDB 4.2 → 6.0 upgrade path
-
-The default value of `db_image` was changed from `mongo:4.2` to `mongo:6.0.7` to align with the
-reference Helm chart and to move off an end-of-life image (MongoDB 4.2 reached EOL in April 2024).
-
-**Fresh deployments** can start directly with `mongo:6.0.7` — no action required.
-
-**Existing deployments with persisted MongoDB volumes** must upgrade in sequence because MongoDB does
-not support skipping major versions:
-
-1. `mongo:4.2` → `mongo:4.4` — start the new container, wait for startup, verify data.
-2. `mongo:4.4` → `mongo:5.0` — repeat.
-3. `mongo:5.0` → `mongo:6.0.7` — repeat.
-
-Skipping steps will result in MongoDB refusing to start due to incompatible on-disk storage formats.
-Refer to the [MongoDB Upgrade documentation](https://www.mongodb.com/docs/manual/release-notes/6.0-upgrade-standalone/)
-for full details.
