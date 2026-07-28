@@ -26,29 +26,79 @@
 #
 # USAGE
 # -----
-#   ./scripts/pre-teardown.sh [JOB_NAME]
+#   ./scripts/pre-teardown.sh [--namespace <ns>] [-n <ns>] [JOB_NAME]
 #
-#   JOB_NAME  Base job name prefix (default: openstudio-server).
-#             The script stops <JOB_NAME>-web and <JOB_NAME>-rserve.
+#   --namespace, -n  Nomad namespace containing the jobs (default: "default").
+#                    Falls back to the NOMAD_NAMESPACE environment variable
+#                    when the flag is not provided.
+#
+#   JOB_NAME         Base job name prefix (default: openstudio-server).
+#                    The script stops <JOB_NAME>-web and <JOB_NAME>-rserve.
+#
+# ENVIRONMENT
+# -----------
+#   NOMAD_NAMESPACE  Nomad namespace to use when --namespace is not passed.
+#                    Defaults to "default" if neither the flag nor this
+#                    variable is set.
 #
 # EXAMPLE
 # -------
+#   # Default namespace
 #   ./scripts/pre-teardown.sh
-#   ./scripts/pre-teardown.sh my-custom-job-name
+#
+#   # Custom namespace via flag
+#   ./scripts/pre-teardown.sh --namespace openstudio
+#
+#   # Custom namespace via environment variable
+#   NOMAD_NAMESPACE=openstudio ./scripts/pre-teardown.sh
+#
+#   # Custom job name and namespace
+#   ./scripts/pre-teardown.sh --namespace openstudio my-custom-job-name
 #
 # After this script completes successfully, run:
 #   nomad-pack destroy .
 
 set -euo pipefail
 
+usage() {
+  sed -n '/^# USAGE/,/^# After this script/p' "$0" | sed 's/^# \?//'
+  exit 0
+}
+
+# Parse arguments
+NAMESPACE="${NOMAD_NAMESPACE:-default}"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --namespace|-n)
+      if [[ -z "${2:-}" ]]; then
+        echo "ERROR: --namespace requires a value." >&2
+        exit 1
+      fi
+      NAMESPACE="$2"
+      shift 2
+      ;;
+    --help|-h)
+      usage
+      ;;
+    -*)
+      echo "ERROR: Unknown flag: $1" >&2
+      exit 1
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
 JOB_NAME="${1:-openstudio-server}"
 
-echo "==> Stopping Nomad jobs for pack '${JOB_NAME}' ..."
+echo "==> Stopping Nomad jobs for pack '${JOB_NAME}' in namespace '${NAMESPACE}' ..."
 echo "    (nomad job stop blocks until all allocations are dead — no sleep required)"
 echo ""
 
 echo "--> Stopping ${JOB_NAME}-web ..."
-if ! nomad job stop "${JOB_NAME}-web"; then
+if ! nomad job stop -namespace "${NAMESPACE}" "${JOB_NAME}-web"; then
   echo "ERROR: Failed to stop job '${JOB_NAME}-web'. Aborting." >&2
   exit 1
 fi
@@ -56,7 +106,7 @@ echo "    ${JOB_NAME}-web: all allocations dead."
 
 echo ""
 echo "--> Stopping ${JOB_NAME}-rserve ..."
-if ! nomad job stop "${JOB_NAME}-rserve"; then
+if ! nomad job stop -namespace "${NAMESPACE}" "${JOB_NAME}-rserve"; then
   echo "ERROR: Failed to stop job '${JOB_NAME}-rserve'. Aborting." >&2
   exit 1
 fi
