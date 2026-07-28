@@ -339,6 +339,57 @@ Or with:
 ```
 | Helm Hooks | Nomad Lifecycle hooks / Periodic Jobs | Planned |
 
+## Running Tests
+
+The pack ships `templates/openstudio_test.nomad.tpl`, a `batch` + `parameterized` job that validates the full OpenStudio Server stack after deployment — the Nomad equivalent of a Helm test pod.
+
+### What it checks
+
+| Task | Check type | Target |
+|------|-----------|--------|
+| `web-http-check` | HTTP (`curl`) | `openstudio-web.service.consul:<test_web_port>/` |
+| `redis-tcp-check` | TCP (`nc -z`) | `openstudio-redis.service.consul:<test_redis_port>` |
+| `mongo-tcp-check` | TCP (`nc -z`) | `openstudio-db.service.consul:<test_mongo_port>` |
+| `rserve-tcp-check` | TCP (`nc -z`) | `openstudio-rserve.service.consul:<test_rserve_port>` |
+
+All four tasks must exit `0` for the job to succeed. The job uses `reschedule { attempts = 0 }` and `restart { attempts = 0 mode = "fail" }` for clear pass/fail semantics with no automatic retries.
+
+### Dispatch
+
+Render and register the test job alongside your deployment, then dispatch it:
+
+```bash
+# Render and run pack (test job is always included)
+nomad-pack run .
+
+# Dispatch the parameterized test job
+nomad job dispatch openstudio-server-test
+
+# Optionally override the per-check timeout (seconds)
+nomad job dispatch -meta TEST_TIMEOUT=30 openstudio-server-test
+
+# Tail logs for a specific check task
+nomad alloc logs <alloc-id> web-http-check
+nomad alloc logs <alloc-id> redis-tcp-check
+```
+
+### Overriding defaults
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `test_web_port` | `80` | Web HTTP check port |
+| `test_redis_port` | `6379` | Redis TCP check port |
+| `test_mongo_port` | `27017` | MongoDB TCP check port |
+| `test_rserve_port` | `6311` | RServe TCP check port |
+| `test_timeout_seconds` | `10` | Per-check timeout (seconds) |
+| `test_retry_count` | `3` | curl retry count for web check |
+| `test_curl_image_tag` | `latest` | Tag for `curlimages/curl` image |
+| `test_busybox_image_tag` | `stable` | Tag for `busybox` image |
+
+```bash
+nomad-pack run -var "test_timeout_seconds=30" -var "test_web_port=8080" .
+```
+
 ## Vault Role Authorization
 
 When `vault_enabled` is `true`, this pack renders task-level Nomad `vault` blocks so Nomad can request Vault tokens automatically using configured roles.

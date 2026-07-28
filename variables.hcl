@@ -654,3 +654,52 @@ variable "vault_env" {
   description = "Expose Vault token to tasks as environment variables."
   default     = true
 }
+
+# Test job variables (openstudio_test.nomad.tpl)
+variable "test_web_port" {
+  type        = number
+  description = "Port for the HTTP health check against openstudio-web.service.consul."
+  default     = 80
+}
+
+variable "test_redis_port" {
+  type        = number
+  description = "Port for the TCP check against openstudio-redis.service.consul."
+  default     = 6379
+}
+
+variable "test_mongo_port" {
+  type        = number
+  description = "Port for the TCP check against openstudio-db.service.consul (MongoDB)."
+  default     = 27017
+}
+
+variable "test_rserve_port" {
+  type        = number
+  description = "Port for the TCP check against openstudio-rserve.service.consul."
+  default     = 6311
+}
+
+variable "test_timeout_seconds" {
+  type        = number
+  description = "Per-check timeout in seconds passed to curl --max-time and nc -w."
+  default     = 10
+}
+
+variable "test_retry_count" {
+  type        = number
+  description = "Number of curl retries for the web HTTP health check."
+  default     = 3
+}
+
+variable "test_curl_image_tag" {
+  type        = string
+  description = "Tag for the curlimages/curl image used in the web HTTP check task."
+  default     = "latest"
+}
+
+variable "test_busybox_image_tag" {
+  type        = string
+  description = "Tag for the busybox image used in TCP check tasks."
+  default     = "stable"
+}
