@@ -325,7 +325,29 @@ volume "mongodb" {
 ### 4.4 Shared NFS Volume Wiring (web/worker)
 
 When `nfs_shared_volume_enabled = true`, the `web` and `worker` task groups mount the volume
-identified by `nfs_volume_source` at `nfs_volume_mount_path`.
+identified by `nfs_volume_source` at `nfs_volume_mount_path`. The volume type is controlled by
+`nfs_volume_type` (default: `"host_volume"`).
+
+With `nfs_volume_type = "host_volume"` (recommended):
+
+```hcl
+volume "nfs-shared" {
+  type      = "host"
+  source    = "openstudio-nfs"
+  read_only = false
+}
+```
+
+With `nfs_volume_type = "csi"`:
+
+```hcl
+volume "nfs-shared" {
+  type            = "csi"
+  source          = "openstudio-nfs"
+  access_mode     = "multi-node-multi-writer"
+  attachment_mode = "file-system"
+}
+```
 
 ---
 
@@ -424,6 +446,7 @@ Pack override (`override.hcl`):
 
 ```hcl
 nfs_shared_volume_enabled = true
+nfs_volume_type           = "host_volume"   # default — no need to set explicitly
 nfs_volume_source         = "openstudio-nfs"
 nfs_volume_mount_path     = "/mnt/openstudio"
 ```
@@ -440,7 +463,7 @@ If you require CSI-managed lifecycle instead of a host volume, you can still use
 
 1. deploy a CSI plugin (see [Section 3](#3-csi-plugin-setup))
 2. register an NFS-backed CSI volume
-3. set `nfs_volume_source` to that CSI volume ID
+3. set `nfs_volume_source` to that CSI volume ID and `nfs_volume_type = "csi"`
 
 Example CSI volume registration:
 

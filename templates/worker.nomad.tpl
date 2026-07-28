@@ -67,12 +67,20 @@ job "[[ var "job_name" . ]]-worker" {
     }
     [[ end ]]
     [[ if var "nfs_shared_volume_enabled" . ]]
+    [[ if eq (var "nfs_volume_type" .) "csi" ]]
     volume "nfs-shared" {
       type            = "csi"
       source          = "[[ var "nfs_volume_source" . ]]"
       access_mode     = "multi-node-multi-writer"
       attachment_mode = "file-system"
     }
+    [[ else ]]
+    volume "nfs-shared" {
+      type      = "host"
+      source    = "[[ var "nfs_volume_source" . ]]"
+      read_only = false
+    }
+    [[ end ]]
     [[ end ]]
     [[ template "openstudio_server.arch_constraint" . ]]
 
