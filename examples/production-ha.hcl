@@ -72,13 +72,18 @@ redis_spreads = [
 ]
 
 # ---------- Shared NFS (web + worker) ----------
-# Recommended: OS-level NFS mount + Nomad host_volume. See docs/storage.md:
-#   nomad client.hcl host_volume "openstudio-nfs"
-#   override vars for nfs_shared_volume_enabled, nfs_volume_source, nfs_volume_mount_path
-#
-# nfs_shared_volume_enabled = true
-# nfs_volume_source         = "openstudio-nfs"
-# nfs_volume_mount_path     = "/mnt/openstudio"
+# Recommended: OS-level NFS mount registered as a Nomad host_volume.
+# Prerequisites: see examples/volumes/openstudio-shared-host-volume.hcl for the
+#   required fstab entry and client.hcl host_volume stanza before deploying.
+# Note: web_count MUST remain 1 — NFS provides shared filesystem access but does
+#   NOT add distributed file-locking; multiple web replicas cause split-brain
+#   writes. See docs/operations-guide.md §'Web replica constraint'.
+nfs_shared_volume_enabled = true
+nfs_volume_source         = "openstudio-nfs"
+nfs_volume_mount_path     = "/mnt/openstudio"
+
+# web_count must stay 1 (NFS does not provide distributed file-locking).
+web_count = 1
 
 # ---------- Rserve ----------
 rserve_cpu    = 1000
