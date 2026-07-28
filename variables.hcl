@@ -180,3 +180,58 @@ variable "vector_image" {
   description = "The Vector image name and tag."
   default     = "timberio/vector:0.30.0-alpine"
 }
+
+# Scheduling helper inputs
+variable "db_constraints" {
+  type        = any
+  description = "Placement constraints for the db group."
+  default     = []
+}
+
+variable "db_affinities" {
+  type        = any
+  description = "Placement affinities for the db group."
+  default     = []
+}
+
+variable "db_spreads" {
+  type        = any
+  description = "Spread rules for the db group."
+  default     = []
+}
+
+variable "redis_constraints" {
+  type        = any
+  description = "Placement constraints for the redis group."
+  default     = []
+}
+
+variable "redis_affinities" {
+  type        = any
+  description = "Placement affinities for the redis group."
+  default     = []
+}
+
+variable "redis_spreads" {
+  type        = any
+  description = "Spread rules for the redis group."
+  default     = []
+}
+
+variable "rserve_constraints" {
+  type        = any
+  description = "Placement constraints for the rserve group."
+  default     = []
+}
+
+variable "rserve_affinities" {
+  type        = any
+  description = "Placement affinities for the rserve group."
+  default     = []
+}
+
+variable "rserve_spreads" {
+  type        = any
+  description = "Spread rules for the rserve group."
+  default     = []
+}

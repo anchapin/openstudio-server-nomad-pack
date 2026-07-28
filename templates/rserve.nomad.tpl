@@ -10,6 +10,9 @@ job "[[ var "job_name" . ]]-rserve" {
 
   group "rserve" {
     count = 1
+    [[ template "constraints" (var "rserve_constraints" .) ]]
+    [[ template "affinities" (var "rserve_affinities" .) ]]
+    [[ template "spreads" (var "rserve_spreads" .) ]]
 
     network {
       port "rserve" {
