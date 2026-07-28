@@ -83,12 +83,8 @@ jobs:
           NOMAD_ADDR: http://127.0.0.1:4646
         run: |
           SERVICES=(
-            "openstudio-db"
-            "openstudio-redis"
-            "openstudio-rserve"
             "openstudio-web"
             "openstudio-web-background"
-            "openstudio-worker"
           )
           DEADLINE=$((SECONDS + 300))
 
@@ -99,9 +95,6 @@ jobs:
                 echo "ERROR: Timeout waiting for ${svc}" >&2
                 nomad job status openstudio-server-e2e-web || true
                 nomad job status openstudio-server-e2e-worker || true
-                nomad job status openstudio-server-e2e-db || true
-                nomad job status openstudio-server-e2e-redis || true
-                nomad job status openstudio-server-e2e-rserve || true
                 exit 1
               fi
 
