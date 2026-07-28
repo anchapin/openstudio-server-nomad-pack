@@ -59,10 +59,46 @@ variable "db_image" {
   default     = "mongo:4.2"
 }
 
+variable "mongodb_storage_type" {
+  type        = string
+  description = "MongoDB storage type: ephemeral, host, or csi."
+  default     = "ephemeral"
+}
+
+variable "mongodb_host_volume" {
+  type        = string
+  description = "Nomad client host_volume name for MongoDB when mongodb_storage_type is host."
+  default     = "openstudio-mongodb"
+}
+
+variable "mongodb_csi_volume" {
+  type        = string
+  description = "Nomad CSI volume ID for MongoDB when mongodb_storage_type is csi."
+  default     = "openstudio-mongodb"
+}
+
 variable "redis_image" {
   type        = string
   description = "The Redis image name and tag."
   default     = "redis:6.2-alpine"
+}
+
+variable "redis_storage_type" {
+  type        = string
+  description = "Redis storage type: ephemeral, host, or csi."
+  default     = "ephemeral"
+}
+
+variable "redis_host_volume" {
+  type        = string
+  description = "Nomad client host_volume name for Redis when redis_storage_type is host."
+  default     = "openstudio-redis"
+}
+
+variable "redis_csi_volume" {
+  type        = string
+  description = "Nomad CSI volume ID for Redis when redis_storage_type is csi."
+  default     = "openstudio-redis"
 }
 
 variable "rserve_image" {
