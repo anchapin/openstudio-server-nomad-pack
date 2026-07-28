@@ -22,7 +22,7 @@
 | `web_cpu` | `number` | `1000` | CPU shares allocated to the OpenStudio Web task. |
 | `web_memory` | `number` | `2048` | Memory (MB) allocated to the OpenStudio Web task. |
 | `web_memory_max` | `number` | `2048` | Memory hard limit (MB) for the OpenStudio Web task (Nomad memory_max). |
-| `web_count` | `number` | `1` | The number of web task group allocations. |
+| `web_count` | `number` | `1` | The number of web task group allocations. MUST remain 1 (the default). The web process relies on local filesystem state without a distributed file-locking scheme; setting web_count > 1 causes split-brain writes across allocations. See docs/operations-guide.md §'Web replica constraint' for the root cause and the architectural changes required to relax this limit. |
 | `web_port` | `number` | `80` | Host-side static port mapped to the web container HTTP port. |
 | `web_health_check_interval` | `string` | `"10s"` | Interval between Consul health checks for the web service. |
 | `web_health_check_timeout` | `string` | `"2s"` | Timeout for Consul health checks for the web service. |
