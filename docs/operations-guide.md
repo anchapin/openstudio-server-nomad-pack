@@ -257,8 +257,18 @@ NOMAD_NAMESPACE=openstudio ./scripts/pre-teardown.sh
 
 `JOB_NAME` defaults to `openstudio-server`. The namespace defaults to `"default"` but
 should match the `nomad_namespace` variable used when the pack was deployed. The script
-stops `<JOB_NAME>-web` and `<JOB_NAME>-rserve` in the specified namespace, then prints
-the `nomad-pack destroy .` instruction.
+stops jobs in this order:
+
+1. `<JOB_NAME>-worker` (drains in-flight simulations first)
+2. `<JOB_NAME>-web`
+3. `<JOB_NAME>-rserve`
+4. `<JOB_NAME>-db`
+5. `<JOB_NAME>-redis`
+6. `<JOB_NAME>-system-hooks` (stopped with `-global`)
+7. `<JOB_NAME>-state-backup` (optional, stopped with `-detach` if present)
+8. `<JOB_NAME>-autoscaler` (optional, stopped with `-detach` if present)
+
+Then it prints the `nomad-pack destroy .` instruction.
 
 > **Note for non-default namespace deployments:** Always pass `--namespace` (or set
 > `NOMAD_NAMESPACE`) when the pack was deployed with `nomad_namespace != "default"`.
