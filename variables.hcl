@@ -455,4 +455,69 @@ variable "verification_targets" {
     "redis=openstudio-redis.service.consul:6379",
     "rserve=openstudio-rserve.service.consul:6311",
   ]
+# Vault integration variables
+variable "vault_enabled" {
+  type        = bool
+  description = "Enable Vault role-based authorization blocks in Nomad tasks."
+  default     = false
+}
+
+variable "vault_default_role" {
+  type        = string
+  description = "Default Vault role used by tasks when a task-specific role is not set."
+  default     = ""
+}
+
+variable "vault_db_role" {
+  type        = string
+  description = "Vault role override for the MongoDB task."
+  default     = ""
+}
+
+variable "vault_redis_role" {
+  type        = string
+  description = "Vault role override for the Redis task."
+  default     = ""
+}
+
+variable "vault_rserve_role" {
+  type        = string
+  description = "Vault role override for the Rserve task."
+  default     = ""
+}
+
+variable "vault_vector_role" {
+  type        = string
+  description = "Vault role override for Vector sidecar tasks."
+  default     = ""
+}
+
+variable "vault_policies" {
+  type        = list(string)
+  description = "Additional Vault policies to attach to Nomad-issued Vault tokens."
+  default     = []
+}
+
+variable "vault_namespace" {
+  type        = string
+  description = "Vault namespace used for task token requests (Enterprise Vault)."
+  default     = ""
+}
+
+variable "vault_change_mode" {
+  type        = string
+  description = "How tasks react to Vault token or secret changes."
+  default     = "restart"
+}
+
+variable "vault_change_signal" {
+  type        = string
+  description = "Signal sent to tasks when vault_change_mode is set to signal."
+  default     = "SIGHUP"
+}
+
+variable "vault_env" {
+  type        = bool
+  description = "Expose Vault token to tasks as environment variables."
+  default     = true
 }

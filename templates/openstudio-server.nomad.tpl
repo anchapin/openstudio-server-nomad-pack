@@ -25,6 +25,40 @@ job "[[ var "job_name" . ]]" {
     task "web" {
       driver = "docker"
 
+      [[ if var "vault_enabled" . ]]
+      [[ if var "vault_db_role" . ]]
+      vault {
+        role = "[[ var "vault_db_role" . ]]"
+        [[ if var "vault_policies" . ]]
+        policies = [[ var "vault_policies" . | toJson ]]
+        [[ end ]]
+        [[ if var "vault_namespace" . ]]
+        namespace = "[[ var "vault_namespace" . ]]"
+        [[ end ]]
+        change_mode = "[[ var "vault_change_mode" . ]]"
+        [[ if var "vault_change_signal" . ]]
+        change_signal = "[[ var "vault_change_signal" . ]]"
+        [[ end ]]
+        env = [[ var "vault_env" . ]]
+      }
+      [[ else if var "vault_default_role" . ]]
+      vault {
+        role = "[[ var "vault_default_role" . ]]"
+        [[ if var "vault_policies" . ]]
+        policies = [[ var "vault_policies" . | toJson ]]
+        [[ end ]]
+        [[ if var "vault_namespace" . ]]
+        namespace = "[[ var "vault_namespace" . ]]"
+        [[ end ]]
+        change_mode = "[[ var "vault_change_mode" . ]]"
+        [[ if var "vault_change_signal" . ]]
+        change_signal = "[[ var "vault_change_signal" . ]]"
+        [[ end ]]
+        env = [[ var "vault_env" . ]]
+      }
+      [[ end ]]
+      [[ end ]]
+
       config {
         image = "[[ var "web_image" . ]]"
         ports = ["http"]
@@ -89,6 +123,40 @@ EOH
     [[ if var "enable_vector_collection" . ]]
     task "vector" {
       driver = "docker"
+
+      [[ if var "vault_enabled" . ]]
+      [[ if var "vault_vector_role" . ]]
+      vault {
+        role = "[[ var "vault_vector_role" . ]]"
+        [[ if var "vault_policies" . ]]
+        policies = [[ var "vault_policies" . | toJson ]]
+        [[ end ]]
+        [[ if var "vault_namespace" . ]]
+        namespace = "[[ var "vault_namespace" . ]]"
+        [[ end ]]
+        change_mode = "[[ var "vault_change_mode" . ]]"
+        [[ if var "vault_change_signal" . ]]
+        change_signal = "[[ var "vault_change_signal" . ]]"
+        [[ end ]]
+        env = [[ var "vault_env" . ]]
+      }
+      [[ else if var "vault_default_role" . ]]
+      vault {
+        role = "[[ var "vault_default_role" . ]]"
+        [[ if var "vault_policies" . ]]
+        policies = [[ var "vault_policies" . | toJson ]]
+        [[ end ]]
+        [[ if var "vault_namespace" . ]]
+        namespace = "[[ var "vault_namespace" . ]]"
+        [[ end ]]
+        change_mode = "[[ var "vault_change_mode" . ]]"
+        [[ if var "vault_change_signal" . ]]
+        change_signal = "[[ var "vault_change_signal" . ]]"
+        [[ end ]]
+        env = [[ var "vault_env" . ]]
+      }
+      [[ end ]]
+      [[ end ]]
 
       lifecycle {
         hook    = "prestart"
@@ -285,6 +353,40 @@ EOH
     task "redis" {
       driver = "docker"
 
+      [[ if var "vault_enabled" . ]]
+      [[ if var "vault_redis_role" . ]]
+      vault {
+        role = "[[ var "vault_redis_role" . ]]"
+        [[ if var "vault_policies" . ]]
+        policies = [[ var "vault_policies" . | toJson ]]
+        [[ end ]]
+        [[ if var "vault_namespace" . ]]
+        namespace = "[[ var "vault_namespace" . ]]"
+        [[ end ]]
+        change_mode = "[[ var "vault_change_mode" . ]]"
+        [[ if var "vault_change_signal" . ]]
+        change_signal = "[[ var "vault_change_signal" . ]]"
+        [[ end ]]
+        env = [[ var "vault_env" . ]]
+      }
+      [[ else if var "vault_default_role" . ]]
+      vault {
+        role = "[[ var "vault_default_role" . ]]"
+        [[ if var "vault_policies" . ]]
+        policies = [[ var "vault_policies" . | toJson ]]
+        [[ end ]]
+        [[ if var "vault_namespace" . ]]
+        namespace = "[[ var "vault_namespace" . ]]"
+        [[ end ]]
+        change_mode = "[[ var "vault_change_mode" . ]]"
+        [[ if var "vault_change_signal" . ]]
+        change_signal = "[[ var "vault_change_signal" . ]]"
+        [[ end ]]
+        env = [[ var "vault_env" . ]]
+      }
+      [[ end ]]
+      [[ end ]]
+
       config {
         image = "[[ var "redis_image" . ]]"
         ports = ["redis"]
@@ -358,6 +460,40 @@ EOT
     [[ if var "enable_vector_collection" . ]]
     task "vector" {
       driver = "docker"
+
+      [[ if var "vault_enabled" . ]]
+      [[ if var "vault_vector_role" . ]]
+      vault {
+        role = "[[ var "vault_vector_role" . ]]"
+        [[ if var "vault_policies" . ]]
+        policies = [[ var "vault_policies" . | toJson ]]
+        [[ end ]]
+        [[ if var "vault_namespace" . ]]
+        namespace = "[[ var "vault_namespace" . ]]"
+        [[ end ]]
+        change_mode = "[[ var "vault_change_mode" . ]]"
+        [[ if var "vault_change_signal" . ]]
+        change_signal = "[[ var "vault_change_signal" . ]]"
+        [[ end ]]
+        env = [[ var "vault_env" . ]]
+      }
+      [[ else if var "vault_default_role" . ]]
+      vault {
+        role = "[[ var "vault_default_role" . ]]"
+        [[ if var "vault_policies" . ]]
+        policies = [[ var "vault_policies" . | toJson ]]
+        [[ end ]]
+        [[ if var "vault_namespace" . ]]
+        namespace = "[[ var "vault_namespace" . ]]"
+        [[ end ]]
+        change_mode = "[[ var "vault_change_mode" . ]]"
+        [[ if var "vault_change_signal" . ]]
+        change_signal = "[[ var "vault_change_signal" . ]]"
+        [[ end ]]
+        env = [[ var "vault_env" . ]]
+      }
+      [[ end ]]
+      [[ end ]]
 
       lifecycle {
         hook    = "prestart"
