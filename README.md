@@ -204,6 +204,17 @@ When `enable_consul_connect = true`, the pack configures Consul Connect sidecar 
 - `openstudio-rserve` on port `6311`
 
 These sidecars enforce mutual TLS for service-to-service traffic through the Connect mesh.
+| `vault_enabled` | `bool` | Enable task-level Vault role authorization blocks | `false` |
+| `vault_default_role` | `string` | Default Vault role for all tasks when no task override is set | `""` |
+| `vault_db_role` | `string` | Vault role override for MongoDB task | `""` |
+| `vault_redis_role` | `string` | Vault role override for Redis task | `""` |
+| `vault_rserve_role` | `string` | Vault role override for Rserve task | `""` |
+| `vault_vector_role` | `string` | Vault role override for Vector sidecars | `""` |
+| `vault_policies` | `list(string)` | Additional policies to attach to Nomad-issued Vault tokens | `[]` |
+| `vault_namespace` | `string` | Vault Enterprise namespace for token requests | `""` |
+| `vault_change_mode` | `string` | Token/secret change handling mode (`restart`/`noop`/`signal`) | `"restart"` |
+| `vault_change_signal` | `string` | Signal used when `vault_change_mode = "signal"` | `"SIGHUP"` |
+| `vault_env` | `bool` | Expose Vault token in task environment | `true` |
 
 ## Helm to Nomad Parity & Differences
 
@@ -261,3 +272,12 @@ Or with:
 ```bash
 ./scripts/run-batch-verification.sh
 ```
+| Helm Hooks | Nomad Lifecycle hooks / Periodic Jobs | Planned |
+
+## Vault Role Authorization
+
+When `vault_enabled` is `true`, this pack renders task-level Nomad `vault` blocks so Nomad can request Vault tokens automatically using configured roles.
+
+- Use `vault_default_role` to apply one role to all tasks.
+- Override specific tasks with `vault_db_role`, `vault_redis_role`, `vault_rserve_role`, and `vault_vector_role`.
+- Optionally set `vault_policies`, `vault_namespace`, `vault_change_mode`, `vault_change_signal`, and `vault_env` to control token behavior.
