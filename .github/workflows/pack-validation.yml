@@ -1,22 +1,24 @@
 name: Nomad Pack Validation
 
 on:
-  pull_request:
+  push:
     branches: [ develop ]
+  pull_request:
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
-  integration:
+  validate:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
 
       - name: Setup Nomad
-        uses: hashicorp/setup-nomad@main
+        uses: hashicorp/setup-nomad@6e88df50dd00f3737f04fddde2bf2bd446e313dd  # main
 
       - name: Setup Nomad Pack
-        uses: hashicorp/setup-nomad-pack@main
+        uses: hashicorp/setup-nomad-pack@7828b76610ea4c670afa01a1c84fbd9175b186b1  # main
 
       - name: Check pack formatting
         run: nomad-pack fmt -check -recursive .
@@ -26,6 +28,9 @@ jobs:
 
       - name: Validate batch verification rendering
         run: nomad-pack render -var "enable_batch_verification=true" .
+
+      - name: Validate pack
+        run: nomad-pack validate .
 
       - name: Validate Vagrantfile Syntax
         run: ruby -c Vagrantfile
@@ -53,6 +58,11 @@ jobs:
           done
           echo "Nomad dev agent did not become ready in time."
           exit 1
+
+      - name: Plan dry-run
+        env:
+          NOMAD_ADDR: http://127.0.0.1:4646
+        run: nomad-pack plan . --name openstudio-server
 
       - name: Run integration validation
         env:
