@@ -197,3 +197,15 @@ By default, MongoDB and Redis run with `ephemeral` storage. To persist data, set
 - `redis_storage_type`: `host` or `csi`
 
 Then set the matching volume name/ID via `mongodb_host_volume`/`mongodb_csi_volume` and `redis_host_volume`/`redis_csi_volume`.
+
+## Consul Service Checks
+
+The pack registers Consul service checks for datastore and API telemetry:
+
+- `openstudio-db`: TCP check on MongoDB (`27017`)
+- `openstudio-redis`: TCP check on Redis (`6379`)
+- `openstudio-rserve`: TCP check on RServe (`6311`)
+- `openstudio-web`: multi-check health telemetry:
+  - TCP socket check on port `8080`
+  - HTTP liveness check on `/up`
+  - HTTP readiness check on `/`

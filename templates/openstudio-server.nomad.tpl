@@ -12,6 +12,96 @@ job "[[ var "job_name" . ]]" {
 
   # Placeholder groups mapping to openstudio-server components:
   # web, web-background, worker, db, redis, rserve.
+
+  group "web" {
+    count = 1
+
+    network {
+      port "http" {
+        to = 8080
+      }
+    }
+
+    task "web" {
+      driver = "docker"
+
+      config {
+        image = "[[ var "web_image" . ]]"
+        ports = ["http"]
+        logging {
+          type = "[[ var "log_driver_type" . ]]"
+          config {
+            max-size = "[[ var "log_max_size" . ]]"
+            max-file = "[[ var "log_max_files" . ]]"
+          }
+        }
+      }
+
+      service {
+        name     = "openstudio-web"
+        port     = "http"
+        provider = "consul"
+
+        check {
+          name     = "openstudio-web-tcp"
+          type     = "tcp"
+          interval = "10s"
+          timeout  = "2s"
+        }
+
+        check {
+          name     = "openstudio-web-liveness"
+          type     = "http"
+          path     = "/up"
+          interval = "10s"
+          timeout  = "2s"
+        }
+
+        check {
+          name     = "openstudio-web-readiness"
+          type     = "http"
+          path     = "/"
+          interval = "10s"
+          timeout  = "2s"
+        }
+      }
+    }
+
+    [[ if var "enable_vector_collection" . ]]
+    task "vector" {
+      driver = "docker"
+
+      lifecycle {
+        hook    = "prestart"
+        sidecar = true
+      }
+
+      config {
+        image = "[[ var "vector_image" . ]]"
+        args  = ["--config", "local/vector.toml"]
+      }
+
+      template {
+        data        = <<EOH
+[sources.alloc_logs]
+type = "file"
+include = ["/alloc/logs/*.std*"]
+
+[sinks.console]
+type = "console"
+inputs = ["alloc_logs"]
+encoding.codec = "json"
+EOH
+        destination = "local/vector.toml"
+      }
+
+      resources {
+        cpu    = 100
+        memory = 64
+      }
+    }
+    [[ end ]]
+  }
   
   group "db" {
     count = 1
@@ -78,6 +168,7 @@ job "[[ var "job_name" . ]]" {
         ]
         
         check {
+          name     = "openstudio-db-tcp"
           type     = "tcp"
           interval = "10s"
           timeout  = "2s"
@@ -157,6 +248,7 @@ EOH
         ]
 
         check {
+          name     = "openstudio-redis-tcp"
           type     = "tcp"
           interval = "10s"
           timeout  = "2s"

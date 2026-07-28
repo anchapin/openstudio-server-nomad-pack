@@ -37,6 +37,7 @@ job "[[ var "job_name" . ]]-rserve" {
         ]
 
         check {
+          name     = "openstudio-rserve-tcp"
           type     = "tcp"
           interval = "10s"
           timeout  = "2s"
