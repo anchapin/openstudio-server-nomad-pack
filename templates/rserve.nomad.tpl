@@ -67,5 +67,27 @@ job "[[ var "job_name" . ]]-rserve" {
       vault {}
       [[ end ]]
     }
+
+    task "cleanup-poststop" {
+      driver = "docker"
+
+      lifecycle {
+        hook = "poststop"
+      }
+
+      config {
+        image   = "[[ var "poststop_cleanup_image" . ]]"
+        command = "sh"
+        args = [
+          "-ec",
+          <<EOT
+set -eu
+[[ range var "poststop_cleanup_paths" . -]]
+rm -rf "[[ . ]]"
+[[ end -]]
+EOT
+        ]
+      }
+    }
   }
 }
