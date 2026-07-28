@@ -15,6 +15,20 @@ job "[[ var "job_name" . ]]-web" {
   }
 
   group "web" {
+    # WARNING: web_count must remain 1 (the default).
+    # The OpenStudio Server web process uses local filesystem state (e.g. uploaded
+    # analysis files under /mnt/openstudio) without a distributed file-locking scheme.
+    # Running more than one web replica causes split-brain: each allocation writes to
+    # its own private view of the filesystem, so file operations on one node are
+    # invisible to the others.  This mirrors the Helm chart constraint
+    # (web-hpa.yaml maxReplicas: 1, "NFS cannot guarantee file locking using multiple
+    # clients").
+    #
+    # To safely run web_count > 1 you must first implement one of:
+    #   a) A distributed lock manager (e.g. Redlock via Redis) wrapping every
+    #      filesystem operation in the web process, OR
+    #   b) Stateless file handling: move all persistent artefacts to object storage
+    #      (e.g. S3) and eliminate local-disk writes from the request path.
     count = [[ var "web_count" . ]]
 
     [[ if var "nfs_shared_volume_enabled" . ]]

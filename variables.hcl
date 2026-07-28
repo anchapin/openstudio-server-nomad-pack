@@ -103,7 +103,7 @@ variable "web_memory_max" {
 
 variable "web_count" {
   type        = number
-  description = "The number of web task group allocations."
+  description = "The number of web task group allocations. MUST remain 1 (the default). The web process relies on local filesystem state without a distributed file-locking scheme; setting web_count > 1 causes split-brain writes across allocations. See docs/operations-guide.md §'Web replica constraint' for the root cause and the architectural changes required to relax this limit."
   default     = 1
 }
 

@@ -22,6 +22,45 @@ The `web` task group blocks on a `prestart` check that waits for `openstudio-db`
 
 ---
 
+## Web Replica Constraint
+
+> [!WARNING]
+> **`web_count` must remain `1` (the default).** Setting it higher will silently
+> corrupt analysis state.
+
+### Root cause
+
+The OpenStudio Server web process stores uploaded analysis artefacts (input files, result
+archives, temporary data) on the **local container filesystem** — typically under
+`/mnt/openstudio` when NFS is mounted, or in the allocation's private scratch space when
+it is not.  There is no distributed file-locking mechanism protecting these paths.
+
+When `web_count > 1`, each Nomad allocation gets its own isolated view of that filesystem.
+A file written by allocation A is invisible to allocation B, so subsequent requests routed
+to B fail to find artefacts that A created.  This is the same constraint documented in the
+upstream Helm chart (`templates/web/web-hpa.yaml`, `maxReplicas: 1`):
+
+> *"For this to work and have more than 1 web pod we'll need to implement a distributed
+> file locking scheme — NFS cannot guarantee file locking using multiple clients."*
+
+The NFS CSI volume (enabled with `nfs_shared_volume_enabled = true`) provides shared
+storage, but it does **not** provide advisory file locks across clients: concurrent
+writers can still race and corrupt state.
+
+### How to relax this constraint
+
+Two architectural changes are required before `web_count > 1` is safe:
+
+| Approach | What is needed |
+|---|---|
+| **Distributed lock manager** | Wrap every filesystem operation in the web process with an atomic lock acquired via a distributed backend (e.g. [Redlock](https://redis.io/docs/latest/develop/use/patterns/distributed-locks/) over the existing Redis instance). All replicas share the same NFS volume; the lock prevents concurrent writes to the same path. |
+| **Stateless file handling** | Eliminate local-disk writes from the request path by moving all persistent artefacts to object storage (e.g. Amazon S3, MinIO, or an S3-compatible endpoint). The web process becomes fully stateless and any number of replicas can run safely. |
+
+Until one of these approaches is implemented in the upstream OpenStudio Server
+application, keep `web_count = 1`.
+
+---
+
 ## Guides
 
 ### 🚀 Getting Started: Single-Node Dev Cluster
