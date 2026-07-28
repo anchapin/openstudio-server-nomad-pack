@@ -115,6 +115,8 @@ Refer to [`variables.hcl`](file:///Users/achapin/OpenStudio/openstudio-server-no
 | `worker_queue_requeued_target` | `number` | Target value for `requeued` queue depth per allocation | `1` |
 | `worker_queue_simulations_query` | `string` | Prometheus query for `simulations` queue depth | `"sum(openstudio_worker_queue_depth{queue=\"simulations\"})"` |
 | `worker_queue_simulations_target` | `number` | Target value for `simulations` queue depth per allocation | `5` |
+| `web_background_image` | `string` | Docker image for OpenStudio Web-Background | `"nrel/openstudio-server:latest"` |
+| `web_background_count` | `number` | Number of Web-Background tasks | `1` |
 | `db_image` | `string` | MongoDB image | `"mongo:4.2"` |
 | `mongodb_storage_type` | `string` | MongoDB storage type (`ephemeral`, `host`, `csi`) | `"ephemeral"` |
 | `mongodb_host_volume` | `string` | Host volume name for MongoDB when `mongodb_storage_type=host` | `"openstudio-mongodb"` |
