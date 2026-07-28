@@ -1,0 +1,29 @@
+name: Nomad ACL Policy Validation
+
+on:
+  push:
+    branches: [ develop ]
+    paths:
+      - 'policies/**'
+  pull_request:
+    branches: [ develop ]
+    paths:
+      - 'policies/**'
+
+jobs:
+  validate-policies:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup Nomad
+        uses: hashicorp/setup-nomad@main
+
+      - name: Validate ACL Policy Syntax
+        run: |
+          echo "Checking HCL formatting for policy files..."
+          nomad fmt -check policies/
+
+      - name: List Policy Files
+        run: ls -1 policies/*.hcl
