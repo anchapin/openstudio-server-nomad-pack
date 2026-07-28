@@ -270,6 +270,10 @@ redis_volume_source   = "openstudio-redis"
 
 ### 4.1 MongoDB — Host Volume Wiring
 
+> **Upgrade note:** If this volume contains data created on MongoDB `4.2`, do **not** jump
+> directly to `mongo:6.0.7`. Follow the stepwise migration sequence in
+> [`docs/upgrading.md`](./upgrading.md#mongodb-upgrade-path-for-persisted-42-data) first.
+
 The pack renders the following volume stanza for MongoDB when `mongodb_storage_type = "host_volume"`:
 
 ```hcl
@@ -595,8 +599,9 @@ sudo rm -rf /opt/nomad/volumes/mongodb /opt/nomad/volumes/redis
 ```
 
 > **Warning:** These commands permanently delete all MongoDB and Redis data. Make a backup first
-> if the data has any value (see the [migration guide](./migration-k8s-to-nomad.md) for
-> `mongodump` instructions).
+> if the data has any value (see the [upgrade guide](./upgrading.md) for MongoDB backup and
+> migration steps, plus the [migration guide](./migration-k8s-to-nomad.md) for
+> Kubernetes-to-Nomad data-move workflows).
 
 ### 7.3 Delete CSI Volumes
 
