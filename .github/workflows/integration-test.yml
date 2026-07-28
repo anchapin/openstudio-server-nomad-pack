@@ -30,7 +30,11 @@ jobs:
 
       - name: Start Nomad dev agent
         run: |
-          sudo /usr/local/bin/nomad agent -dev -log-level=WARN &
+          # Advertise on the real host IP so Docker's iptables DNAT rules apply
+          # to Consul TCP health checks (loopback traffic bypasses PREROUTING DNAT).
+          HOST_IP=$(hostname -I | awk '{print $1}')
+          echo "HOST_IP=${HOST_IP}" >> "${GITHUB_ENV}"
+          sudo /usr/local/bin/nomad agent -dev -bind=0.0.0.0 -advertise="${HOST_IP}" -log-level=WARN &
           echo "Waiting for Nomad to become ready..."
           for i in $(seq 1 30); do
             NOMAD_ADDR=http://127.0.0.1:4646 nomad status >/dev/null 2>&1 && echo "Nomad is ready after ${i}s" && break

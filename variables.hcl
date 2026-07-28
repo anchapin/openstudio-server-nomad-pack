@@ -295,7 +295,7 @@ variable "redis_csi_volume" {
 variable "rserve_image" {
   type        = string
   description = "The Rserve image name and tag."
-  default     = "nrel/rserve:latest"
+  default     = "nrel/openstudio-rserve:latest"
 }
 
 variable "rserve_cpu" {
