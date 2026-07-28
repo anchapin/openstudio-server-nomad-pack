@@ -16,6 +16,8 @@
 | `region` | `string` | `"global"` | The Nomad region where the job will be deployed. |
 | `datacenters` | `list(string)` | `["dc1"]` | A list of datacenters in the region which are eligible for task placement. |
 | `web_image` | `string` | `"nrel/openstudio-server:latest"` | The image name and tag for the OpenStudio Server web container. |
+| `web_command` | `string` | `""` | Optional command override for the web task. Leave empty to use the image default entrypoint. |
+| `web_args` | `list(string)` | `[]` | Optional args passed to web_command when set. |
 | `web_priority` | `number` | `80` | Nomad job priority for the OpenStudio Web UI job. |
 | `web_cpu` | `number` | `1000` | CPU shares allocated to the OpenStudio Web task. |
 | `web_memory` | `number` | `2048` | Memory (MB) allocated to the OpenStudio Web task. |
@@ -33,6 +35,9 @@
 | `web_background_cpu` | `number` | `250` | CPU shares allocated to the OpenStudio web-background task. |
 | `web_background_memory` | `number` | `512` | Memory (MB) allocated to the OpenStudio web-background task. |
 | `worker_image` | `string` | `"nrel/openstudio-server:latest"` | The image name and tag for the OpenStudio Server worker container. |
+| `worker_command` | `string` | `"/usr/local/bin/start-workers"` | Command used to start the worker task. |
+| `worker_args` | `list(string)` | `[]` | Optional args passed to worker_command. |
+| `worker_health_check_command` | `string` | `"pgrep -f resque > /dev/null"` | Shell command used by the worker service health check. |
 | `worker_count` | `number` | `1` | The number of worker task group allocations. |
 | `worker_update_max_parallel` | `number` | `1` | Maximum number of worker allocations updated in parallel. |
 | `worker_update_health_check` | `string` | `"task_states"` | Health check mode for worker rolling updates. |
@@ -50,12 +55,14 @@
 | `worker_cpu_target_utilization` | `number` | `50` | Target worker CPU utilization percentage used by the nomad-apm avg_cpu scaling check. |
 | `nomad_autoscaler_enabled` | `bool` | `false` | Render an optional Nomad Autoscaler daemon job stub. When false (default), the autoscaler job template is omitted. |
 | `autoscaler_prometheus_address` | `string` | `"http://prometheus:9090"` | Address of the Prometheus server used by the Nomad Autoscaler APM plugin to evaluate scaling checks. |
-| `autoscaler_cooldown` | `string` | `"5m"` | Cooldown duration between worker autoscaling actions (e.g. '5m', '2m'). |
+| `autoscaler_cooldown` | `string` | `"60m"` | Cooldown duration between worker autoscaling actions (e.g. '60m', '30m'). Defaults to 60m to match the Helm chart stabilizationWindowSeconds of 3600. |
 | `worker_queue_requeued_query` | `string` | `"sum(openstudio_worker_queue_depth{queue=\"requeued\"})"` | Prometheus query for requeued backlog depth. |
 | `worker_queue_requeued_target` | `number` | `1` | Target queue depth for requeued jobs per worker allocation. |
 | `worker_queue_simulations_query` | `string` | `"sum(openstudio_worker_queue_depth{queue=\"simulations\"})"` | Prometheus query for simulations backlog depth. |
 | `worker_queue_simulations_target` | `number` | `5` | Target queue depth for simulation jobs per worker allocation. |
 | `web_background_image` | `string` | `"nrel/openstudio-server:latest"` | The image name and tag for the OpenStudio Server web-background container. |
+| `web_background_command` | `string` | `""` | Optional command override for the web-background task. Leave empty to use the image default entrypoint. |
+| `web_background_args` | `list(string)` | `[]` | Optional args passed to web_background_command when set. |
 | `web_background_count` | `number` | `1` | The number of web-background tasks to run. |
 | `db_image` | `string` | `"mongo:4.2"` | The MongoDB database image name and tag. |
 | `db_cpu` | `number` | `1000` | CPU shares allocated to the MongoDB task. |
@@ -75,6 +82,8 @@
 | `nfs_volume_source` | `string` | `"openstudio-nfs"` | Nomad CSI volume ID for the NFS shared volume used by web and worker task groups. |
 | `nfs_volume_mount_path` | `string` | `"/mnt/openstudio"` | Mount path inside web and worker tasks where the NFS shared volume is attached. |
 | `rserve_image` | `string` | `"nrel/openstudio-rserve:latest"` | The Rserve image name and tag. |
+| `rserve_command` | `string` | `""` | Optional command override for the Rserve task. Leave empty to use the image default entrypoint. |
+| `rserve_args` | `list(string)` | `[]` | Optional args passed to rserve_command when set. |
 | `rserve_cpu` | `number` | `1000` | CPU shares allocated to the Rserve task. |
 | `rserve_memory` | `number` | `2048` | Memory (MB) allocated to the Rserve task. |
 | `rserve_health_check_interval` | `string` | `"10s"` | Interval between Consul health checks for the Rserve service. |

@@ -301,8 +301,8 @@ variable "autoscaler_prometheus_address" {
 
 variable "autoscaler_cooldown" {
   type        = string
-  description = "Cooldown duration between worker autoscaling actions (e.g. '5m', '2m')."
-  default     = "5m"
+  description = "Cooldown duration between worker autoscaling actions (e.g. '60m', '30m'). Defaults to 60m to match the Helm chart stabilizationWindowSeconds of 3600."
+  default     = "60m"
 }
 
 variable "worker_queue_requeued_query" {

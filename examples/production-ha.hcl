@@ -41,7 +41,7 @@ worker_autoscaling_enabled  = true
 worker_autoscaling_cpu_enabled = true
 worker_min_replicas         = 2
 worker_max_replicas         = 20
-autoscaler_cooldown         = "3m"
+autoscaler_cooldown         = "60m"
 
 worker_update_max_parallel      = 2
 worker_update_min_healthy_time  = "1m"
