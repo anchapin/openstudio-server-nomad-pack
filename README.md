@@ -331,15 +331,20 @@ Set `worker_autoscaling_enabled = true` to activate worker scaling policies:
 | Variable | Default | Description |
 |---|---|---|
 | `worker_autoscaling_enabled` | `false` | Enable/disable the `scaling` block |
+| `worker_autoscaling_cpu_enabled` | `true` | Enable the built-in `nomad-apm` CPU check (`check "cpu-utilization"`); uses `source = "nomad-apm"` — **no external Prometheus required** |
+| `worker_cpu_target_utilization` | `50` | Target worker CPU utilization % for the `nomad-apm` avg_cpu check; mirrors Helm HPA `targetCPUUtilizationPercentage: 50` |
 | `nomad_autoscaler_enabled` | `false` | Render optional autoscaler daemon stub (`templates/nomad-autoscaler.nomad.tpl`) |
 | `worker_min_replicas` | `1` | Minimum worker allocations |
 | `worker_max_replicas` | `10` | Maximum worker allocations |
 | `autoscaler_cooldown` | `"60m"` | Cooldown between scaling decisions |
-| `autoscaler_prometheus_address` | `"http://prometheus:9090"` | Prometheus URL for the Autoscaler plugin |
+| `autoscaler_prometheus_address` | `"http://prometheus:9090"` | Prometheus URL for the Autoscaler plugin (only required for PromQL queue-depth checks) |
 | `worker_queue_requeued_query` | see vars | PromQL for the `requeued` queue depth |
 | `worker_queue_simulations_query` | see vars | PromQL for the `simulations` queue depth |
 
-The optional autoscaler stub is preconfigured with `nomad-apm` as the default APM source and includes a commented Prometheus block you can enable if you want PromQL-based checks.
+> [!NOTE]
+> **CPU check uses `nomad-apm` — no Prometheus needed.** When `worker_autoscaling_cpu_enabled = true`, the pack configures a `check "cpu-utilization"` block with `source = "nomad-apm"` and a `target-value` strategy at `worker_cpu_target_utilization` (default `50`). This is a built-in Nomad Autoscaler APM driver that reads directly from the Nomad API — no external metrics stack is required. The default of `50` mirrors the Helm chart's `targetCPUUtilizationPercentage: 50` HPA setting.
+>
+> The optional autoscaler stub is preconfigured with `nomad-apm` as the default APM source and includes a commented Prometheus block you can enable if you want PromQL-based queue-depth checks.
 
 ### Vector Sidecar
 
