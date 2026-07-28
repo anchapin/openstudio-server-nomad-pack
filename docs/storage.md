@@ -345,7 +345,45 @@ AWS EFS, NetApp, a NAS appliance, or a dedicated NFS VM).
 `/etc/fstab` (Linux clients):
 
 ```fstab
-<nfs-host>:/exports/openstudio /mnt/openstudio nfs nfsvers=4,sync,hard,intr 0 0
+<nfs-host>:/exports/openstudio /mnt/openstudio nfs nfsvers=4,sync,hard,intr,rsize=65536,wsize=65536,timeo=14 0 0
+```
+
+#### 5.1.1 NFS Mount Options (equivalent to Helm `configmaps/nfs-cm.yaml`)
+
+No Consul KV entry, Nomad `template` stanza, or additional ConfigMap is needed — set NFS mount
+options directly in `/etc/fstab` (or a systemd `.mount` unit) on each Nomad client.
+
+Recommended options for OpenStudio simulation workloads:
+
+- `nfsvers=4`: Uses NFSv4 for modern locking/session behavior and broad managed-NFS compatibility.
+- `sync`: Confirms writes on stable storage to reduce corruption risk for shared run artifacts.
+- `hard`: Retries I/O until the NFS server recovers, avoiding silent data loss on transient outages.
+- `intr`: Allows interrupted operations so admin actions can stop blocked tasks during incidents.
+- `rsize=65536`: Uses larger read requests to improve throughput for large simulation outputs.
+- `wsize=65536`: Uses larger write requests to improve throughput for large simulation outputs.
+- `timeo=14`: Sets a moderate RPC timeout to balance retry responsiveness and stability.
+
+Equivalent systemd mount unit (`/etc/systemd/system/mnt-openstudio.mount`):
+
+```ini
+[Unit]
+Description=OpenStudio shared NFS mount
+After=network-online.target
+Wants=network-online.target
+
+[Mount]
+What=<nfs-host>:/exports/openstudio
+Where=/mnt/openstudio
+Type=nfs
+Options=nfsvers=4,sync,hard,intr,rsize=65536,wsize=65536,timeo=14
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now mnt-openstudio.mount
 ```
 
 Nomad client config (`/etc/nomad.d/client.hcl`):

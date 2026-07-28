@@ -123,6 +123,7 @@ Nomad Pack variable names (`variables.hcl`).
 | `persistence.existingClaim` / PVC name (mongo)| `mongodb_volume_source`          | |
 | `persistence.storageClass` (redis)            | `redis_storage_type`             | `host_volume` or `csi` |
 | `persistence.existingClaim` / PVC name (redis)| `redis_volume_source`            | |
+| `configmaps/nfs-cm.yaml`                      | OS-level NFS mount options on Nomad clients | Configure in `/etc/fstab` or a systemd `.mount` unit; no Consul KV, Nomad `template`, or extra ConfigMap |
 | `ingress.hosts[0].host`                       | `ingress_domain`                 | |
 | `nameOverride` / `fullnameOverride`           | `job_name`                       | |
 | `appVersion` / `image.tag`                    | `app_version`                    | |

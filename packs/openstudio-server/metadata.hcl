@@ -1,10 +1,10 @@
 app {
-  name        = "openstudio-server"
-  version     = "1.0.0"
-  description = "Nomad pack to run OpenStudio Server on Nomad and Consul clusters."
+  url = "https://github.com/anchapin/openstudio-server-nomad-pack"
 }
 
 pack {
   name        = "openstudio-server"
-  version     = "0.1.0"
+  description = "Deploys the full OpenStudio Server stack (web, worker, db, Redis, Rserve) on HashiCorp Nomad with Consul service discovery."
+  version     = "0.2.46"
+  url         = "https://github.com/anchapin/openstudio-server-nomad-pack"
 }
