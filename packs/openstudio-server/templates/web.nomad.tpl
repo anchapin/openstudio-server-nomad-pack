@@ -211,7 +211,9 @@ EOH
         name     = "openstudio-web-background"
         provider = "consul"
 
-        tags = []
+        tags = [
+          "traefik.enable=false",
+        ]
 
         check {
           name     = "openstudio-web-background-alive"
