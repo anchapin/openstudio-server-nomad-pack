@@ -16,6 +16,10 @@ jobs:
       - name: Setup Nomad Pack
         uses: hashicorp/setup-nomad-pack@main
 
+      - name: Run version bump script tests
+        run: |
+          ./scripts/test_bump_metadata_version.sh
+
       - name: Validate Pack
         run: |
           nomad-pack render .
