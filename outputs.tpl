@@ -5,7 +5,7 @@ Consul Service URLs:
 - Redis Service: http://localhost:8500/ui/[[ index (var "datacenters" .) 0 ]]/services/openstudio-redis
 
 Traefik Router URL:
-- Web UI: http://[[ var "job_name" . ]].[[ var "ingress_domain" . ]]
+- Web UI: http[[ if var "ingress_tls_enabled" . ]]s[[ end ]]://[[ var "ingress_domain" . ]]
 
 Batch Verification:
 - Enable job: nomad-pack run -var "enable_batch_verification=true" .
