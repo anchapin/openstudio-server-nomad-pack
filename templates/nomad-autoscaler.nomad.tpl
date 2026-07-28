@@ -18,7 +18,7 @@ job "[[ var "job_name" . ]]-autoscaler" {
       driver = "docker"
 
       config {
-        image   = "hashicorp/nomad-autoscaler:0.4.7"
+        image   = "[[ var "nomad_autoscaler_image" . ]]"
         command = "nomad-autoscaler"
         args    = ["agent", "-config", "local/autoscaler.hcl"]
       }
