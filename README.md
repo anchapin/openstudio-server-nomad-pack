@@ -94,6 +94,14 @@ Refer to [`variables.hcl`](file:///Users/achapin/OpenStudio/openstudio-server-no
 | `worker_priority` | `number` | Nomad priority for calculation workers | `40` |
 | `worker_queues` | `string` | Queue list for worker processing | `"requeued,simulations"` |
 | `worker_process_count` | `string` | Worker container `COUNT` env value | `"1"` |
+| `worker_autoscaling_enabled` | `bool` | Enables worker autoscaling policy | `true` |
+| `worker_autoscaling_min` | `number` | Minimum worker allocations under autoscaling | `1` |
+| `worker_autoscaling_max` | `number` | Maximum worker allocations under autoscaling | `10` |
+| `worker_autoscaling_cooldown` | `string` | Worker autoscaling cooldown duration | `"2m"` |
+| `worker_queue_requeued_query` | `string` | Prometheus query for `requeued` queue depth | `"sum(openstudio_worker_queue_depth{queue=\"requeued\"})"` |
+| `worker_queue_requeued_target` | `number` | Target value for `requeued` queue depth per allocation | `1` |
+| `worker_queue_simulations_query` | `string` | Prometheus query for `simulations` queue depth | `"sum(openstudio_worker_queue_depth{queue=\"simulations\"})"` |
+| `worker_queue_simulations_target` | `number` | Target value for `simulations` queue depth per allocation | `5` |
 | `db_image` | `string` | MongoDB image | `"mongo:4.2"` |
 | `mongodb_storage_type` | `string` | MongoDB storage type (`ephemeral`, `host`, `csi`) | `"ephemeral"` |
 | `mongodb_host_volume` | `string` | Host volume name for MongoDB when `mongodb_storage_type=host` | `"openstudio-mongodb"` |
@@ -225,7 +233,7 @@ These sidecars enforce mutual TLS for service-to-service traffic through the Con
 | Deployment/Pod | Job & Task Groups | Scaffolded (Web, DB, Redis, Worker, Rserve) |
 | Container | Task (`docker` driver) | Scaffolded |
 | Service | Consul `service` registration | Scaffolded |
-| HPA / KEDA ScaledObject | Nomad Autoscaler | Planned |
+| HPA / KEDA ScaledObject | Nomad Autoscaler | Implemented (Worker, Prometheus target-value checks) |
 | StorageClass / PVC | Nomad CSI volumes / `host_volume` | Implemented (DB/Redis) |
 | ServiceAccount / RBAC | Nomad ACLs / Vault Roles | Planned |
 | Helm Hooks | Nomad Lifecycle hooks / Periodic Jobs | Implemented (poststop cleanup tasks) |
