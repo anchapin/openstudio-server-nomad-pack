@@ -11,12 +11,12 @@ job "openstudio-server-smoke-test" {
     count = 1
 
     task "verify" {
-      driver = "docker"
+      # raw_exec avoids Docker image pull overhead; Nomad dev mode enables it by default.
+      driver = "raw_exec"
 
       config {
-        image   = "alpine:3.18"
         command = "/bin/sh"
-        args    = ["-c", "echo 'Smoke test: pack deployment verified.' && exit 0"]
+        args    = ["-c", "echo 'Smoke test: pack deployment verified.'"]
       }
 
       resources {

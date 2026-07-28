@@ -89,40 +89,35 @@ jobs:
         run: |
           nomad job run examples/test-batch.nomad
 
+          # Poll the HTTP API for job status — more reliable than parsing CLI JSON output
+          # across Nomad versions (CLI -json structure changed in v2.x).
           python3 - <<'PY'
-          import json
-          import subprocess
-          import time
-          import sys
+          import json, sys, time, urllib.request
 
           job_id = "openstudio-server-smoke-test"
-          deadline = time.time() + 180
+          base   = "http://127.0.0.1:4646/v1/job"
+          deadline = time.time() + 60
 
           while time.time() < deadline:
-              data = json.loads(subprocess.check_output(["nomad", "job", "status", "-json", job_id], text=True))
-              if isinstance(data, list):
-                  data = data[0] if data else {}
-              if data.get("Status") == "dead":
+              with urllib.request.urlopen(f"{base}/{job_id}") as r:
+                  status = json.load(r).get("Status")
+              if status == "dead":
                   break
-              time.sleep(5)
+              time.sleep(2)
           else:
-              print(f"ERROR: timeout waiting for {job_id} to finish", file=sys.stderr)
-              subprocess.run(["nomad", "job", "status", job_id], check=False)
+              print(f"ERROR: timeout waiting for {job_id}", file=sys.stderr)
               sys.exit(1)
 
-          allocs = json.loads(subprocess.check_output(["nomad", "job", "allocations", "-json", job_id], text=True))
+          with urllib.request.urlopen(f"{base}/{job_id}/allocations") as r:
+              allocs = json.load(r)
           if not allocs:
-              print(f"ERROR: no allocations found for {job_id}", file=sys.stderr)
+              print(f"ERROR: no allocations for {job_id}", file=sys.stderr)
               sys.exit(1)
 
-          failed = [a for a in allocs if a.get("ClientStatus") not in {"complete"}]
+          failed = [a for a in allocs if a.get("ClientStatus") != "complete"]
           if failed:
-              print("ERROR: smoke test allocation failures detected", file=sys.stderr)
-              for alloc in failed:
-                  print(
-                      f"{alloc.get('ID')} status={alloc.get('ClientStatus')} desired={alloc.get('DesiredStatus')}",
-                      file=sys.stderr,
-                  )
+              for a in failed:
+                  print(f"FAIL {a.get('ID','')} status={a.get('ClientStatus')}", file=sys.stderr)
               sys.exit(1)
 
           print("Smoke-test batch job completed successfully.")
