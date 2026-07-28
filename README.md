@@ -304,3 +304,11 @@ When `vault_enabled` is `true`, this pack renders task-level Nomad `vault` block
 - Use `vault_default_role` to apply one role to all tasks.
 - Override specific tasks with `vault_db_role`, `vault_redis_role`, `vault_rserve_role`, and `vault_vector_role`.
 - Optionally set `vault_policies`, `vault_namespace`, `vault_change_mode`, `vault_change_signal`, and `vault_env` to control token behavior.
+
+## License
+
+This project is dual-licensed under either MIT or BSD-3-Clause. See:
+
+- [LICENSE](LICENSE)
+- [LICENSE-MIT](LICENSE-MIT)
+- [LICENSE-BSD-3-CLAUSE](LICENSE-BSD-3-CLAUSE)
