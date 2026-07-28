@@ -340,9 +340,12 @@ variable "mongodb_volume_source" {
   default     = "openstudio-mongodb"
 }
 
+# Intentionally uses redis:6.2-alpine (newer, smaller) instead of the Helm chart's
+# redis:6.0.9. Operators should align the Redis major.minor version with their
+# target OpenStudio Server release requirements.
 variable "redis_image" {
   type        = string
-  description = "The Redis image name and tag."
+  description = "The Redis image name and tag. Intentionally diverges from the Helm chart default (redis:6.0.9) by using redis:6.2-alpine; align Redis major.minor with your target OpenStudio Server release requirements."
   default     = "redis:6.2-alpine"
 }
 
