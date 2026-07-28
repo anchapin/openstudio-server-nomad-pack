@@ -184,6 +184,39 @@ Before running `nomad-pack run` for the first time:
 
 ---
 
+---
+
+## Teardown Order
+
+Before destroying the pack, stop the stateless jobs first so that all Nomad allocations
+reach a terminal state before any downstream cleanup (NFS unmount, volume deletion, etc.).
+
+Use the provided helper script:
+
+```bash
+./scripts/pre-teardown.sh [JOB_NAME]
+```
+
+`JOB_NAME` defaults to `openstudio-server`. The script stops `<JOB_NAME>-web` and
+`<JOB_NAME>-rserve` in sequence, then prints the `nomad-pack destroy .` instruction.
+
+Once the script exits successfully, run:
+
+```bash
+nomad-pack destroy .
+```
+
+### Why no `sleep`?
+
+The Helm chart's `hooks/pre-delete-hook.yaml` runs `kubectl delete deployment … && sleep 60`
+as a workaround for Kubernetes' non-deterministic pod drain timing — there is no blocking
+primitive that guarantees pods are dead before the hook exits.
+
+`nomad job stop` is deterministic: it **blocks until every allocation is dead**. No sleep
+is needed, making this approach cleaner and more reliable than the Helm equivalent.
+
+---
+
 ## Further Reading
 
 - [Nomad Pack documentation](https://developer.hashicorp.com/nomad/tools/nomad-pack)
