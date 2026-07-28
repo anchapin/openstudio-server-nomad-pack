@@ -107,7 +107,22 @@ job "[[ var "job_name" . ]]-redis" {
       }
 
       [[ if var "vault_integration_enabled" . ]]
-      vault {}
+      vault {
+        policies      = ["[[ var "vault_policy" . ]]"]
+        change_mode   = "restart"
+        change_signal = "SIGTERM"
+      }
+
+      template {
+        destination = "secrets/env"
+        env         = true
+        change_mode = "restart"
+        data        = <<-EOT
+{{ with secret "[[ var "vault_kv_redis_path" . ]]" }}
+REDIS_PASSWORD={{ .Data.data.password }}
+{{ end }}
+EOT
+      }
       [[ end ]]
     }
 

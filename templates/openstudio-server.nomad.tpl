@@ -77,6 +77,31 @@ job "[[ var "job_name" . ]]" {
       [[ end ]]
       [[ end ]]
 
+      [[ if var "vault_integration_enabled" . ]]
+      vault {
+        policies      = ["[[ var "vault_policy" . ]]"]
+        change_mode   = "restart"
+        change_signal = "SIGTERM"
+      }
+
+      template {
+        destination = "secrets/env"
+        env         = true
+        change_mode = "restart"
+        data        = <<-EOT
+{{ with secret "[[ var "vault_kv_mongodb_path" . ]]" }}
+MONGO_PASSWORD={{ .Data.data.password }}
+{{ end }}
+{{ with secret "[[ var "vault_kv_redis_path" . ]]" }}
+REDIS_PASSWORD={{ .Data.data.password }}
+{{ end }}
+{{ with secret "[[ var "vault_kv_app_path" . ]]" }}
+APP_SECRET_KEY_BASE={{ .Data.data.secret_key_base }}
+{{ end }}
+EOT
+      }
+      [[ end ]]
+
       config {
         image = "[[ var "web_image" . ]]"
         ports = ["http"]
@@ -223,6 +248,31 @@ EOH
     task "worker" {
       driver = "docker"
 
+      [[ if var "vault_integration_enabled" . ]]
+      vault {
+        policies      = ["[[ var "vault_policy" . ]]"]
+        change_mode   = "restart"
+        change_signal = "SIGTERM"
+      }
+
+      template {
+        destination = "secrets/env"
+        env         = true
+        change_mode = "restart"
+        data        = <<-EOT
+{{ with secret "[[ var "vault_kv_mongodb_path" . ]]" }}
+MONGO_PASSWORD={{ .Data.data.password }}
+{{ end }}
+{{ with secret "[[ var "vault_kv_redis_path" . ]]" }}
+REDIS_PASSWORD={{ .Data.data.password }}
+{{ end }}
+{{ with secret "[[ var "vault_kv_app_path" . ]]" }}
+APP_SECRET_KEY_BASE={{ .Data.data.secret_key_base }}
+{{ end }}
+EOT
+      }
+      [[ end ]]
+
       config {
         image = "[[ var "worker_image" . ]]"
         logging {
@@ -327,7 +377,22 @@ EOH
       }
 
       [[ if var "vault_integration_enabled" . ]]
-      vault {}
+      vault {
+        policies      = ["[[ var "vault_policy" . ]]"]
+        change_mode   = "restart"
+        change_signal = "SIGTERM"
+      }
+
+      template {
+        destination = "secrets/env"
+        env         = true
+        change_mode = "restart"
+        data        = <<-EOT
+{{ with secret "[[ var "vault_kv_mongodb_path" . ]]" }}
+MONGO_PASSWORD={{ .Data.data.password }}
+{{ end }}
+EOT
+      }
       [[ end ]]
 
       service {
@@ -514,6 +579,25 @@ EOH
         cpu    = [[ var "redis_cpu" . ]]
         memory = [[ var "redis_memory" . ]]
       }
+
+      [[ if var "vault_integration_enabled" . ]]
+      vault {
+        policies      = ["[[ var "vault_policy" . ]]"]
+        change_mode   = "restart"
+        change_signal = "SIGTERM"
+      }
+
+      template {
+        destination = "secrets/env"
+        env         = true
+        change_mode = "restart"
+        data        = <<-EOT
+{{ with secret "[[ var "vault_kv_redis_path" . ]]" }}
+REDIS_PASSWORD={{ .Data.data.password }}
+{{ end }}
+EOT
+      }
+      [[ end ]]
     }
 
     task "cleanup-poststop" {
@@ -617,6 +701,31 @@ EOH
     task "web-background" {
       driver = "docker"
 
+      [[ if var "vault_integration_enabled" . ]]
+      vault {
+        policies      = ["[[ var "vault_policy" . ]]"]
+        change_mode   = "restart"
+        change_signal = "SIGTERM"
+      }
+
+      template {
+        destination = "secrets/env"
+        env         = true
+        change_mode = "restart"
+        data        = <<-EOT
+{{ with secret "[[ var "vault_kv_mongodb_path" . ]]" }}
+MONGO_PASSWORD={{ .Data.data.password }}
+{{ end }}
+{{ with secret "[[ var "vault_kv_redis_path" . ]]" }}
+REDIS_PASSWORD={{ .Data.data.password }}
+{{ end }}
+{{ with secret "[[ var "vault_kv_app_path" . ]]" }}
+APP_SECRET_KEY_BASE={{ .Data.data.secret_key_base }}
+{{ end }}
+EOT
+      }
+      [[ end ]]
+
       config {
         image   = "[[ var "web_background_image" . ]]"
         command = "/usr/local/bin/start-web-background"
@@ -630,10 +739,14 @@ EOH
       }
 
       env {
-        QUEUES      = "background,analyses"
-        REDIS_URL   = "redis://openstudio-redis.service.consul:6379"
-        MONGO_USER  = "openstudio"
-        MONGO_PASSWORD = "openstudio"
+        QUEUES     = "background,analyses"
+        REDIS_URL  = "redis://openstudio-redis.service.consul:6379"
+        MONGO_USER = "openstudio"
+        [[ if not (var "vault_integration_enabled" .) ]]
+        MONGO_PASSWORD      = "[[ var "mongo_password" . ]]"
+        REDIS_PASSWORD      = "[[ var "redis_password" . ]]"
+        APP_SECRET_KEY_BASE = "[[ var "app_secret_key_base" . ]]"
+        [[ end ]]
       }
     }
 

@@ -396,6 +396,70 @@ nomad alloc logs <alloc-id> redis-tcp-check
 nomad-pack run -var "test_timeout_seconds=30" -var "test_web_port=8080" .
 ```
 
+## Vault Integration
+
+When `vault_integration_enabled` is `true`, every task group receives a `vault` block and a `template` stanza that securely injects credentials via Nomad's `secrets/env` mechanism. This replaces the plaintext fallback variables with dynamic secrets fetched from HashiCorp Vault KV v2.
+
+### What gets injected
+
+| Secret | Vault path variable | Env var rendered |
+|--------|---------------------|-----------------|
+| MongoDB password | `vault_kv_mongodb_path` | `MONGO_PASSWORD` |
+| Redis password | `vault_kv_redis_path` | `REDIS_PASSWORD` |
+| App secret key | `vault_kv_app_path` | `APP_SECRET_KEY_BASE` |
+
+### Quick start
+
+1. Write secrets to Vault:
+
+```bash
+vault kv put secret/openstudio/mongodb password="<strong-password>"
+vault kv put secret/openstudio/redis    password="<strong-password>"
+vault kv put secret/openstudio/app      secret_key_base="<hex-secret>"
+```
+
+2. Create a Vault policy:
+
+```hcl
+# openstudio-server.hcl
+path "secret/data/openstudio/*" {
+  capabilities = ["read"]
+}
+path "secret/metadata/openstudio/*" {
+  capabilities = ["read", "list"]
+}
+```
+
+```bash
+vault policy write openstudio-server openstudio-server.hcl
+```
+
+3. Enable in the pack:
+
+```bash
+nomad-pack run \
+  -var "vault_integration_enabled=true" \
+  -var "vault_policy=openstudio-server" \
+  .
+```
+
+### Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `vault_integration_enabled` | `false` | Toggle Vault secrets integration on or off |
+| `vault_policy` | `"openstudio-server"` | Vault policy name attached to all task tokens |
+| `vault_kv_mongodb_path` | `"secret/data/openstudio/mongodb"` | KV v2 path for MongoDB credentials |
+| `vault_kv_redis_path` | `"secret/data/openstudio/redis"` | KV v2 path for Redis credentials |
+| `vault_kv_app_path` | `"secret/data/openstudio/app"` | KV v2 path for application secrets |
+| `mongo_password` | `""` | Plaintext MongoDB password (used when `vault_integration_enabled=false`) |
+| `redis_password` | `""` | Plaintext Redis password (used when `vault_integration_enabled=false`) |
+| `app_secret_key_base` | `""` | Plaintext app secret key base (used when `vault_integration_enabled=false`) |
+
+When `vault_integration_enabled` is `false` (default), the `mongo_password`, `redis_password`, and `app_secret_key_base` variables are injected as plaintext environment variables. This preserves backwards-compatible behaviour for development deployments.
+
+> **Requirements:** Nomad ≥ 1.1 with Vault integration enabled in the Nomad server config, and Vault ≥ 1.9 with KV v2 secrets engine. See [docs/vault-policies.md](./docs/vault-policies.md) for full setup guidance.
+
 ## Vault Role Authorization
 
 When `vault_enabled` is `true`, this pack renders task-level Nomad `vault` blocks so Nomad can request Vault tokens automatically using configured roles.
