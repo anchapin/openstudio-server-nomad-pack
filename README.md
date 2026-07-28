@@ -21,6 +21,11 @@ A [Nomad Pack](https://github.com/hashicorp/nomad-pack) for deploying [OpenStudi
 
 Refer to [`variables.hcl`](file:///Users/achapin/OpenStudio/openstudio-server-nomad-pack/variables.hcl) for the list of configuration parameters and defaults.
 
+## Pack Metadata
+
+- Root pack metadata: [`metadata.hcl`](./metadata.hcl)
+- Pack-scoped metadata: [`packs/openstudio-server/metadata.hcl`](./packs/openstudio-server/metadata.hcl)
+
 | Variable | Type | Description | Default |
 | --- | --- | --- | --- |
 | `job_name` | `string` | The name of the Nomad job | `"openstudio-server"` |
