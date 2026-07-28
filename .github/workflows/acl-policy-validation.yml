@@ -5,10 +5,12 @@ on:
     branches: [ develop ]
     paths:
       - 'policies/**'
+      - 'scripts/apply-acl-policies.sh'
   pull_request:
     branches: [ develop ]
     paths:
       - 'policies/**'
+      - 'scripts/apply-acl-policies.sh'
 
 jobs:
   validate-policies:
@@ -29,6 +31,9 @@ jobs:
           # docs/acl-policies.md § "Namespace Configuration" and scripts/apply-acl-policies.sh).
           # CI validates HCL syntax only — it does not apply policies to any cluster.
           nomad fmt -check policies/
+
+      - name: Validate apply-acl-policies.sh syntax
+        run: bash -n scripts/apply-acl-policies.sh
 
       - name: List Policy Files
         run: ls -1 policies/*.hcl
