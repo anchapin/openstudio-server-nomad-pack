@@ -447,13 +447,19 @@ variable "redis_health_check_timeout" {
 
 variable "nfs_shared_volume_enabled" {
   type        = bool
-  description = "When true, a CSI NFS shared volume is declared and mounted in both web and worker task groups."
+  description = "When true, an NFS shared volume is declared and mounted in both web and worker task groups. Volume type is controlled by nfs_volume_type."
   default     = false
+}
+
+variable "nfs_volume_type" {
+  type        = string
+  description = "Storage backend for the NFS shared volume. Use \"host_volume\" (default, recommended) for an OS-level NFS mount registered as a Nomad host volume, or \"csi\" for a CSI-managed NFS volume. Mirrors the mongodb_storage_type / redis_storage_type pattern."
+  default     = "host_volume"
 }
 
 variable "nfs_volume_source" {
   type        = string
-  description = "Nomad CSI volume ID for the NFS shared volume used by web and worker task groups."
+  description = "Nomad volume ID for the NFS shared volume used by web and worker task groups. For host_volume this is the host_volume name; for csi this is the CSI volume ID."
   default     = "openstudio-nfs"
 }
 

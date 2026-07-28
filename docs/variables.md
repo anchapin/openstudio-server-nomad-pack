@@ -79,8 +79,9 @@
 | `redis_volume_source` | `string` | `"openstudio-redis"` | Nomad volume source name for Redis persistent storage (host_volume name or CSI volume ID). |
 | `redis_health_check_interval` | `string` | `"10s"` | Interval between Consul health checks for the Redis service. |
 | `redis_health_check_timeout` | `string` | `"2s"` | Timeout for Consul health checks for the Redis service. |
-| `nfs_shared_volume_enabled` | `bool` | `false` | When true, a CSI NFS shared volume is declared and mounted in both web and worker task groups. |
-| `nfs_volume_source` | `string` | `"openstudio-nfs"` | Nomad CSI volume ID for the NFS shared volume used by web and worker task groups. |
+| `nfs_shared_volume_enabled` | `bool` | `false` | When true, an NFS shared volume is declared and mounted in both web and worker task groups. Volume type is controlled by nfs_volume_type. |
+| `nfs_volume_type` | `string` | `"host_volume"` | Storage backend for the NFS shared volume. Use \"host_volume\" (default, recommended) for an OS-level NFS mount registered as a Nomad host volume, or \"csi\" for a CSI-managed NFS volume. Mirrors the mongodb_storage_type / redis_storage_type pattern. |
+| `nfs_volume_source` | `string` | `"openstudio-nfs"` | Nomad volume ID for the NFS shared volume used by web and worker task groups. For host_volume this is the host_volume name; for csi this is the CSI volume ID. |
 | `nfs_volume_mount_path` | `string` | `"/mnt/openstudio"` | Mount path inside web and worker tasks where the NFS shared volume is attached. |
 | `rserve_image` | `string` | `"nrel/openstudio-rserve:3.11.0"` | The Rserve image name and tag. |
 | `rserve_command` | `string` | `""` | Optional command override for the Rserve task. Leave empty to use the image default entrypoint. |
