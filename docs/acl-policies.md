@@ -26,10 +26,11 @@ nomad acl bootstrap
 | `operator` | [`policies/operator.hcl`](../policies/operator.hcl) | Full deploy/stop/read — cluster operators running `nomad-pack run/stop` |
 | `readonly` | [`policies/readonly.hcl`](../policies/readonly.hcl) | Status and log visibility — monitoring dashboards and support staff |
 | `cicd` | [`policies/cicd.hcl`](../policies/cicd.hcl) | Minimal service token — automated pipelines that render, plan, run, and stop jobs |
+| `teardown` | [`policies/teardown.hcl`](../policies/teardown.hcl) | Teardown-only token — stop lifecycle access for cleanup without deploy or exec privileges |
 
 ## Minimum Required Capabilities
 
-All three roles are scoped to the `openstudio` namespace (deny-all on `default`) and require at minimum:
+All roles are scoped to the `openstudio` namespace (deny-all on `default`). At minimum, workload-facing roles require:
 
 - `read-job` / `list-jobs` — enumerate and inspect pack jobs
 - `agent: read`, `node: read` — resolve allocation placement
@@ -58,6 +59,12 @@ nomad acl policy apply \
   -name cicd \
   -description "OpenStudio Server CI/CD service token role" \
   - < policies/cicd.hcl
+
+# Teardown token
+nomad acl policy apply \
+  -name teardown \
+  -description "OpenStudio Server teardown role" \
+  - < policies/teardown.hcl
 ```
 
 Verify the policies were registered:
@@ -87,6 +94,23 @@ nomad acl token create \
   -policy cicd \
   -ttl 8h
 ```
+
+### Teardown Token
+
+Use a dedicated teardown token for cleanup workflows instead of broad admin access:
+
+```sh
+nomad acl policy apply \
+  -name teardown \
+  -description "OpenStudio Server teardown role" \
+  - < policies/teardown.hcl
+
+nomad acl token create \
+  -name "teardown-token" \
+  -policy teardown
+```
+
+This is the least-privilege Nomad equivalent for teardown automation. Unlike the Helm `cluster-admin` ServiceAccount binding anti-pattern, it is namespace-scoped and grants only `read-job`, `list-jobs`, and `alloc-lifecycle`.
 
 Export the `SecretID` for use with the CLI or API:
 
