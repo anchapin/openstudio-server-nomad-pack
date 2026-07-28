@@ -129,6 +129,9 @@ Refer to [`variables.hcl`](file:///Users/achapin/OpenStudio/openstudio-server-no
 | `redis_backup_port` | `number` | Redis port for backup/restore jobs | `6379` |
 | `restore_enabled` | `bool` | Enable on-demand state restore job definition | `true` |
 | `enable_consul_connect` | `bool` | Enable Consul Connect sidecar proxies for mTLS service-to-service communication | `true` |
+| `enable_batch_verification` | `bool` | Enable standalone batch connectivity verification job | `false` |
+| `verification_image` | `string` | Image used to run batch verification checks | `"busybox:1.36"` |
+| `verification_targets` | `list(string)` | Connectivity targets in `component=host:port` format | `["db=openstudio-db.service.consul:27017","redis=openstudio-redis.service.consul:6379","rserve=openstudio-rserve.service.consul:6311"]` |
 
 ## Scheduling Helpers
 
@@ -159,6 +162,7 @@ redis_affinities = [
 - `templates/openstudio-server.nomad.tpl`: Core OpenStudio Server scaffolding and MongoDB (`openstudio-db`) service.
 - `templates/redis.nomad.tpl`: Redis cache service (`openstudio-redis`) on port `6379`.
 - `templates/rserve.nomad.tpl`: Rserve service (`openstudio-rserve`) on port `6311`.
+- `templates/batch-verification.nomad.tpl`: Optional batch connectivity verification job.
 ## Backup and Restore Batch Jobs
 
 This pack now includes:
@@ -224,3 +228,25 @@ The pack registers Consul service checks for datastore and API telemetry:
   - TCP socket check on port `8080`
   - HTTP liveness check on `/up`
   - HTTP readiness check on `/`
+
+## Batch Verification Checks
+
+This pack includes an optional batch job template (`templates/batch-verification.nomad.tpl`) for connectivity checks across core services.
+
+- Runs ICMP ping and TCP socket checks per target.
+- Emits metric-style log lines:
+  - `batch_verification_result ...`
+  - `batch_verification_summary ...`
+- Exits non-zero if any target is unreachable.
+
+Run it with:
+
+```bash
+nomad-pack run -var "enable_batch_verification=true" .
+```
+
+Or with:
+
+```bash
+./scripts/run-batch-verification.sh
+```

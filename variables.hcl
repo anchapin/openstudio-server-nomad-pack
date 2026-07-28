@@ -408,3 +408,26 @@ variable "poststop_cleanup_paths" {
     "/alloc/tmp/openstudio/analysis",
   ]
 }
+
+# Batch verification configuration
+variable "enable_batch_verification" {
+  type        = bool
+  description = "Enable standalone batch connectivity verification job."
+  default     = false
+}
+
+variable "verification_image" {
+  type        = string
+  description = "The image used for batch connectivity verification checks."
+  default     = "busybox:1.36"
+}
+
+variable "verification_targets" {
+  type        = list(string)
+  description = "Connectivity targets in component=host:port format for batch verification."
+  default = [
+    "db=openstudio-db.service.consul:27017",
+    "redis=openstudio-redis.service.consul:6379",
+    "rserve=openstudio-rserve.service.consul:6311",
+  ]
+}
