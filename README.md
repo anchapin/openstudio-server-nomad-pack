@@ -48,7 +48,7 @@ Refer to [`variables.hcl`](file:///Users/achapin/OpenStudio/openstudio-server-no
 | --- | --- | --- |
 | Helm chart | Nomad Pack | Scaffolded |
 | `values.yaml` | `variables.hcl` | Scaffolded |
-| Deployment/Pod | Job & Task Groups | Scaffolded (DB, Redis, Worker) |
+| Deployment/Pod | Job & Task Groups | Scaffolded (Web, DB, Redis, Worker, Rserve) |
 | Container | Task (`docker` driver) | Scaffolded |
 | Service | Consul `service` registration | Scaffolded |
 | HPA / KEDA ScaledObject | Nomad Autoscaler | Planned |

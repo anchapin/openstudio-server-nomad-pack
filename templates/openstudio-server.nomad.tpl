@@ -4,7 +4,7 @@ job "[[ var "job_name" . ]]" {
   type        = "service"
 
   # Placeholder groups mapping to openstudio-server components:
-  # web, web-background, worker, db, redis, rserve.
+  # web-background, worker, db, redis, rserve.
   
   group "db" {
     count = 1
