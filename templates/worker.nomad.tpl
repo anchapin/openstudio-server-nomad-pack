@@ -10,16 +10,20 @@ job "[[ var "job_name" . ]]-worker" {
     [[ if var "worker_autoscaling_enabled" . ]]
     scaling {
       enabled = true
-      min     = [[ var "worker_autoscaling_min" . ]]
-      max     = [[ var "worker_autoscaling_max" . ]]
+      min     = [[ var "worker_min_replicas" . ]]
+      max     = [[ var "worker_max_replicas" . ]]
 
       policy {
-        cooldown            = "[[ var "worker_autoscaling_cooldown" . ]]"
+        cooldown            = "[[ var "autoscaler_cooldown" . ]]"
         evaluation_interval = "30s"
 
         check "queue-requeued-depth" {
           source = "prometheus"
           query  = [[ var "worker_queue_requeued_query" . | toJson ]]
+
+          config {
+            prometheus_address = "[[ var "autoscaler_prometheus_address" . ]]"
+          }
 
           strategy "target-value" {
             target = [[ var "worker_queue_requeued_target" . ]]
@@ -29,6 +33,10 @@ job "[[ var "job_name" . ]]-worker" {
         check "queue-simulations-depth" {
           source = "prometheus"
           query  = [[ var "worker_queue_simulations_query" . | toJson ]]
+
+          config {
+            prometheus_address = "[[ var "autoscaler_prometheus_address" . ]]"
+          }
 
           strategy "target-value" {
             target = [[ var "worker_queue_simulations_target" . ]]

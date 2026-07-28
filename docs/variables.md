@@ -88,14 +88,39 @@
 
 | Variable | Type | Default | Description | Example Override |
 |---|---|---|---|---|
-| `worker_autoscaling_enabled` | `bool` | `true` | Enable autoscaling for the worker task group. See [Variable Interactions](#variable-interactions). | `false` |
-| `worker_autoscaling_min` | `number` | `1` | Minimum worker allocations when autoscaling is enabled. | `2` |
-| `worker_autoscaling_max` | `number` | `10` | Maximum worker allocations when autoscaling is enabled. | `20` |
-| `worker_autoscaling_cooldown` | `string` | `"2m"` | Cooldown duration between worker autoscaling actions. | `"5m"` |
+| `worker_autoscaling_enabled` | `bool` | `false` | Enable Nomad Autoscaler integration for the worker task group. When `false` (default), the `scaling` block is omitted and `worker_count` controls the fixed allocation count. | `true` |
+| `worker_min_replicas` | `number` | `1` | Minimum worker allocations. Used as the initial `count` and as the autoscaler lower bound when autoscaling is enabled. | `2` |
+| `worker_max_replicas` | `number` | `10` | Maximum worker allocations when autoscaling is enabled. | `20` |
+| `autoscaler_prometheus_address` | `string` | `"http://prometheus:9090"` | Address of the Prometheus server queried by the Nomad Autoscaler APM plugin. | `"http://prometheus.service.consul:9090"` |
+| `autoscaler_cooldown` | `string` | `"5m"` | Cooldown duration between consecutive autoscaling actions. | `"2m"` |
 | `worker_queue_requeued_query` | `string` | `"sum(openstudio_worker_queue_depth{queue=\"requeued\"})"` | Prometheus query for requeued queue backlog depth. | Custom PromQL |
 | `worker_queue_requeued_target` | `number` | `1` | Target requeued queue depth per worker allocation. | `2` |
 | `worker_queue_simulations_query` | `string` | `"sum(openstudio_worker_queue_depth{queue=\"simulations\"})"` | Prometheus query for simulations queue backlog depth. | Custom PromQL |
 | `worker_queue_simulations_target` | `number` | `5` | Target simulations queue depth per worker allocation. | `10` |
+
+### Prometheus metric requirements
+
+The autoscaler evaluates two Prometheus queries by default:
+
+| Queue | Default PromQL | Meaning |
+|---|---|---|
+| `requeued` | `sum(openstudio_worker_queue_depth{queue="requeued"})` | Jobs re-enqueued after transient failure |
+| `simulations` | `sum(openstudio_worker_queue_depth{queue="simulations"})` | Active simulation jobs waiting for a worker |
+
+These metrics must be exposed by the OpenStudio Server application and scraped by Prometheus. If a metric is absent (returns no series), the Nomad Autoscaler will not emit scale events — this is the safe default behaviour.
+
+### Enabling autoscaling
+
+```hcl
+# override.hcl — pass to nomad-pack with --var-file
+worker_autoscaling_enabled    = true
+worker_min_replicas           = 1
+worker_max_replicas           = 20
+autoscaler_prometheus_address = "http://prometheus.service.consul:9090"
+autoscaler_cooldown           = "5m"
+```
+
+The Nomad Autoscaler agent must be running separately and configured to target the same Nomad cluster. See the [Nomad Autoscaler documentation](https://developer.hashicorp.com/nomad/tools/autoscaling).
 
 ---
 
@@ -284,15 +309,15 @@ verification_targets = [
 
 ### `worker_count` vs. `worker_autoscaling_enabled`
 
-`worker_count` sets the **static** desired count when `worker_autoscaling_enabled = false`.  
+`worker_count` sets the **static** desired count when `worker_autoscaling_enabled = false` (the default).  
 When `worker_autoscaling_enabled = true`, the Nomad Autoscaler policy takes ownership of
-the count — `worker_count` serves only as the initial allocation seed and `worker_autoscaling_min`
-/ `worker_autoscaling_max` become the binding limits. Setting `worker_count` higher than
-`worker_autoscaling_max` results in the autoscaler immediately scaling down.
+the count — `worker_count` serves only as the initial allocation seed and `worker_min_replicas`
+/ `worker_max_replicas` become the binding limits. Setting `worker_count` higher than
+`worker_max_replicas` results in the autoscaler immediately scaling down.
 
 ```
 worker_autoscaling_enabled = false  →  worker_count is the fixed allocation count
-worker_autoscaling_enabled = true   →  worker_autoscaling_min ≤ actual count ≤ worker_autoscaling_max
+worker_autoscaling_enabled = true   →  worker_min_replicas ≤ actual count ≤ worker_max_replicas
 ```
 
 ### `vault_integration_enabled` vs. `vault_enabled`
