@@ -28,7 +28,7 @@ jobs:
           nomad --version
 
       - name: Setup Nomad Pack
-        uses: hashicorp/setup-nomad-pack@main
+        uses: hashicorp/setup-nomad-pack@7828b76610ea4c670afa01a1c84fbd9175b186b1  # main
 
       - name: Render and validate templates
         run: |
@@ -53,7 +53,7 @@ jobs:
           nomad --version
 
       - name: Setup Nomad Pack
-        uses: hashicorp/setup-nomad-pack@main
+        uses: hashicorp/setup-nomad-pack@7828b76610ea4c670afa01a1c84fbd9175b186b1  # main
 
       - name: Ensure Docker is available
         run: |
