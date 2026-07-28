@@ -109,6 +109,57 @@ jobs:
           NOMAD_ADDR: http://127.0.0.1:4646
         run: nomad-pack plan . --name openstudio-server-batch-verification -var "enable_batch_verification=true"
 
+      - name: Check packs/ registry scaffold is in sync with root
+        run: |
+          FAIL=0
+
+          # 1. Pack version must match
+          ROOT_VER=$(grep -E '^\s*version\s*=' metadata.hcl | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+          PACK_VER=$(grep -E '^\s*version\s*=' packs/openstudio-server/metadata.hcl | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+          if [ "${ROOT_VER}" != "${PACK_VER}" ]; then
+            echo "ERROR: metadata version mismatch: root=${ROOT_VER} packs/=${PACK_VER}"
+            FAIL=1
+          else
+            echo "OK: metadata version matches (${ROOT_VER})"
+          fi
+
+          # 2. Variable names must match (order-insensitive)
+          ROOT_VARS=$(grep -E '^variable\s+"' variables.hcl | sed 's/variable "\(.*\)".*/\1/' | sort)
+          PACK_VARS=$(grep -E '^variable\s+"' packs/openstudio-server/variables.hcl | sed 's/variable "\(.*\)".*/\1/' | sort)
+          if [ "${ROOT_VARS}" != "${PACK_VARS}" ]; then
+            echo "ERROR: variables.hcl variable names differ between root and packs/:"
+            diff <(echo "${ROOT_VARS}") <(echo "${PACK_VARS}") || true
+            FAIL=1
+          else
+            echo "OK: variable names match ($(echo "${ROOT_VARS}" | wc -l | tr -d ' ') variables)"
+          fi
+
+          # 3. Template files must be identical
+          for tpl in templates/*.tpl templates/*.nomad.tpl; do
+            [ -f "${tpl}" ] || continue
+            fname=$(basename "${tpl}")
+            pack_tpl="packs/openstudio-server/templates/${fname}"
+            if [ ! -f "${pack_tpl}" ]; then
+              echo "ERROR: ${pack_tpl} is missing (present in root templates/)"
+              FAIL=1
+            elif ! diff -q "${tpl}" "${pack_tpl}" > /dev/null 2>&1; then
+              echo "ERROR: ${tpl} and ${pack_tpl} differ"
+              FAIL=1
+            else
+              echo "OK: ${fname} matches"
+            fi
+          done
+
+          if [ "${FAIL}" -ne 0 ]; then
+            echo ""
+            echo "packs/openstudio-server/ is out of sync with root."
+            echo "Run: cp variables.hcl packs/openstudio-server/variables.hcl"
+            echo "     cp metadata.hcl packs/openstudio-server/metadata.hcl"
+            echo "     cp templates/*.tpl templates/*.nomad.tpl packs/openstudio-server/templates/"
+            exit 1
+          fi
+          echo "All packs/ drift checks passed."
+
       - name: Run integration validation
         env:
           NOMAD_ADDR: http://127.0.0.1:4646

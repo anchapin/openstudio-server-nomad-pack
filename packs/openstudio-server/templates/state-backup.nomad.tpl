@@ -38,10 +38,10 @@ EOH
       }
 
       env {
-        MONGODB_URI           = "[[ var "mongodb_backup_uri" . ]]"
-        BACKUP_MOUNT_PATH     = "[[ var "backup_mount_path" . ]]"
-        BACKUP_SUBDIRECTORY   = "[[ var "backup_subdirectory" . ]]"
-        BACKUP_RETENTION_DAYS = "[[ var "backup_retention_days" . ]]"
+        MONGODB_URI            = "[[ var "mongodb_backup_uri" . ]]"
+        BACKUP_MOUNT_PATH      = "[[ var "backup_mount_path" . ]]"
+        BACKUP_SUBDIRECTORY    = "[[ var "backup_subdirectory" . ]]"
+        BACKUP_RETENTION_DAYS  = "[[ var "backup_retention_days" . ]]"
       }
 
       volume_mount {
@@ -81,11 +81,11 @@ EOH
       }
 
       env {
-        REDIS_HOST            = "[[ var "redis_backup_host" . ]]"
-        REDIS_PORT            = "[[ var "redis_backup_port" . ]]"
-        BACKUP_MOUNT_PATH     = "[[ var "backup_mount_path" . ]]"
-        BACKUP_SUBDIRECTORY   = "[[ var "backup_subdirectory" . ]]"
-        BACKUP_RETENTION_DAYS = "[[ var "backup_retention_days" . ]]"
+        REDIS_HOST             = "[[ var "redis_backup_host" . ]]"
+        REDIS_PORT             = "[[ var "redis_backup_port" . ]]"
+        BACKUP_MOUNT_PATH      = "[[ var "backup_mount_path" . ]]"
+        BACKUP_SUBDIRECTORY    = "[[ var "backup_subdirectory" . ]]"
+        BACKUP_RETENTION_DAYS  = "[[ var "backup_retention_days" . ]]"
       }
 
       volume_mount {
