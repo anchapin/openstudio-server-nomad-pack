@@ -55,6 +55,13 @@ jobs:
       - name: Setup Nomad Pack
         uses: hashicorp/setup-nomad-pack@main
 
+      - name: Ensure Docker is available
+        run: |
+          if command -v systemctl >/dev/null 2>&1; then
+            sudo systemctl start docker || true
+          fi
+          docker info >/dev/null
+
       - name: Start Nomad dev agent
         run: |
           nomad agent -dev -bind=127.0.0.1 -log-level=WARN &
