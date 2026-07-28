@@ -31,7 +31,7 @@ variable "worker_min_replicas" {
 variable "worker_max_replicas" {
   type        = number
   description = "Maximum number of worker replicas."
-  default     = 3
+  default     = 10
 }
 
 variable "vault_integration_enabled" {
@@ -169,26 +169,20 @@ variable "worker_memory" {
 
 variable "worker_autoscaling_enabled" {
   type        = bool
-  description = "Enable autoscaling for the worker task group."
-  default     = true
+  description = "Enable Nomad Autoscaler integration for the worker task group. When false (default), the scaling block is omitted and worker_count controls the fixed allocation count."
+  default     = false
 }
 
-variable "worker_autoscaling_min" {
-  type        = number
-  description = "Minimum worker allocations when autoscaling is enabled."
-  default     = 1
-}
-
-variable "worker_autoscaling_max" {
-  type        = number
-  description = "Maximum worker allocations when autoscaling is enabled."
-  default     = 10
-}
-
-variable "worker_autoscaling_cooldown" {
+variable "autoscaler_prometheus_address" {
   type        = string
-  description = "Cooldown duration between worker autoscaling actions."
-  default     = "2m"
+  description = "Address of the Prometheus server used by the Nomad Autoscaler APM plugin to evaluate scaling checks."
+  default     = "http://prometheus:9090"
+}
+
+variable "autoscaler_cooldown" {
+  type        = string
+  description = "Cooldown duration between worker autoscaling actions (e.g. '5m', '2m')."
+  default     = "5m"
 }
 
 variable "worker_queue_requeued_query" {
