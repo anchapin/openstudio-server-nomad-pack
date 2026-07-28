@@ -338,6 +338,17 @@ When `vault_enabled` is `true`, this pack renders task-level Nomad `vault` block
 
 For full setup instructions — including Vault policy HCL, KV v2 path conventions, Nomad ↔ Vault integration configuration, token TTL guidance, and both legacy and Nomad ≥ 1.7 `vault` block syntax — see **[docs/vault-policies.md](./docs/vault-policies.md)**.
 
+## Migrating from Kubernetes
+
+Teams running OpenStudio Server on Kubernetes via the [NREL Helm chart](https://github.com/NREL/openstudio-server) can follow the step-by-step guide in **[docs/migration-k8s-to-nomad.md](./docs/migration-k8s-to-nomad.md)**, which covers:
+
+- Pre-migration checklist (data backups, Consul service name mapping, network prerequisites)
+- Helm `values.yaml` → Nomad Pack variable mapping table
+- MongoDB (`mongodump`/`mongorestore`) and Redis persistence migration procedures
+- Post-migration smoke-test commands for all six services
+- Rollback procedure (keeping the Kubernetes deployment scaled-down during migration)
+- Known differences between Kubernetes and Nomad (service discovery, RBAC, storage, etc.)
+
 ## License
 
 This project is dual-licensed under either MIT or BSD-3-Clause. See:
