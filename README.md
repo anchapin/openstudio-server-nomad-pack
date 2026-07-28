@@ -82,7 +82,18 @@ The `web` task group includes a `prestart` init task that blocks web container s
 
 ## Configuration Variables
 
-Refer to [`variables.hcl`](file:///Users/achapin/OpenStudio/openstudio-server-nomad-pack/variables.hcl) for the list of configuration parameters and defaults.
+A full variable reference — including types, defaults, example override values, and notes on
+variable interactions — is available in **[docs/variables.md](./docs/variables.md)**.
+
+Annotated `override.hcl` files for common deployment scenarios are in the [`examples/`](./examples/) directory:
+
+| File | Use case |
+|---|---|
+| [`examples/minimal-dev.hcl`](./examples/minimal-dev.hcl) | Single-node, minimal resources, ephemeral storage — CI and local dev |
+| [`examples/production-ha.hcl`](./examples/production-ha.hcl) | Multi-datacenter, HA resources, Vault enabled |
+| [`examples/airgapped.hcl`](./examples/airgapped.hcl) | Private registry image overrides, no Vault |
+
+The raw variable declarations and defaults live in [`variables.hcl`](./variables.hcl).
 
 ## Pack Metadata
 
