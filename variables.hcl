@@ -152,7 +152,7 @@ variable "rserve_image" {
 variable "enable_consul_connect" {
   type        = bool
   description = "Enable Consul Connect sidecar proxies for mTLS service-to-service communication."
-  default     = true
+  default     = false
 }
 
 # Logging configuration variables
