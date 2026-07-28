@@ -23,6 +23,11 @@ jobs:
       - name: Validate ACL Policy Syntax
         run: |
           echo "Checking HCL formatting for policy files..."
+          # NOTE: policies/*.hcl intentionally reference namespace "openstudio" as the
+          # recommended production namespace. The pack's nomad_namespace variable defaults
+          # to "default", so operators must substitute the namespace before applying (see
+          # docs/acl-policies.md § "Namespace Configuration" and scripts/apply-acl-policies.sh).
+          # CI validates HCL syntax only — it does not apply policies to any cluster.
           nomad fmt -check policies/
 
       - name: List Policy Files
