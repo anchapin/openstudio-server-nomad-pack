@@ -67,6 +67,13 @@ Refer to [`variables.hcl`](file:///Users/achapin/OpenStudio/openstudio-server-no
 | Variable | Type | Description | Default |
 | --- | --- | --- | --- |
 | `job_name` | `string` | The name of the Nomad job | `"openstudio-server"` |
+| `app_version` | `string` | Version tag for OpenStudio Server components | `"latest"` |
+| `mongodb_storage_type` | `string` | Nomad volume type for MongoDB persistence (`host`, `csi`, or `ephemeral`) | `"host"` |
+| `mongodb_volume_source` | `string` | Nomad volume source name for MongoDB data | `"openstudio-mongodb"` |
+| `worker_min_replicas` | `number` | Minimum worker replica count | `1` |
+| `worker_max_replicas` | `number` | Maximum worker replica count | `3` |
+| `vault_integration_enabled` | `bool` | Enable Nomad Vault stanzas in tasks | `false` |
+| `ingress_domain` | `string` | Domain suffix for ingress/service hostnames | `"service.consul"` |
 | `region` | `string` | The Nomad region to deploy into | `"global"` |
 | `datacenters` | `list(string)` | Eligible datacenters | `["dc1"]` |
 | `web_image` | `string` | Docker image for OpenStudio Web | `"nrel/openstudio-server:latest"` |
