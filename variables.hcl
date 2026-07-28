@@ -4,6 +4,48 @@ variable "job_name" {
   default     = "openstudio-server"
 }
 
+variable "app_version" {
+  type        = string
+  description = "Application version tag used for OpenStudio Server component images."
+  default     = "latest"
+}
+
+variable "mongodb_storage_type" {
+  type        = string
+  description = "Nomad volume type for MongoDB persistence (for example, host or csi). Use ephemeral to disable persistent volume wiring."
+  default     = "host"
+}
+
+variable "mongodb_volume_source" {
+  type        = string
+  description = "Nomad volume source name for MongoDB persistent storage."
+  default     = "openstudio-mongodb"
+}
+
+variable "worker_min_replicas" {
+  type        = number
+  description = "Minimum number of worker replicas."
+  default     = 1
+}
+
+variable "worker_max_replicas" {
+  type        = number
+  description = "Maximum number of worker replicas."
+  default     = 3
+}
+
+variable "vault_integration_enabled" {
+  type        = bool
+  description = "Enable Nomad Vault integration stanzas for tasks."
+  default     = false
+}
+
+variable "ingress_domain" {
+  type        = string
+  description = "Ingress domain used when constructing service hostnames."
+  default     = "service.consul"
+}
+
 variable "region" {
   type        = string
   description = "The Nomad region where the job will be deployed."

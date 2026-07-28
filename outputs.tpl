@@ -5,4 +5,4 @@ Consul Service URLs:
 - Redis Service: http://localhost:8500/ui/[[ index (var "datacenters" .) 0 ]]/services/openstudio-redis
 
 Traefik Router URL:
-- Web UI: http://[[ var "job_name" . ]]-web.service.consul
+- Web UI: http://[[ var "job_name" . ]].[[ var "ingress_domain" . ]]

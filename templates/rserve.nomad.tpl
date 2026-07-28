@@ -2,6 +2,11 @@ job "[[ var "job_name" . ]]-rserve" {
   region      = "[[ var "region" . ]]"
   datacenters = [[ var "datacenters" . | toJson ]]
   type        = "service"
+  meta {
+    app_version       = "[[ var "app_version" . ]]"
+    ingress_domain    = "[[ var "ingress_domain" . ]]"
+    vault_integration = "[[ var "vault_integration_enabled" . ]]"
+  }
 
   group "rserve" {
     count = 1
@@ -24,6 +29,9 @@ job "[[ var "job_name" . ]]-rserve" {
         name = "openstudio-rserve"
         port = "rserve"
         provider = "consul"
+        tags = [
+          "ingress.domain=[[ var "ingress_domain" . ]]"
+        ]
 
         check {
           type     = "tcp"
@@ -31,6 +39,15 @@ job "[[ var "job_name" . ]]-rserve" {
           timeout  = "2s"
         }
       }
+
+      env {
+        APP_VERSION               = "[[ var "app_version" . ]]"
+        VAULT_INTEGRATION_ENABLED = "[[ var "vault_integration_enabled" . ]]"
+      }
+
+      [[ if var "vault_integration_enabled" . ]]
+      vault {}
+      [[ end ]]
     }
   }
 }
