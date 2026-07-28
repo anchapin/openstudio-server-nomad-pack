@@ -15,7 +15,7 @@
 | `nomad_namespace` | `string` | `"default"` | The Nomad namespace in which all pack jobs are registered. Use 'default' for the built-in namespace. |
 | `region` | `string` | `"global"` | The Nomad region where the job will be deployed. |
 | `datacenters` | `list(string)` | `["dc1"]` | A list of datacenters in the region which are eligible for task placement. |
-| `web_image` | `string` | `"nrel/openstudio-server:latest"` | The image name and tag for the OpenStudio Server web container. |
+| `web_image` | `string` | `"nrel/openstudio-server:3.11.0"` | The image name and tag for the OpenStudio Server web container. |
 | `web_command` | `string` | `""` | Optional command override for the web task. Leave empty to use the image default entrypoint. |
 | `web_args` | `list(string)` | `[]` | Optional args passed to web_command when set. |
 | `web_priority` | `number` | `80` | Nomad job priority for the OpenStudio Web UI job. |
@@ -34,7 +34,7 @@
 | `web_update_auto_revert` | `bool` | `true` | Automatically revert a web deployment if the update fails. |
 | `web_background_cpu` | `number` | `250` | CPU shares allocated to the OpenStudio web-background task. |
 | `web_background_memory` | `number` | `512` | Memory (MB) allocated to the OpenStudio web-background task. |
-| `worker_image` | `string` | `"nrel/openstudio-server:latest"` | The image name and tag for the OpenStudio Server worker container. |
+| `worker_image` | `string` | `"nrel/openstudio-server:3.11.0"` | The image name and tag for the OpenStudio Server worker container. |
 | `worker_command` | `string` | `"/usr/local/bin/start-workers"` | Command used to start the worker task. |
 | `worker_args` | `list(string)` | `[]` | Optional args passed to worker_command. |
 | `worker_health_check_command` | `string` | `"pgrep -f resque > /dev/null"` | Shell command used by the worker service health check. |
@@ -60,7 +60,7 @@
 | `worker_queue_requeued_target` | `number` | `1` | Target queue depth for requeued jobs per worker allocation. |
 | `worker_queue_simulations_query` | `string` | `"sum(openstudio_worker_queue_depth{queue=\"simulations\"})"` | Prometheus query for simulations backlog depth. |
 | `worker_queue_simulations_target` | `number` | `5` | Target queue depth for simulation jobs per worker allocation. |
-| `web_background_image` | `string` | `"nrel/openstudio-server:latest"` | The image name and tag for the OpenStudio Server web-background container. |
+| `web_background_image` | `string` | `"nrel/openstudio-server:3.11.0"` | The image name and tag for the OpenStudio Server web-background container. |
 | `web_background_command` | `string` | `""` | Optional command override for the web-background task. Leave empty to use the image default entrypoint. |
 | `web_background_args` | `list(string)` | `[]` | Optional args passed to web_background_command when set. |
 | `web_background_count` | `number` | `1` | The number of web-background tasks to run. |
