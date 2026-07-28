@@ -610,4 +610,66 @@ EOH
     }
     [[ end ]]
   }
+
+  group "web-background" {
+    count = [[ var "web_background_count" . ]]
+
+    task "web-background" {
+      driver = "docker"
+
+      config {
+        image   = "[[ var "web_background_image" . ]]"
+        command = "/usr/local/bin/start-web-background"
+        logging {
+          type = "[[ var "log_driver_type" . ]]"
+          config {
+            max-size = "[[ var "log_max_size" . ]]"
+            max-file = "[[ var "log_max_files" . ]]"
+          }
+        }
+      }
+
+      env {
+        QUEUES      = "background,analyses"
+        REDIS_URL   = "redis://openstudio-redis.service.consul:6379"
+        MONGO_USER  = "openstudio"
+        MONGO_PASSWORD = "openstudio"
+      }
+    }
+
+    [[ if var "enable_vector_collection" . ]]
+    task "vector" {
+      driver = "docker"
+
+      lifecycle {
+        hook    = "prestart"
+        sidecar = true
+      }
+
+      config {
+        image = "[[ var "vector_image" . ]]"
+        args  = ["--config", "local/vector.toml"]
+      }
+
+      template {
+        data        = <<EOH
+[sources.alloc_logs]
+type = "file"
+include = ["/alloc/logs/*.std*"]
+
+[sinks.console]
+type = "console"
+inputs = ["alloc_logs"]
+encoding.codec = "json"
+EOH
+        destination = "local/vector.toml"
+      }
+
+      resources {
+        cpu    = 100
+        memory = 64
+      }
+    }
+    [[ end ]]
+  }
 }

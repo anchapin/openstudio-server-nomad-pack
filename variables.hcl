@@ -209,6 +209,17 @@ variable "worker_queue_simulations_target" {
   default     = 5
 }
 
+variable "web_background_image" {
+  type        = string
+  description = "The image name and tag for the OpenStudio Server web-background container."
+  default     = "nrel/openstudio-server:latest"
+}
+
+variable "web_background_count" {
+  type        = number
+  description = "The number of web-background tasks to run."
+  default     = 1
+}
 variable "db_image" {
   type        = string
   description = "The MongoDB database image name and tag."
