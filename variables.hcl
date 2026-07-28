@@ -74,13 +74,13 @@ variable "web_priority" {
 variable "web_cpu" {
   type        = number
   description = "CPU shares allocated to the OpenStudio Web task."
-  default     = 500
+  default     = 1000
 }
 
 variable "web_memory" {
   type        = number
   description = "Memory (MB) allocated to the OpenStudio Web task."
-  default     = 1024
+  default     = 2048
 }
 
 variable "web_memory_max" {
@@ -152,13 +152,13 @@ variable "web_update_auto_revert" {
 variable "web_background_cpu" {
   type        = number
   description = "CPU shares allocated to the OpenStudio web-background task."
-  default     = 500
+  default     = 250
 }
 
 variable "web_background_memory" {
   type        = number
   description = "Memory (MB) allocated to the OpenStudio web-background task."
-  default     = 1024
+  default     = 512
 }
 
 variable "worker_image" {
@@ -229,13 +229,13 @@ variable "worker_process_count" {
 
 variable "worker_cpu" {
   type        = number
-  description = "CPU shares allocated to the OpenStudio worker task."
+  description = "CPU shares allocated to the OpenStudio worker task. These defaults are intentionally higher than Helm to support higher simulation concurrency per Nomad allocation."
   default     = 2000
 }
 
 variable "worker_memory" {
   type        = number
-  description = "Memory (MB) allocated to the OpenStudio worker task."
+  description = "Memory (MB) allocated to the OpenStudio worker task. These defaults are intentionally higher than Helm to support higher simulation concurrency per Nomad allocation."
   default     = 4096
 }
 
@@ -301,13 +301,13 @@ variable "db_image" {
 variable "db_cpu" {
   type        = number
   description = "CPU shares allocated to the MongoDB task."
-  default     = 500
+  default     = 1000
 }
 
 variable "db_memory" {
   type        = number
   description = "Memory (MB) allocated to the MongoDB task."
-  default     = 1024
+  default     = 4096
 }
 
 variable "db_health_check_interval" {
@@ -349,7 +349,7 @@ variable "redis_cpu" {
 variable "redis_memory" {
   type        = number
   description = "Memory (MB) allocated to the Redis task."
-  default     = 512
+  default     = 1024
 }
 
 variable "redis_storage_type" {
@@ -403,13 +403,13 @@ variable "rserve_image" {
 variable "rserve_cpu" {
   type        = number
   description = "CPU shares allocated to the Rserve task."
-  default     = 500
+  default     = 1000
 }
 
 variable "rserve_memory" {
   type        = number
   description = "Memory (MB) allocated to the Rserve task."
-  default     = 1024
+  default     = 2048
 }
 
 variable "rserve_health_check_interval" {

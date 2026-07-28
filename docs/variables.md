@@ -17,8 +17,8 @@
 | `datacenters` | `list(string)` | `["dc1"]` | A list of datacenters in the region which are eligible for task placement. |
 | `web_image` | `string` | `"nrel/openstudio-server:latest"` | The image name and tag for the OpenStudio Server web container. |
 | `web_priority` | `number` | `80` | Nomad job priority for the OpenStudio Web UI job. |
-| `web_cpu` | `number` | `500` | CPU shares allocated to the OpenStudio Web task. |
-| `web_memory` | `number` | `1024` | Memory (MB) allocated to the OpenStudio Web task. |
+| `web_cpu` | `number` | `1000` | CPU shares allocated to the OpenStudio Web task. |
+| `web_memory` | `number` | `2048` | Memory (MB) allocated to the OpenStudio Web task. |
 | `web_memory_max` | `number` | `2048` | Memory hard limit (MB) for the OpenStudio Web task (Nomad memory_max). |
 | `web_count` | `number` | `1` | The number of web task group allocations. |
 | `web_port` | `number` | `80` | Host-side static port mapped to the web container HTTP port. |
@@ -30,8 +30,8 @@
 | `web_update_healthy_deadline` | `string` | `"5m"` | Maximum time for a web allocation to become healthy. |
 | `web_update_progress_deadline` | `string` | `"10m"` | Maximum time for the web rolling update to make progress. |
 | `web_update_auto_revert` | `bool` | `true` | Automatically revert a web deployment if the update fails. |
-| `web_background_cpu` | `number` | `500` | CPU shares allocated to the OpenStudio web-background task. |
-| `web_background_memory` | `number` | `1024` | Memory (MB) allocated to the OpenStudio web-background task. |
+| `web_background_cpu` | `number` | `250` | CPU shares allocated to the OpenStudio web-background task. |
+| `web_background_memory` | `number` | `512` | Memory (MB) allocated to the OpenStudio web-background task. |
 | `worker_image` | `string` | `"nrel/openstudio-server:latest"` | The image name and tag for the OpenStudio Server worker container. |
 | `worker_count` | `number` | `1` | The number of worker task group allocations. |
 | `worker_update_max_parallel` | `number` | `1` | Maximum number of worker allocations updated in parallel. |
@@ -43,8 +43,8 @@
 | `worker_priority` | `number` | `40` | Nomad job priority for calculation workers. |
 | `worker_queues` | `string` | `"requeued,simulations"` | Comma-separated queue list processed by worker tasks. |
 | `worker_process_count` | `string` | `"1"` | COUNT environment variable passed to worker containers. |
-| `worker_cpu` | `number` | `2000` | CPU shares allocated to the OpenStudio worker task. |
-| `worker_memory` | `number` | `4096` | Memory (MB) allocated to the OpenStudio worker task. |
+| `worker_cpu` | `number` | `2000` | CPU shares allocated to the OpenStudio worker task. These defaults are intentionally higher than Helm to support higher simulation concurrency per Nomad allocation. |
+| `worker_memory` | `number` | `4096` | Memory (MB) allocated to the OpenStudio worker task. These defaults are intentionally higher than Helm to support higher simulation concurrency per Nomad allocation. |
 | `worker_autoscaling_enabled` | `bool` | `false` | Enable Nomad Autoscaler integration for the worker task group. When false (default), the scaling block is omitted and worker_count controls the fixed allocation count. |
 | `autoscaler_prometheus_address` | `string` | `"http://prometheus:9090"` | Address of the Prometheus server used by the Nomad Autoscaler APM plugin to evaluate scaling checks. |
 | `autoscaler_cooldown` | `string` | `"5m"` | Cooldown duration between worker autoscaling actions (e.g. '5m', '2m'). |
@@ -55,15 +55,15 @@
 | `web_background_image` | `string` | `"nrel/openstudio-server:latest"` | The image name and tag for the OpenStudio Server web-background container. |
 | `web_background_count` | `number` | `1` | The number of web-background tasks to run. |
 | `db_image` | `string` | `"mongo:4.2"` | The MongoDB database image name and tag. |
-| `db_cpu` | `number` | `500` | CPU shares allocated to the MongoDB task. |
-| `db_memory` | `number` | `1024` | Memory (MB) allocated to the MongoDB task. |
+| `db_cpu` | `number` | `1000` | CPU shares allocated to the MongoDB task. |
+| `db_memory` | `number` | `4096` | Memory (MB) allocated to the MongoDB task. |
 | `db_health_check_interval` | `string` | `"10s"` | Interval between Consul health checks for the MongoDB service. |
 | `db_health_check_timeout` | `string` | `"2s"` | Timeout for Consul health checks for the MongoDB service. |
 | `mongodb_storage_type` | `string` | `"host_volume"` | MongoDB storage type: host_volume, csi, or ephemeral. Use ephemeral to disable persistent volume wiring. |
 | `mongodb_volume_source` | `string` | `"openstudio-mongodb"` | Nomad volume source name for MongoDB persistent storage (host_volume name or CSI volume ID). |
 | `redis_image` | `string` | `"redis:6.2-alpine"` | The Redis image name and tag. |
 | `redis_cpu` | `number` | `250` | CPU shares allocated to the Redis task. |
-| `redis_memory` | `number` | `512` | Memory (MB) allocated to the Redis task. |
+| `redis_memory` | `number` | `1024` | Memory (MB) allocated to the Redis task. |
 | `redis_storage_type` | `string` | `"host_volume"` | Redis storage type: host_volume, csi, or ephemeral. Use ephemeral to disable persistent volume wiring. |
 | `redis_volume_source` | `string` | `"openstudio-redis"` | Nomad volume source name for Redis persistent storage (host_volume name or CSI volume ID). |
 | `redis_health_check_interval` | `string` | `"10s"` | Interval between Consul health checks for the Redis service. |
@@ -72,8 +72,8 @@
 | `nfs_volume_source` | `string` | `"openstudio-nfs"` | Nomad CSI volume ID for the NFS shared volume used by web and worker task groups. |
 | `nfs_volume_mount_path` | `string` | `"/mnt/openstudio"` | Mount path inside web and worker tasks where the NFS shared volume is attached. |
 | `rserve_image` | `string` | `"nrel/openstudio-rserve:latest"` | The Rserve image name and tag. |
-| `rserve_cpu` | `number` | `500` | CPU shares allocated to the Rserve task. |
-| `rserve_memory` | `number` | `1024` | Memory (MB) allocated to the Rserve task. |
+| `rserve_cpu` | `number` | `1000` | CPU shares allocated to the Rserve task. |
+| `rserve_memory` | `number` | `2048` | Memory (MB) allocated to the Rserve task. |
 | `rserve_health_check_interval` | `string` | `"10s"` | Interval between Consul health checks for the Rserve service. |
 | `rserve_health_check_timeout` | `string` | `"2s"` | Timeout for Consul health checks for the Rserve service. |
 | `enable_consul_connect` | `bool` | `false` | Enable Consul Connect sidecar proxies for mTLS service-to-service communication. |
