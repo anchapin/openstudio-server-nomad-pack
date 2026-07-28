@@ -93,7 +93,16 @@ jobs:
           deadline = time.time() + 300
 
           while time.time() < deadline:
-              allocs = json.loads(subprocess.check_output(["nomad", "job", "allocations", "-json", job_id], text=True))
+              try:
+                  allocs_json = subprocess.check_output(
+                      ["nomad", "job", "allocations", "-json", job_id],
+                      text=True,
+                      stderr=subprocess.DEVNULL,
+                  )
+              except subprocess.CalledProcessError:
+                  time.sleep(5)
+                  continue
+              allocs = json.loads(allocs_json)
               running = {
                   alloc.get("TaskGroup")
                   for alloc in allocs
