@@ -1,6 +1,6 @@
-job "[[ var "job_name" ]]" {
-  region      = "[[ var "region" ]]"
-  datacenters = [[ var "datacenters" | toJSON ]]
+job "[[ var "job_name" . ]]" {
+  region      = "[[ var "region" . ]]"
+  datacenters = [[ var "datacenters" . | toJson ]]
   type        = "service"
 
   # Placeholder groups mapping to openstudio-server components:
@@ -19,13 +19,13 @@ job "[[ var "job_name" ]]" {
       driver = "docker"
 
       config {
-        image = "[[ var "db_image" ]]"
+        image = "[[ var "db_image" . ]]"
         ports = ["db"]
         logging {
-          type = "[[ var "log_driver_type" ]]"
+          type = "[[ var "log_driver_type" . ]]"
           config {
-            max-size = "[[ var "log_max_size" ]]"
-            max-file = "[[ var "log_max_files" ]]"
+            max-size = "[[ var "log_max_size" . ]]"
+            max-file = "[[ var "log_max_files" . ]]"
           }
         }
       }
@@ -43,7 +43,7 @@ job "[[ var "job_name" ]]" {
       }
     }
 
-    [[ if var "enable_vector_collection" ]]
+    [[ if var "enable_vector_collection" . ]]
     task "vector" {
       driver = "docker"
 
@@ -53,7 +53,7 @@ job "[[ var "job_name" ]]" {
       }
 
       config {
-        image = "[[ var "vector_image" ]]"
+        image = "[[ var "vector_image" . ]]"
         args  = ["--config", "local/vector.toml"]
       }
 
@@ -92,13 +92,13 @@ EOH
       driver = "docker"
 
       config {
-        image = "[[ var "redis_image" ]]"
+        image = "[[ var "redis_image" . ]]"
         ports = ["redis"]
         logging {
-          type = "[[ var "log_driver_type" ]]"
+          type = "[[ var "log_driver_type" . ]]"
           config {
-            max-size = "[[ var "log_max_size" ]]"
-            max-file = "[[ var "log_max_files" ]]"
+            max-size = "[[ var "log_max_size" . ]]"
+            max-file = "[[ var "log_max_files" . ]]"
           }
         }
       }
@@ -116,7 +116,7 @@ EOH
       }
     }
 
-    [[ if var "enable_vector_collection" ]]
+    [[ if var "enable_vector_collection" . ]]
     task "vector" {
       driver = "docker"
 
@@ -126,7 +126,7 @@ EOH
       }
 
       config {
-        image = "[[ var "vector_image" ]]"
+        image = "[[ var "vector_image" . ]]"
         args  = ["--config", "local/vector.toml"]
       }
 
