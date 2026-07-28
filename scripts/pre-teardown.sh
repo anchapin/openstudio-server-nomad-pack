@@ -5,7 +5,7 @@
 #
 # PURPOSE
 # -------
-# Stop the stateless Nomad jobs (web and rserve) before running
+# Stop Nomad jobs in teardown-safe order before running
 # `nomad-pack destroy .` to ensure all allocations are fully dead before
 # any downstream cleanup (e.g., NFS unmount, volume deletion).
 #
@@ -33,7 +33,16 @@
 #                    when the flag is not provided.
 #
 #   JOB_NAME         Base job name prefix (default: openstudio-server).
-#                    The script stops <JOB_NAME>-web and <JOB_NAME>-rserve.
+#                    The script stops:
+#                      - <JOB_NAME>-worker
+#                      - <JOB_NAME>-web
+#                      - <JOB_NAME>-rserve
+#                      - <JOB_NAME>-db
+#                      - <JOB_NAME>-redis
+#                      - <JOB_NAME>-system-hooks (global system job)
+#                    It also stops optional jobs when present:
+#                      - <JOB_NAME>-state-backup
+#                      - <JOB_NAME>-autoscaler
 #
 # ENVIRONMENT
 # -----------
@@ -97,20 +106,65 @@ echo "==> Stopping Nomad jobs for pack '${JOB_NAME}' in namespace '${NAMESPACE}'
 echo "    (nomad job stop blocks until all allocations are dead — no sleep required)"
 echo ""
 
-echo "--> Stopping ${JOB_NAME}-web ..."
-if ! nomad job stop -namespace "${NAMESPACE}" "${JOB_NAME}-web"; then
-  echo "ERROR: Failed to stop job '${JOB_NAME}-web'. Aborting." >&2
+stop_required_job() {
+  local job_name="$1"
+  shift
+  local stop_args=("$@")
+
+  echo "--> Stopping ${job_name} ..."
+  if ! nomad job stop "${stop_args[@]}" -namespace "${NAMESPACE}" "${job_name}"; then
+    echo "ERROR: Failed to stop job '${job_name}'. Aborting." >&2
+    exit 1
+  fi
+  echo "    ${job_name}: all allocations dead."
+}
+
+stop_optional_job() {
+  local job_name="$1"
+  shift
+  local stop_args=("$@")
+
+  if ! nomad job status -namespace "${NAMESPACE}" "${job_name}" >/dev/null 2>&1; then
+    echo "--> Skipping ${job_name} (not found in namespace '${NAMESPACE}')."
+    return 0
+  fi
+
+  echo "--> Stopping optional job ${job_name} ..."
+  if ! nomad job stop -detach "${stop_args[@]}" -namespace "${NAMESPACE}" "${job_name}" >/dev/null; then
+    echo "ERROR: Failed to stop optional job '${job_name}'." >&2
+    exit 1
+  fi
+  echo "    ${job_name}: stop requested with -detach."
+}
+
+echo "--> Stopping ${JOB_NAME}-worker ..."
+echo "    Note: this may take up to worker_kill_timeout seconds for in-flight simulations to drain."
+if ! nomad job stop -namespace "${NAMESPACE}" "${JOB_NAME}-worker"; then
+  echo "ERROR: Failed to stop job '${JOB_NAME}-worker'. Aborting." >&2
   exit 1
 fi
-echo "    ${JOB_NAME}-web: all allocations dead."
+echo "    ${JOB_NAME}-worker: all allocations dead."
 
 echo ""
-echo "--> Stopping ${JOB_NAME}-rserve ..."
-if ! nomad job stop -namespace "${NAMESPACE}" "${JOB_NAME}-rserve"; then
-  echo "ERROR: Failed to stop job '${JOB_NAME}-rserve'. Aborting." >&2
-  exit 1
-fi
-echo "    ${JOB_NAME}-rserve: all allocations dead."
+stop_required_job "${JOB_NAME}-web"
+
+echo ""
+stop_required_job "${JOB_NAME}-rserve"
+
+echo ""
+stop_required_job "${JOB_NAME}-db"
+
+echo ""
+stop_required_job "${JOB_NAME}-redis"
+
+echo ""
+stop_required_job "${JOB_NAME}-system-hooks" -global
+
+echo ""
+stop_optional_job "${JOB_NAME}-state-backup"
+
+echo ""
+stop_optional_job "${JOB_NAME}-autoscaler"
 
 echo ""
 echo "==> All target jobs stopped successfully."
