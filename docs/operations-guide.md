@@ -107,7 +107,7 @@ Step-by-step migration from the [NREL openstudio-server Helm chart](https://gith
 
 ---
 
-## Worker Autoscaling Prerequisite
+## Nomad Autoscaler Integration
 
 > [!IMPORTANT]
 > **Prerequisite: Nomad Autoscaler daemon must be deployed before enabling worker autoscaling.**  
@@ -115,6 +115,36 @@ Step-by-step migration from the [NREL openstudio-server Helm chart](https://gith
 > Recommended path: deploy the [official Nomad Autoscaler pack](https://developer.hashicorp.com/nomad/tools/autoscaling/deployment/nomad).
 
 This pack also ships an optional stub at `templates/nomad-autoscaler.nomad.tpl` gated by `nomad_autoscaler_enabled = false`. The stub defaults to the `nomad-apm` source and includes comments showing where to add an optional Prometheus source.
+
+### Cloud node pool autoscaling
+
+In Kubernetes, worker pod autoscaling (HPA) and node autoscaling (Cluster Autoscaler annotations)
+are separate systems. In Nomad, the **Nomad Autoscaler daemon** can manage both workload scaling and
+cluster capacity scaling from one place.
+
+For cloud-backed worker nodes, add a target policy that scales your node pool directly (for example
+an AWS Auto Scaling Group):
+
+```hcl
+target "aws-asg" {
+  dry-run = "false"             # Set true to validate policy behavior safely
+  aws_region = "us-east-1"      # Region containing the ASG
+  asg_name   = "nomad-clients"  # ASG backing Nomad client nodes
+}
+```
+
+Use the same pattern for GCP Managed Instance Groups with the `gce-mig` target plugin. See:
+
+- Nomad Autoscaler AWS ASG target:
+  [developer.hashicorp.com/nomad/tools/autoscaling/plugins/target/aws-asg](https://developer.hashicorp.com/nomad/tools/autoscaling/plugins/target/aws-asg)
+- Nomad Autoscaler GCE MIG target:
+  [developer.hashicorp.com/nomad/tools/autoscaling/plugins/target/gce-mig](https://developer.hashicorp.com/nomad/tools/autoscaling/plugins/target/gce-mig)
+
+For Kubernetes `cluster-autoscaler.kubernetes.io/safe-to-evict: "false"` equivalence during node
+termination, protect critical tasks with Nomad controls such as:
+
+- `max_client_disconnect` (allow temporary client loss without immediate replacement)
+- `prevent_reschedule_on_lost` (avoid automatic rescheduling after client loss)
 
 ---
 

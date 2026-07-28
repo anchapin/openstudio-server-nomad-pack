@@ -396,7 +396,7 @@ kubectl delete namespace openstudio
 | **Service discovery** | kube-dns (`<svc>.<ns>.svc.cluster.local`) | Consul DNS (`<svc>.service.consul`) | Applications must use Consul DNS or Nomad template `{{ range service "..." }}` |
 | **Secrets management** | Kubernetes Secrets / external-secrets | Vault (optional) via Nomad task `vault` blocks | See [docs/vault-policies.md](./vault-policies.md) |
 | **RBAC** | Kubernetes RBAC (ServiceAccounts, Roles, RoleBindings) | Nomad ACLs + Consul ACLs + Vault policies | No direct equivalent; see [docs/acl-policies.md](./acl-policies.md) |
-| **Autoscaling** | HorizontalPodAutoscaler | Nomad Autoscaler (`worker_autoscaling_enabled`) | Requires [Nomad Autoscaler](https://developer.hashicorp.com/nomad/tools/autoscaling) daemon |
+| **Autoscaling** | HorizontalPodAutoscaler | Nomad Autoscaler (`worker_autoscaling_enabled`) | Requires [Nomad Autoscaler](https://developer.hashicorp.com/nomad/tools/autoscaling) daemon; for Helm Cluster Autoscaler annotation equivalence, see [Cloud node pool autoscaling](./operations-guide.md#cloud-node-pool-autoscaling) |
 | **Storage** | PersistentVolumeClaims | Host volumes or CSI volumes | No dynamic provisioning by default with host volumes |
 | **Ingress** | Kubernetes Ingress / Ingress Controller | Consul Connect / external load balancer | Configure `ingress_domain` variable |
 | **Health checks** | Kubernetes liveness/readiness probes | Consul service checks + Nomad `check_restart` | Managed in pack templates |
