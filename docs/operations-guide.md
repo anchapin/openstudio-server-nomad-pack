@@ -242,11 +242,28 @@ reach a terminal state before any downstream cleanup (NFS unmount, volume deleti
 Use the provided helper script:
 
 ```bash
-./scripts/pre-teardown.sh [JOB_NAME]
+# Default namespace ("default")
+./scripts/pre-teardown.sh
+
+# Non-default namespace via flag
+./scripts/pre-teardown.sh --namespace openstudio
+
+# Non-default namespace via environment variable
+NOMAD_NAMESPACE=openstudio ./scripts/pre-teardown.sh
+
+# Custom job name and namespace
+./scripts/pre-teardown.sh --namespace openstudio my-custom-job-name
 ```
 
-`JOB_NAME` defaults to `openstudio-server`. The script stops `<JOB_NAME>-web` and
-`<JOB_NAME>-rserve` in sequence, then prints the `nomad-pack destroy .` instruction.
+`JOB_NAME` defaults to `openstudio-server`. The namespace defaults to `"default"` but
+should match the `nomad_namespace` variable used when the pack was deployed. The script
+stops `<JOB_NAME>-web` and `<JOB_NAME>-rserve` in the specified namespace, then prints
+the `nomad-pack destroy .` instruction.
+
+> **Note for non-default namespace deployments:** Always pass `--namespace` (or set
+> `NOMAD_NAMESPACE`) when the pack was deployed with `nomad_namespace != "default"`.
+> Without it, `nomad job stop` targets the `default` namespace and silently succeeds
+> without stopping anything.
 
 Once the script exits successfully, run:
 
