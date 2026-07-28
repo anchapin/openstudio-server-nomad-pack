@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Replaced phantom autoscaling variable names in README variable reference table
+  (`worker_autoscaling_min`, `worker_autoscaling_max`, `worker_autoscaling_cooldown`) with the
+  correct names (`worker_min_replicas`, `worker_max_replicas`, `autoscaler_cooldown`) that match
+  `variables.hcl` (resolves #123).
+- Updated stale defaults in README: `worker_autoscaling_enabled` `true` → `false`,
+  `worker_max_replicas` `3` → `10`, `autoscaler_cooldown` `"2m"` → `"60m"`,
+  `autoscaler_prometheus_address` `""` → `"http://prometheus:9090"` (resolves #123).
+
 ## [0.1.0] - Unreleased
 
 ### Added
