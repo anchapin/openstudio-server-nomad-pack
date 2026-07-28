@@ -136,15 +136,13 @@ jobs:
             echo "OK: metadata version matches (${ROOT_VER})"
           fi
 
-          # 2. Variable names must match (order-insensitive)
-          ROOT_VARS=$(grep -E '^variable\s+"' variables.hcl | sed 's/variable "\(.*\)".*/\1/' | sort)
-          PACK_VARS=$(grep -E '^variable\s+"' packs/openstudio-server/variables.hcl | sed 's/variable "\(.*\)".*/\1/' | sort)
-          if [ "${ROOT_VARS}" != "${PACK_VARS}" ]; then
-            echo "ERROR: variables.hcl variable names differ between root and packs/:"
-            diff <(echo "${ROOT_VARS}") <(echo "${PACK_VARS}") || true
+          # 2. variables.hcl must be byte-for-byte identical
+          if ! diff -q variables.hcl packs/openstudio-server/variables.hcl > /dev/null 2>&1; then
+            echo "ERROR: variables.hcl differs between root and packs/openstudio-server/"
+            diff -u variables.hcl packs/openstudio-server/variables.hcl || true
             FAIL=1
           else
-            echo "OK: variable names match ($(echo "${ROOT_VARS}" | wc -l | tr -d ' ') variables)"
+            echo "OK: variables.hcl matches exactly"
           fi
 
           # 3. Template files must be identical
