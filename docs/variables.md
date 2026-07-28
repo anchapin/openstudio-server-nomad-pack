@@ -50,6 +50,7 @@
 | `worker_process_count` | `string` | `"1"` | COUNT environment variable passed to worker containers. |
 | `worker_cpu` | `number` | `2000` | CPU shares allocated to the OpenStudio worker task. These defaults are intentionally higher than Helm to support higher simulation concurrency per Nomad allocation. |
 | `worker_memory` | `number` | `4096` | Memory (MB) allocated to the OpenStudio worker task. These defaults are intentionally higher than Helm to support higher simulation concurrency per Nomad allocation. |
+| `worker_kill_timeout` | `string` | `"5200s"` | Grace period Nomad grants the worker task to finish in-flight work before force-killing it on drain or update. Matches Helm `terminationGracePeriodSeconds: 5200`. **WARNING:** reducing this below the longest simulation duration will result in data loss on node drains and rolling updates. |
 | `worker_autoscaling_enabled` | `bool` | `false` | Enable Nomad Autoscaler integration for the worker task group. When false (default), the scaling block is omitted and worker_count controls the fixed allocation count. |
 | `worker_autoscaling_cpu_enabled` | `bool` | `true` | Enable the built-in Nomad APM CPU autoscaling check for workers (avg_cpu target-value strategy). |
 | `worker_cpu_target_utilization` | `number` | `50` | Target worker CPU utilization percentage used by the nomad-apm avg_cpu scaling check. |

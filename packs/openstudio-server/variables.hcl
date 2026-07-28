@@ -239,6 +239,12 @@ variable "worker_memory" {
   default     = 4096
 }
 
+variable "worker_kill_timeout" {
+  type        = string
+  description = "Grace period Nomad grants the worker task to finish in-flight work before force-killing it on drain or update. Must be >= the longest expected simulation run. Matches Helm terminationGracePeriodSeconds: 5200. WARNING: reducing this below the longest simulation duration will result in data loss on node drains and rolling updates."
+  default     = "5200s"
+}
+
 variable "worker_autoscaling_enabled" {
   type        = bool
   description = "Enable Nomad Autoscaler integration for the worker task group. When false (default), the scaling block is omitted and worker_count controls the fixed allocation count."
