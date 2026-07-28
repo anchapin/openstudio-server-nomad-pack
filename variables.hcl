@@ -6,8 +6,10 @@ variable "job_name" {
 
 variable "app_version" {
   type        = string
-  description = "Application version tag used for OpenStudio Server component images."
-  default     = "latest"
+  # Keep this in sync with the image tag used in web_image, worker_image,
+  # web_background_image, and rserve_image whenever versions are bumped.
+  description = "Application version tag injected as APP_VERSION into all OpenStudio Server containers. Must match the image tag used in web_image, worker_image, web_background_image, and rserve_image to avoid version mismatch."
+  default     = "3.11.0"
 }
 
 variable "worker_min_replicas" {
