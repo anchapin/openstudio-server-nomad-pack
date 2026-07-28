@@ -40,9 +40,13 @@ Before your first `nomad-pack run`, confirm:
 
 ## Pack Registry Layout Scaffold
 
-This repository now includes the registry-aligned scaffold at:
+This repository now includes the registry-aligned pack at:
 
-- `packs/openstudio-server/templates`
+- `packs/openstudio-server/metadata.hcl`
+- `packs/openstudio-server/README.md`
+- `packs/openstudio-server/variables.hcl`
+- `packs/openstudio-server/outputs.tpl`
+- `packs/openstudio-server/templates/*`
 
 ## Local Integration Testing (Vagrant + Consul/Nomad/Vault)
 
