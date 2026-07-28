@@ -245,6 +245,12 @@ variable "worker_autoscaling_enabled" {
   default     = false
 }
 
+variable "nomad_autoscaler_enabled" {
+  type        = bool
+  description = "Render an optional Nomad Autoscaler daemon job stub. When false (default), the autoscaler job template is omitted."
+  default     = false
+}
+
 variable "autoscaler_prometheus_address" {
   type        = string
   description = "Address of the Prometheus server used by the Nomad Autoscaler APM plugin to evaluate scaling checks."

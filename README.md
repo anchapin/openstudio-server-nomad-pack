@@ -30,6 +30,14 @@ The pack currently renders separate jobs for:
 - `<job_name>-rserve`
 - `<job_name>` (OpenStudio placeholder job with Redis scaffold)
 
+## Deployment Checklist (Preflight)
+
+Before your first `nomad-pack run`, confirm:
+
+- [ ] Nomad cluster and Consul integration are healthy
+- [ ] Persistent storage prerequisites are in place (`host_volume` or CSI)
+- [ ] If `worker_autoscaling_enabled = true`: Nomad Autoscaler is deployed and running
+
 ## Pack Registry Layout Scaffold
 
 This repository now includes the registry-aligned scaffold at:
@@ -287,6 +295,7 @@ redis_affinities = [
 - `templates/redis.nomad.tpl`: Redis cache service (`openstudio-redis`) on port `6379`.
 - `templates/rserve.nomad.tpl`: Rserve service (`openstudio-rserve`) on port `6311`.
 - `templates/worker.nomad.tpl`: Resque worker task group with rolling deploys, Nomad Autoscaler scaling, and optional Vector sidecar.
+- `templates/nomad-autoscaler.nomad.tpl`: Optional Nomad Autoscaler daemon job stub (disabled by default).
 - `templates/batch-verification.nomad.tpl`: Optional batch connectivity verification job.
 
 ## Worker Scaling Configuration
@@ -308,17 +317,25 @@ The `update` stanza ensures zero-downtime upgrades by rolling through allocation
 
 ### Nomad Autoscaler Integration
 
-Set `worker_autoscaling_enabled = true` to activate Prometheus-driven scaling:
+> [!IMPORTANT]
+> **Prerequisite: Nomad Autoscaler daemon must already be deployed.**  
+> Nomad silently ignores worker `scaling` blocks when the Autoscaler daemon is not running.  
+> Recommended path: deploy the [official Nomad Autoscaler pack](https://developer.hashicorp.com/nomad/tools/autoscaling/deployment/nomad) before enabling worker autoscaling.
+
+Set `worker_autoscaling_enabled = true` to activate worker scaling policies:
 
 | Variable | Default | Description |
 |---|---|---|
 | `worker_autoscaling_enabled` | `false` | Enable/disable the `scaling` block |
+| `nomad_autoscaler_enabled` | `false` | Render optional autoscaler daemon stub (`templates/nomad-autoscaler.nomad.tpl`) |
 | `worker_min_replicas` | `1` | Minimum worker allocations |
 | `worker_max_replicas` | `3` | Maximum worker allocations |
 | `autoscaler_cooldown` | `"2m"` | Cooldown between scaling decisions |
 | `autoscaler_prometheus_address` | `""` | Prometheus URL for the Autoscaler plugin |
 | `worker_queue_requeued_query` | see vars | PromQL for the `requeued` queue depth |
 | `worker_queue_simulations_query` | see vars | PromQL for the `simulations` queue depth |
+
+The optional autoscaler stub is preconfigured with `nomad-apm` as the default APM source and includes a commented Prometheus block you can enable if you want PromQL-based checks.
 
 ### Vector Sidecar
 
