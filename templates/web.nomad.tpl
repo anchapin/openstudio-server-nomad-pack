@@ -2,6 +2,7 @@ job "[[ var "job_name" . ]]-web" {
   region      = "[[ var "region" . ]]"
   datacenters = [[ var "datacenters" . | toJson ]]
   type        = "service"
+  priority    = [[ var "web_priority" . ]]
 
   group "web" {
     count = 1
@@ -39,6 +40,11 @@ job "[[ var "job_name" . ]]-web" {
           interval = "10s"
           timeout  = "2s"
         }
+      }
+
+      resources {
+        cpu    = [[ var "web_cpu" . ]]
+        memory = [[ var "web_memory" . ]]
       }
     }
 

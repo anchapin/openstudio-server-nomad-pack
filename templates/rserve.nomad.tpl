@@ -58,6 +58,11 @@ job "[[ var "job_name" . ]]-rserve" {
         }
       }
 
+      resources {
+        cpu    = [[ var "rserve_cpu" . ]]
+        memory = [[ var "rserve_memory" . ]]
+      }
+
       env {
         APP_VERSION               = "[[ var "app_version" . ]]"
         VAULT_INTEGRATION_ENABLED = "[[ var "vault_integration_enabled" . ]]"
