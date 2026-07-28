@@ -5,6 +5,15 @@ job "[[ var "job_name" . ]]-worker" {
   type        = "service"
   priority    = [[ var "worker_priority" . ]]
 
+  update {
+    max_parallel      = [[ var "worker_update_max_parallel" . ]]
+    health_check      = "[[ var "worker_update_health_check" . ]]"
+    min_healthy_time  = "[[ var "worker_update_min_healthy_time" . ]]"
+    healthy_deadline  = "[[ var "worker_update_healthy_deadline" . ]]"
+    progress_deadline = "[[ var "worker_update_progress_deadline" . ]]"
+    auto_revert       = [[ var "worker_update_auto_revert" . ]]
+  }
+
   group "worker" {
     count = [[ var "worker_count" . ]]
 
@@ -87,6 +96,20 @@ job "[[ var "job_name" . ]]-worker" {
       resources {
         cpu    = [[ var "worker_cpu" . ]]
         memory = [[ var "worker_memory" . ]]
+      }
+
+      service {
+        name     = "openstudio-worker"
+        provider = "consul"
+
+        check {
+          name     = "worker-alive"
+          type     = "script"
+          command  = "/bin/sh"
+          args     = ["-c", "pgrep -f resque > /dev/null"]
+          interval = "30s"
+          timeout  = "5s"
+        }
       }
     }
 

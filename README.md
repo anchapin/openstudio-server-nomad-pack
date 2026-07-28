@@ -280,7 +280,43 @@ redis_affinities = [
 - `templates/openstudio-server.nomad.tpl`: Core OpenStudio Server scaffolding and MongoDB (`openstudio-db`) service.
 - `templates/redis.nomad.tpl`: Redis cache service (`openstudio-redis`) on port `6379`.
 - `templates/rserve.nomad.tpl`: Rserve service (`openstudio-rserve`) on port `6311`.
+- `templates/worker.nomad.tpl`: Resque worker task group with rolling deploys, Nomad Autoscaler scaling, and optional Vector sidecar.
 - `templates/batch-verification.nomad.tpl`: Optional batch connectivity verification job.
+
+## Worker Scaling Configuration
+
+The worker job (`<job_name>-worker`) supports two scaling models:
+
+### Rolling Deploys
+
+The `update` stanza ensures zero-downtime upgrades by rolling through allocations one at a time:
+
+| Variable | Default | Description |
+|---|---|---|
+| `worker_update_max_parallel` | `1` | Number of allocations replaced simultaneously |
+| `worker_update_health_check` | `"task_states"` | Health check mode for promotion |
+| `worker_update_min_healthy_time` | `"30s"` | Time allocation must stay healthy before promotion |
+| `worker_update_healthy_deadline` | `"5m"` | Max time for an allocation to become healthy |
+| `worker_update_progress_deadline` | `"10m"` | Max time for the full rollout to progress |
+| `worker_update_auto_revert` | `true` | Revert deployment if rollout fails |
+
+### Nomad Autoscaler Integration
+
+Set `worker_autoscaling_enabled = true` to activate Prometheus-driven scaling:
+
+| Variable | Default | Description |
+|---|---|---|
+| `worker_autoscaling_enabled` | `false` | Enable/disable the `scaling` block |
+| `worker_min_replicas` | `1` | Minimum worker allocations |
+| `worker_max_replicas` | `3` | Maximum worker allocations |
+| `autoscaler_cooldown` | `"2m"` | Cooldown between scaling decisions |
+| `autoscaler_prometheus_address` | `""` | Prometheus URL for the Autoscaler plugin |
+| `worker_queue_requeued_query` | see vars | PromQL for the `requeued` queue depth |
+| `worker_queue_simulations_query` | see vars | PromQL for the `simulations` queue depth |
+
+### Vector Sidecar
+
+Set `enable_vector_collection = true` to ship worker allocation logs to a Vector pipeline. The sidecar starts before the worker task (`lifecycle { hook = "prestart" sidecar = true }`) and tails all allocation logs from `/alloc/logs/*.std*`.
 ## Backup and Restore Batch Jobs
 
 This pack now includes:
@@ -379,6 +415,7 @@ The pack registers Consul service checks for datastore and API telemetry:
   - TCP socket check on port `8080`
   - HTTP liveness check on `/up`
   - HTTP readiness check on `/`
+- `openstudio-worker`: script check (`pgrep -f resque`) — confirms at least one Resque process is running in the allocation
 
 ## Batch Verification Checks
 
