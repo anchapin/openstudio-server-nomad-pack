@@ -152,7 +152,7 @@ variable "rserve_image" {
 variable "enable_consul_connect" {
   type        = bool
   description = "Enable Consul Connect sidecar proxies for mTLS service-to-service communication."
-  default     = true
+  default     = false
 }
 
 # Logging configuration variables
@@ -326,4 +326,19 @@ variable "docker_cap_drop" {
   type        = list(string)
   description = "Linux capabilities to drop from Docker containers."
   default     = ["ALL"]
+}
+
+variable "poststop_cleanup_image" {
+  type        = string
+  description = "The image used for poststop cleanup lifecycle tasks."
+  default     = "alpine:3.20"
+}
+
+variable "poststop_cleanup_paths" {
+  type        = list(string)
+  description = "Directories removed by poststop cleanup lifecycle tasks when allocations stop."
+  default = [
+    "/alloc/tmp/analysis",
+    "/alloc/tmp/openstudio/analysis",
+  ]
 }

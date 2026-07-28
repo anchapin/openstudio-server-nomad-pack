@@ -190,6 +190,28 @@ EOH
       }
     }
 
+    task "cleanup-poststop" {
+      driver = "docker"
+
+      lifecycle {
+        hook = "poststop"
+      }
+
+      config {
+        image   = "[[ var "poststop_cleanup_image" . ]]"
+        command = "sh"
+        args = [
+          "-ec",
+          <<EOT
+set -eu
+[[ range var "poststop_cleanup_paths" . -]]
+rm -rf "[[ . ]]"
+[[ end -]]
+EOT
+        ]
+      }
+    }
+
     [[ if var "enable_vector_collection" . ]]
     task "vector" {
       driver = "docker"
@@ -284,6 +306,28 @@ EOH
           interval = "10s"
           timeout  = "2s"
         }
+      }
+    }
+
+    task "cleanup-poststop" {
+      driver = "docker"
+
+      lifecycle {
+        hook = "poststop"
+      }
+
+      config {
+        image   = "[[ var "poststop_cleanup_image" . ]]"
+        command = "sh"
+        args = [
+          "-ec",
+          <<EOT
+set -eu
+[[ range var "poststop_cleanup_paths" . -]]
+rm -rf "[[ . ]]"
+[[ end -]]
+EOT
+        ]
       }
     }
 
