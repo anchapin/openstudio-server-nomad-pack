@@ -242,7 +242,7 @@ This pack includes an optional batch job template (`templates/batch-verification
 Run it with:
 
 ```bash
-nomad-pack run . -var "enable_batch_verification=true"
+nomad-pack run -var "enable_batch_verification=true" .
 ```
 
 Or with:
