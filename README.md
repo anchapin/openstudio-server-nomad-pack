@@ -128,7 +128,9 @@ nomad volume create redis-csi.hcl
 
 ### NFS shared volume (web and worker)
 
-Enable the shared NFS volume for simulation input/output by setting `nfs_shared_volume_enabled = true`. This wires a CSI NFS volume (with `multi-node-multi-writer` access mode) into both `web` and `worker` task groups.
+Enable the shared NFS volume for simulation input/output by setting `nfs_shared_volume_enabled = true`.
+The recommended approach is an OS-level NFS mount registered as a Nomad `host_volume`, then
+pointing `nfs_volume_source` at that host volume name.
 
 ```hcl
 # override.hcl
@@ -137,7 +139,9 @@ nfs_volume_source         = "openstudio-nfs"
 nfs_volume_mount_path     = "/mnt/openstudio"
 ```
 
-The CSI NFS plugin and volume must be registered in Nomad before deploying with this option enabled.
+See **[docs/storage.md](./docs/storage.md#5-nfs-shared-volume-web-and-worker)** for the full setup:
+`/etc/fstab`, `client.hcl` `host_volume`, override values, single-node skip guidance, and advanced
+CSI NFS option.
 
 
 
@@ -170,8 +174,8 @@ The raw variable declarations and defaults live in [`variables.hcl`](./variables
 | `mongodb_volume_source` | `string` | Nomad host_volume name or CSI volume ID for MongoDB data | `"openstudio-mongodb"` |
 | `redis_storage_type` | `string` | Redis storage type (`host_volume`, `csi`, or `ephemeral`) | `"host_volume"` |
 | `redis_volume_source` | `string` | Nomad host_volume name or CSI volume ID for Redis data | `"openstudio-redis"` |
-| `nfs_shared_volume_enabled` | `bool` | Enable CSI NFS shared volume in web and worker task groups | `false` |
-| `nfs_volume_source` | `string` | Nomad CSI volume ID for the NFS shared volume | `"openstudio-nfs"` |
+| `nfs_shared_volume_enabled` | `bool` | Enable shared NFS volume in web and worker task groups | `false` |
+| `nfs_volume_source` | `string` | Nomad host_volume name (recommended) or CSI volume ID for the NFS shared volume | `"openstudio-nfs"` |
 | `nfs_volume_mount_path` | `string` | Mount path for the NFS volume in web and worker tasks | `"/mnt/openstudio"` |
 | `worker_min_replicas` | `number` | Minimum worker replica count | `1` |
 | `worker_max_replicas` | `number` | Maximum worker replica count | `3` |
@@ -208,8 +212,8 @@ The raw variable declarations and defaults live in [`variables.hcl`](./variables
 | `redis_image` | `string` | Redis image | `"redis:6.2-alpine"` |
 | `redis_storage_type` | `string` | Redis storage type (`host_volume`, `csi`, or `ephemeral`) | `"host_volume"` |
 | `redis_volume_source` | `string` | host_volume name or CSI volume ID for Redis | `"openstudio-redis"` |
-| `nfs_shared_volume_enabled` | `bool` | Enable CSI NFS shared volume in web and worker groups | `false` |
-| `nfs_volume_source` | `string` | Nomad CSI volume ID for the NFS shared volume | `"openstudio-nfs"` |
+| `nfs_shared_volume_enabled` | `bool` | Enable shared NFS volume in web and worker groups | `false` |
+| `nfs_volume_source` | `string` | Nomad host_volume name (recommended) or CSI volume ID for the NFS shared volume | `"openstudio-nfs"` |
 | `nfs_volume_mount_path` | `string` | Mount path for the NFS volume in web and worker tasks | `"/mnt/openstudio"` |
 | `rserve_image` | `string` | Rserve image | `"nrel/rserve:latest"` |
 | `enable_vault_mongo_secrets` | `bool` | Enable Vault template rendering for MongoDB credentials. | `false` |
