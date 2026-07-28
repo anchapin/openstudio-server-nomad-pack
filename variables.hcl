@@ -594,7 +594,50 @@ variable "verification_targets" {
   ]
 }
 
-# Vault integration variables
+# Vault KV secrets integration variables (vault_integration_enabled mechanism)
+variable "vault_policy" {
+  type        = string
+  description = "Name of the Vault policy granted to all OpenStudio Server tasks when vault_integration_enabled is true."
+  default     = "openstudio-server"
+}
+
+variable "vault_kv_mongodb_path" {
+  type        = string
+  description = "Vault KV v2 path for MongoDB credentials (must contain a 'password' key)."
+  default     = "secret/data/openstudio/mongodb"
+}
+
+variable "vault_kv_redis_path" {
+  type        = string
+  description = "Vault KV v2 path for Redis credentials (must contain a 'password' key)."
+  default     = "secret/data/openstudio/redis"
+}
+
+variable "vault_kv_app_path" {
+  type        = string
+  description = "Vault KV v2 path for application secrets (must contain a 'secret_key_base' key)."
+  default     = "secret/data/openstudio/app"
+}
+
+variable "mongo_password" {
+  type        = string
+  description = "Plaintext MongoDB password used when vault_integration_enabled is false."
+  default     = ""
+}
+
+variable "redis_password" {
+  type        = string
+  description = "Plaintext Redis password used when vault_integration_enabled is false."
+  default     = ""
+}
+
+variable "app_secret_key_base" {
+  type        = string
+  description = "Plaintext application secret key base used when vault_integration_enabled is false."
+  default     = ""
+}
+
+# Vault role-based authorization variables
 variable "vault_enabled" {
   type        = bool
   description = "Enable Vault role-based authorization blocks in Nomad tasks."

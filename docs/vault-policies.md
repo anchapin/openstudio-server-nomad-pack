@@ -8,9 +8,10 @@ The pack reads secrets from the following default paths (set by `variables.hcl`)
 
 | Variable | Default path | Contents |
 |----------|-------------|---------|
-| `vault_mongo_secret_path` | `secret/data/openstudio/mongodb` | MongoDB `username` and `password` keys |
-
-> **Note:** Redis and application-level secret paths are not yet surfaced as first-class variables. Use `vault_policies` to attach additional Vault policies that grant access to other paths your deployment requires.
+| `vault_kv_mongodb_path` | `secret/data/openstudio/mongodb` | MongoDB `password` key |
+| `vault_kv_redis_path` | `secret/data/openstudio/redis` | Redis `password` key |
+| `vault_kv_app_path` | `secret/data/openstudio/app` | App `secret_key_base` key |
+| `vault_mongo_secret_path` | `secret/data/openstudio/mongodb` | Legacy: MongoDB `username` and `password` keys (used by `enable_vault_mongo_secrets`) |
 
 Write the MongoDB secret before deploying:
 
