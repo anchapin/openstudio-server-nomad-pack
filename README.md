@@ -8,6 +8,7 @@ A [Nomad Pack](https://github.com/hashicorp/nomad-pack) for deploying [OpenStudi
 - **Consul**: A Consul cluster integrated with Nomad for service discovery and DNS resolution.
 - **Vault** (Optional): A Vault cluster integrated with Nomad for secrets management.
 - **Nomad Pack**: The `nomad-pack` CLI installed locally.
+- **Traefik** (Optional): A [Traefik](https://doc.traefik.io/traefik/providers/consul-catalog/) instance configured with the Consul Catalog provider is required for HTTP ingress to the web task group. Traefik automatically discovers routes via the Consul service tags added by this pack. Set `ingress_domain` to your desired hostname and enable `ingress_tls_enabled` for HTTPS.
 
 ## Getting Started
 
@@ -113,7 +114,8 @@ The raw variable declarations and defaults live in [`variables.hcl`](./variables
 | `worker_min_replicas` | `number` | Minimum worker replica count | `1` |
 | `worker_max_replicas` | `number` | Maximum worker replica count | `3` |
 | `vault_integration_enabled` | `bool` | Enable Nomad Vault stanzas in tasks | `false` |
-| `ingress_domain` | `string` | Domain suffix for ingress/service hostnames | `"service.consul"` |
+| `ingress_domain` | `string` | Hostname for Traefik router rules and service ingress | `"localhost"` |
+| `ingress_tls_enabled` | `bool` | When `true`, adds Traefik TLS (`websecure`) router tags to the web service | `false` |
 | `region` | `string` | The Nomad region to deploy into | `"global"` |
 | `datacenters` | `list(string)` | Eligible datacenters | `["dc1"]` |
 | `web_image` | `string` | Docker image for OpenStudio Web | `"nrel/openstudio-server:latest"` |

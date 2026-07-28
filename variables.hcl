@@ -42,8 +42,14 @@ variable "vault_integration_enabled" {
 
 variable "ingress_domain" {
   type        = string
-  description = "Ingress domain used when constructing service hostnames."
-  default     = "service.consul"
+  description = "Ingress domain used when constructing service hostnames and Traefik router rules."
+  default     = "localhost"
+}
+
+variable "ingress_tls_enabled" {
+  type        = bool
+  description = "When true, adds Traefik TLS router tags for the websecure entrypoint on the web service."
+  default     = false
 }
 
 variable "region" {
