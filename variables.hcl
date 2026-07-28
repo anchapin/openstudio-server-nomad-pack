@@ -299,6 +299,12 @@ variable "nomad_autoscaler_enabled" {
   default     = false
 }
 
+variable "nomad_autoscaler_image" {
+  type        = string
+  description = "The image name and tag for the Nomad Autoscaler daemon. See https://github.com/hashicorp/nomad-autoscaler/releases for available versions."
+  default     = "hashicorp/nomad-autoscaler:0.4.7"
+}
+
 variable "autoscaler_prometheus_address" {
   type        = string
   description = "Address of the Prometheus server used by the Nomad Autoscaler APM plugin to evaluate scaling checks."
