@@ -42,6 +42,9 @@
 #                      - <JOB_NAME>-system-hooks (global system job)
 #                    It also stops optional jobs when present:
 #                      - <JOB_NAME>-state-backup
+#                      - <JOB_NAME>-state-restore
+#                      - <JOB_NAME>-batch-verify
+#                      - <JOB_NAME>-test
 #                      - <JOB_NAME>-nomad-autoscaler
 #                      - <JOB_NAME>-autoscaler (legacy name)
 #
@@ -165,8 +168,18 @@ echo ""
 stop_optional_job "${JOB_NAME}-state-backup"
 
 echo ""
-# Stop both the current and legacy autoscaler job names.
+stop_optional_job "${JOB_NAME}-state-restore"
+
+echo ""
+stop_optional_job "${JOB_NAME}-batch-verify"
+
+echo ""
+stop_optional_job "${JOB_NAME}-test"
+
+echo ""
 stop_optional_job "${JOB_NAME}-nomad-autoscaler"
+
+echo ""
 stop_optional_job "${JOB_NAME}-autoscaler"
 
 echo ""

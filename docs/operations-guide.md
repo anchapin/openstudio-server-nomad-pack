@@ -265,9 +265,12 @@ stops jobs in this order:
 4. `<JOB_NAME>-db`
 5. `<JOB_NAME>-redis`
 6. `<JOB_NAME>-system-hooks` (stopped with `-global`)
-7. `<JOB_NAME>-state-backup` (optional, stopped with `-detach` if present)
-8. `<JOB_NAME>-nomad-autoscaler` (optional, stopped if present)
-9. `<JOB_NAME>-autoscaler` (legacy optional name, stopped if present)
+7. `<JOB_NAME>-state-backup` (optional, if present)
+8. `<JOB_NAME>-state-restore` (optional, if present)
+9. `<JOB_NAME>-batch-verify` (optional, if present)
+10. `<JOB_NAME>-test` (optional, if present)
+11. `<JOB_NAME>-nomad-autoscaler` (optional, if present)
+12. `<JOB_NAME>-autoscaler` (legacy optional name, if present)
 
 Then it prints the `nomad-pack destroy .` instruction.
 
