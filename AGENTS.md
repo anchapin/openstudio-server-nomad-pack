@@ -326,7 +326,15 @@ CI fails if these files are out of sync (the `Check variables.md is up-to-date` 
 
    If Step 1 fails, check that the workflow has write permission to push to `main` and that `scripts/bump_metadata_version.sh` exits cleanly against the current `metadata.hcl`. If Step 2 fails (or is skipped), verify that the `v*` tag was actually pushed (check the repo's Tags page) and that the workflow has `contents: write` permission to create releases.
 
-For a non-patch increment (minor/major), manually run `scripts/bump_metadata_version.sh <new-version>` before opening the `develop → main` PR to set the desired version.
+For a non-patch increment (minor/major), manually run `scripts/bump_metadata_version.sh` with the appropriate bump type or explicit version before opening the `develop → main` PR:
+
+```bash
+# Increment minor version (e.g. 0.2.0 → 0.3.0)
+scripts/bump_metadata_version.sh metadata.hcl minor
+
+# Set an explicit target version
+scripts/bump_metadata_version.sh metadata.hcl 0.3.0
+```
 
 ### ACL policies
 

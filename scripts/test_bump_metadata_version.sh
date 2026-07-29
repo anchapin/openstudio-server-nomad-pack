@@ -20,5 +20,9 @@ MAJOR_VERSION="$("${SCRIPT}" "${TEST_FILE}" major)"
 [[ "${MAJOR_VERSION}" == "1.0.0" ]]
 grep -Eq 'version[[:space:]]*=[[:space:]]*"1.0.0"' "${TEST_FILE}"
 
+EXPLICIT_VERSION="$("${SCRIPT}" "${TEST_FILE}" 2.5.3)"
+[[ "${EXPLICIT_VERSION}" == "2.5.3" ]]
+grep -Eq 'version[[:space:]]*=[[:space:]]*"2.5.3"' "${TEST_FILE}"
+
 rm -f "${TEST_FILE}"
 echo "Version bump script tests passed"
