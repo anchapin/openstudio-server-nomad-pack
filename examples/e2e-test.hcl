@@ -45,7 +45,7 @@ docker_cap_drop        = []
 db_image             = "mongo:7"
 redis_image          = "redis:7-alpine"
 rserve_image         = "alpine:3.18"
-web_image            = "alpine:3.18"
+web_image            = "busybox:1.36"
 web_background_image = "alpine:3.18"
 worker_image         = "alpine:3.18"
 
