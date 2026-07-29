@@ -137,6 +137,8 @@ MongoDB and Redis each support three modes via `*_storage_type`:
 | `csi` | Nomad CSI volume | Multi-node clusters with rescheduling |
 | `ephemeral` | No volume declared | CI, throwaway dev |
 
+Volume names default to `openstudio-mongodb` and `openstudio-redis`. MongoDB data mounts at `/data/db`; Redis data mounts at `/data`.
+
 MongoDB and Redis both run as UID/GID `999:999` — volume ownership must be set before first deploy.
 
 ### Vault integration (two independent mechanisms)
@@ -154,11 +156,11 @@ Both can be active simultaneously. When neither is enabled, credentials are supp
 
 | Workflow | Trigger | What it checks |
 |---|---|---|
-| `pack-validation.yml` | push/PR to `develop` or `main` | fmt, render, validate, `examples/test-batch.nomad` job spec validation, script syntax, `variables.md` diff, `compatibility.md` version gate, plan for all example var-files, registry sync |
+| `pack-validation.yml` | push/PR to `develop` or `main`, `workflow_dispatch` | fmt, render, validate, `examples/test-batch.nomad` job spec validation, Vagrantfile syntax, script syntax, version-bump tests, `variables.md` diff, README links to `docs/variables.md`, `compatibility.md` version gate, Nomad dev-agent plan for all example var-files, registry sync, integration test script |
 | `acl-policy-validation.yml` | push/PR on `policies/**` | `nomad fmt -check policies/` |
 | `integration-test.yml` | PR to `develop` (path-filtered) | template render + e2e stack test |
-| `release.yml` | push to `main` | creates GitHub Release from `metadata.hcl` version |
-| `release-version-bump.yml` | push to `main` | auto-bumps patch version, syncs `packs/openstudio-server/metadata.hcl`, commits both files, creates git tag |
+| `release.yml` | push of tag matching `v*` | reads version from `metadata.hcl`, publishes GitHub Release |
+| `release-version-bump.yml` | push to `main` | auto-bumps patch version, syncs `packs/openstudio-server/metadata.hcl`, commits both files, creates and pushes `v*` git tag |
 
 ## Key conventions
 
@@ -189,11 +191,15 @@ After editing `variables.hcl`:
 1. Run `./scripts/generate-vars-doc.sh` → regenerates `docs/variables.md` (never edit manually)
 2. Commit both files together — CI diffs them and fails if out of sync
 
+The README **does not** maintain a variable table — the `## Configuration Variables` section links to `docs/variables.md` only. Never paste a variable table into `README.md`; a CI step enforces the link exists.
+
 ### Image alignment
 
 When bumping OpenStudio Server version, update all four together:
 - `web_image`, `web_background_image`, `worker_image` → `nrel/openstudio-server:<version>`
 - `rserve_image` → `nrel/openstudio-rserve:<version>`
+
+`redis_image` defaults to `redis:6.2-alpine` — align Redis major.minor with the target OpenStudio Server release requirements before deploying.
 
 ### Branch and release flow
 
@@ -234,6 +240,19 @@ When `worker_autoscaling_enabled = true`, the worker job gains a `scaling` block
 2. **Queue depth** (`prometheus` source): uses configurable Prometheus queries (`worker_queue_requeued_query`, `worker_queue_simulations_query`). Requires Prometheus at `autoscaler_prometheus_address`.
 
 The Nomad Autoscaler daemon must be deployed before enabling autoscaling (`nomad_autoscaler_enabled = true` deploys the optional daemon stub via `nomad-autoscaler.nomad.tpl`).
+
+The worker job uses an `update` stanza (equivalent to a Kubernetes PodDisruptionBudget):
+```hcl
+update {
+  max_parallel     = 1
+  health_check     = "checks"
+  min_healthy_time = "10s"
+  healthy_deadline = "5m"
+  auto_revert      = true
+}
+```
+
+For the Prometheus queue-depth strategy, Prometheus must be running and scraping queue metrics **before** enabling `worker_autoscaling_enabled = true`. The CPU strategy (`nomad-apm`) requires no external metrics stack.
 
 ### Scheduler placement helpers
 
