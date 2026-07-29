@@ -105,10 +105,6 @@
 | `log_max_files` | `number` | `3` | The maximum number of log files to keep. |
 | `enable_vector_collection` | `bool` | `true` | Enable Vector sidecar for log collection. |
 | `vector_image` | `string` | `"timberio/vector:0.30.0-alpine"` | The Vector image name and tag. |
-| `enable_vault_mongo_secrets` | `bool` | `false` | Enable dynamic MongoDB credential mapping from Vault into MongoDB task environment variables. |
-| `vault_mongo_secret_path` | `string` | `"secret/data/openstudio/mongodb"` | Vault secret path for MongoDB credentials (for example: secret/data/openstudio/mongodb). |
-| `vault_mongo_username_key` | `string` | `"username"` | Key in the Vault secret data payload containing the MongoDB username. |
-| `vault_mongo_password_key` | `string` | `"password"` | Key in the Vault secret data payload containing the MongoDB password. |
 | `db_constraints` | `any` | `[]` | Placement constraints for the db group. |
 | `db_affinities` | `any` | `[]` | Placement affinities for the db group. |
 | `db_spreads` | `any` | `[]` | Spread rules for the db group. |
@@ -152,7 +148,6 @@
 | `vault_db_role` | `string` | `""` | Vault role override for the MongoDB task. |
 | `vault_redis_role` | `string` | `""` | Vault role override for the Redis task. |
 | `vault_rserve_role` | `string` | `""` | Vault role override for the Rserve task. |
-| `vault_vector_role` | `string` | `""` | Vault role override for Vector sidecar tasks. |
 | `vault_policies` | `list(string)` | `[]` | Additional Vault policies to attach to Nomad-issued Vault tokens. |
 | `vault_namespace` | `string` | `""` | Vault namespace used for task token requests (Enterprise Vault). |
 | `vault_change_mode` | `string` | `"restart"` | How tasks react to Vault token or secret changes. |

@@ -605,31 +605,6 @@ variable "vector_image" {
   default     = "timberio/vector:0.30.0-alpine"
 }
 
-# Vault-backed MongoDB secret template variables
-variable "enable_vault_mongo_secrets" {
-  type        = bool
-  description = "Enable dynamic MongoDB credential mapping from Vault into MongoDB task environment variables."
-  default     = false
-}
-
-variable "vault_mongo_secret_path" {
-  type        = string
-  description = "Vault secret path for MongoDB credentials (for example: secret/data/openstudio/mongodb)."
-  default     = "secret/data/openstudio/mongodb"
-}
-
-variable "vault_mongo_username_key" {
-  type        = string
-  description = "Key in the Vault secret data payload containing the MongoDB username."
-  default     = "username"
-}
-
-variable "vault_mongo_password_key" {
-  type        = string
-  description = "Key in the Vault secret data payload containing the MongoDB password."
-  default     = "password"
-}
-
 # Scheduling helper inputs
 variable "db_constraints" {
   type        = any
@@ -898,12 +873,6 @@ variable "vault_redis_role" {
 variable "vault_rserve_role" {
   type        = string
   description = "Vault role override for the Rserve task."
-  default     = ""
-}
-
-variable "vault_vector_role" {
-  type        = string
-  description = "Vault role override for Vector sidecar tasks."
   default     = ""
 }
 
