@@ -318,7 +318,7 @@ CI fails if these files are out of sync (the `Check variables.md is up-to-date` 
 ### Release process
 
 1. Move all `[Unreleased]` entries in `CHANGELOG.md` to a new versioned section (e.g. `[0.3.0] - YYYY-MM-DD`).
-2. Add a new row to `docs/compatibility.md` (pack version, `app_version`, min Nomad, min Consul). CI enforces this: the `Check compatibility.md is up-to-date` step fails if the current `pack.version` from `metadata.hcl` is absent from `docs/compatibility.md`.
+2. Add a new row to `docs/compatibility.md` (pack version, `app_version`, min Nomad, min Consul) for the **upcoming release version** (`pack.version` + patch). CI enforces this: for pull requests targeting `main`, the `Check compatibility.md is up-to-date` step requires that upcoming release version to be present.
 3. PR `develop` → `main`, merge when CI passes.
 4. Two workflows run automatically after merging to `main`:
    - **Step 1 — `release-version-bump.yml`** (triggers on push to `main`): runs `scripts/bump_metadata_version.sh`, commits the bumped `metadata.hcl`, and pushes a `v<version>` git tag.

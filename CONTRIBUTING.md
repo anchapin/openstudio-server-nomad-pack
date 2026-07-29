@@ -122,7 +122,7 @@ To prepare a release:
 
 1. Ensure all intended changes are merged into `develop` and CI is green.
 2. Move all `[Unreleased]` entries in `CHANGELOG.md` to a new versioned section (e.g. `[0.3.0] - 2026-07-28`).
-3. Update `docs/compatibility.md` (see section below).
+3. Update `docs/compatibility.md` with the **upcoming release version** (current `metadata.hcl` patch + 1) and its compatibility data.
 4. Open a PR from `develop` → `main`, merge when CI passes.
 5. After merging, the two-step release pipeline runs automatically:
    - **`release-version-bump.yml`** bumps the patch version in `metadata.hcl`, commits it, and pushes a `v<version>` git tag.
@@ -179,6 +179,8 @@ When preparing a release, update `docs/compatibility.md` with:
 
 This keeps operators aligned on known-good version combinations.
 
-CI validates this with the `Check compatibility.md is up-to-date` workflow step in `pack-validation.yml`, which extracts `pack.version` from `metadata.hcl` and fails if that version string is absent from `docs/compatibility.md`. This mirrors the `Check variables.md is up-to-date` gate.
+CI validates this with the `Check compatibility.md is up-to-date` workflow step in `pack-validation.yml`:
+- for most runs, it requires the current `pack.version` from `metadata.hcl` to exist in `docs/compatibility.md`
+- for pull requests targeting `main`, it requires the upcoming release version (`pack.version` + patch) to exist
 
-**Release checklist item:** After every automated version bump, add a new row to `docs/compatibility.md` before opening the PR to `main`.
+**Release checklist item:** Before opening a `develop` → `main` PR, add a compatibility row for the upcoming auto-bumped release version.
