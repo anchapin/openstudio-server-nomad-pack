@@ -25,6 +25,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `127.0.0.1` (loopback is unreachable from inside containers); fix Docker fingerprint
   check to use per-node detail view; increase `db_memory` to 768 MB and `redis_memory`
   to 256 MB in `e2e-test.hcl` to prevent OOM kills of MongoDB 7 and Redis containers. (#227)
+- Fixed e2e CI: restart Docker BEFORE starting dnsmasq so `docker0` is stable when
+  dnsmasq binds to it; hardcode `unix:///var/run/docker.sock` for Nomad `DOCKER_HOST`
+  to avoid TCP-context mismatches; add `nomad alloc status -verbose` for failed db/redis
+  allocations in diagnostics step. (#227)
+
+### Fixed
+
+- Fixed `redis.nomad.tpl`: the main Redis task `config` block was missing the
+  `image = "[[ var "redis_image" . ]]"` field, causing every Redis allocation to fail
+  immediately with "image is empty" at runtime. (#227)
 
 ### Changed
 

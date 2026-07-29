@@ -67,31 +67,38 @@ jobs:
 
       - name: Start Consul and Nomad dev agents
         run: |
-          # Determine Docker bridge IP for DNS configuration.
+          # Determine initial Docker bridge IP.
           DOCKER_BRIDGE_IP=$(docker network inspect bridge \
             --format '{{(index .IPAM.Config 0).Gateway}}' 2>/dev/null || echo "172.17.0.1")
-          echo "Docker bridge IP: ${DOCKER_BRIDGE_IP}"
+          echo "Docker bridge IP (pre-restart): ${DOCKER_BRIDGE_IP}"
 
-          # Install dnsmasq to forward .consul DNS queries from Docker containers to Consul.
+          # Install dnsmasq before Docker restart so the package is ready.
           sudo apt-get install -q -y dnsmasq
-          # Stop existing dnsmasq (if running) to avoid port conflicts.
           sudo systemctl stop dnsmasq 2>/dev/null || true
-          # Start dnsmasq on the Docker bridge gateway: forwards .consul to Consul DNS
-          # (port 8600) and all other queries to 8.8.8.8. This lets Docker containers
-          # resolve consul.service.consul, which the wait-for-deps prestart tasks use.
+
+          # Reconfigure Docker daemon DNS BEFORE restarting so docker0 comes up
+          # with the correct resolver config from the start.  Docker must restart
+          # BEFORE dnsmasq binds to docker0 so the interface is stable when dnsmasq
+          # starts (docker0 briefly disappears during daemon restart).
+          echo "{\"dns\": [\"${DOCKER_BRIDGE_IP}\", \"8.8.8.8\"]}" | \
+            sudo tee /etc/docker/daemon.json > /dev/null
+          sudo systemctl restart docker
+          # Re-detect bridge IP after restart (should still be 172.17.0.1).
+          DOCKER_BRIDGE_IP=$(docker network inspect bridge \
+            --format '{{(index .IPAM.Config 0).Gateway}}' 2>/dev/null || echo "172.17.0.1")
+          docker info > /dev/null
+          echo "Docker bridge IP (post-restart): ${DOCKER_BRIDGE_IP}"
+
+          # Start dnsmasq AFTER docker0 is stable so --bind-interfaces can attach.
+          # Forwards .consul queries to Consul DNS (port 8600); all other queries to 8.8.8.8.
           sudo dnsmasq \
             --listen-address="${DOCKER_BRIDGE_IP}" \
             --bind-interfaces \
             --port=53 \
             --server="/consul/127.0.0.1#8600" \
             --server=8.8.8.8 &
-
-          # Reconfigure Docker daemon to use bridge-hosted dnsmasq as DNS resolver
-          # so containers can resolve .consul domains.
-          echo "{\"dns\": [\"${DOCKER_BRIDGE_IP}\", \"8.8.8.8\"]}" | \
-            sudo tee /etc/docker/daemon.json > /dev/null
-          sudo systemctl restart docker
-          docker info > /dev/null
+          sleep 1
+          echo "dnsmasq started on ${DOCKER_BRIDGE_IP}:53"
 
           # Start Consul dev agent (required for service registration and wait-for-deps prestart tasks).
           # -bind=127.0.0.1    : Consul cluster/RPC traffic stays on loopback.
@@ -115,11 +122,9 @@ jobs:
 
           # Start Nomad with Consul integration so service registrations and
           # wait-for-deps prestart tasks (which poll Consul health API) are exercised.
-          # Pass DOCKER_HOST explicitly so the Docker driver can always find the socket.
-          DOCKER_SOCK=$(docker context inspect \
-            --format '{{.Endpoints.docker.Host}}' 2>/dev/null \
-            || echo "unix:///var/run/docker.sock")
-          sudo env PATH="$PATH" DOCKER_HOST="${DOCKER_SOCK}" \
+          # Always use the Unix socket so the Docker driver can connect regardless of
+          # how the runner's Docker context is configured (TCP vs socket).
+          sudo env PATH="$PATH" DOCKER_HOST="unix:///var/run/docker.sock" \
             nomad agent -dev -bind=127.0.0.1 -log-level=WARN \
             -consul-address=127.0.0.1:8500 &
           for i in $(seq 1 45); do
@@ -169,17 +174,19 @@ jobs:
         run: |
           NODE_ID=$(nomad node status 2>/dev/null | awk 'NR>1 && NF>0 {print $1; exit}')
           echo "=== Nomad Node Status (drivers) ==="
-          nomad node status -verbose "${NODE_ID}" || true
+          [ -n "${NODE_ID}" ] && nomad node status -verbose "${NODE_ID}" || nomad node status || true
           echo "=== Nomad Job Status ==="
           nomad status || true
           echo "=== DB Job Allocations ==="
-          DB_ALLOC=$(nomad job allocs openstudio-server-e2e-db 2>/dev/null | awk 'NR==2{print $1}')
           nomad job allocs openstudio-server-e2e-db 2>/dev/null || true
-          [ -n "${DB_ALLOC}" ] && nomad alloc status "${DB_ALLOC}" 2>/dev/null || true
+          DB_ALLOC=$(nomad job allocs -json openstudio-server-e2e-db 2>/dev/null \
+            | python3 -c "import json,sys; a=json.load(sys.stdin); print(next((x['ID'] for x in a if x.get('ClientStatus')=='failed'), ''))" 2>/dev/null || echo "")
+          [ -n "${DB_ALLOC}" ] && { echo "=== DB Alloc Status ==="; nomad alloc status -verbose "${DB_ALLOC}" || true; }
           echo "=== Redis Job Allocations ==="
-          REDIS_ALLOC=$(nomad job allocs openstudio-server-e2e-redis 2>/dev/null | awk 'NR==2{print $1}')
           nomad job allocs openstudio-server-e2e-redis 2>/dev/null || true
-          [ -n "${REDIS_ALLOC}" ] && nomad alloc status "${REDIS_ALLOC}" 2>/dev/null || true
+          REDIS_ALLOC=$(nomad job allocs -json openstudio-server-e2e-redis 2>/dev/null \
+            | python3 -c "import json,sys; a=json.load(sys.stdin); print(next((x['ID'] for x in a if x.get('ClientStatus')=='failed'), ''))" 2>/dev/null || echo "")
+          [ -n "${REDIS_ALLOC}" ] && { echo "=== Redis Alloc Status ==="; nomad alloc status -verbose "${REDIS_ALLOC}" || true; }
           echo "=== Docker containers ==="
           docker ps -a || true
           echo "=== Consul catalog services ==="
