@@ -73,12 +73,20 @@ jobs:
             echo "ERROR: Could not extract pack version from metadata.hcl"
             exit 1
           fi
-          if ! grep -qF "\`${PACK_VERSION}\`" docs/compatibility.md; then
-            echo "ERROR: Pack version ${PACK_VERSION} is not present in docs/compatibility.md."
-            echo "Add a row for this version before merging."
+
+          REQUIRED_VERSION="${PACK_VERSION}"
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ] && [ "${GITHUB_BASE_REF}" = "main" ]; then
+            IFS='.' read -r MAJOR MINOR PATCH <<< "${PACK_VERSION}"
+            REQUIRED_VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))"
+            echo "PR targets main: expecting upcoming release version ${REQUIRED_VERSION} in docs/compatibility.md"
+          fi
+
+          if ! grep -qF "\`${REQUIRED_VERSION}\`" docs/compatibility.md; then
+            echo "ERROR: Required pack version ${REQUIRED_VERSION} is not present in docs/compatibility.md."
+            echo "Add a row for the required release version before merging."
             exit 1
           fi
-          echo "OK: Pack version ${PACK_VERSION} found in docs/compatibility.md."
+          echo "OK: Required pack version ${REQUIRED_VERSION} found in docs/compatibility.md."
 
       - name: Check docker_user non-root hardening is applied to all main service tasks
         run: |
