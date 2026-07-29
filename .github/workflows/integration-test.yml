@@ -207,7 +207,10 @@ jobs:
           consul watch -type=checks || true &
           sleep 2 && kill $! 2>/dev/null || true
 
-      - name: Validate Consul-Nomad integration (PRD AC-5)
+      - name: Validate Consul service registrations (PRD AC-5)
+        env:
+          CONSUL_APP_SERVICE_TIMEOUT_SECONDS: "180"
+          CONSUL_APP_SERVICE_RETRY_INTERVAL_SECONDS: "5"
         run: |
           # PRD Acceptance Criterion 5: All components resolve service connections
           # natively via Consul DNS names (e.g. db.service.consul).
@@ -230,24 +233,44 @@ jobs:
           fi
           echo "PASS: Consul-Nomad integration verified (nomad + nomad-client registered)"
           echo ""
-          # SOFT assertion: openstudio service registrations (informational, non-gating).
-          # These services register only when their container tasks reach running state.
-          # In GitHub Actions CI, nrel/openstudio-server images are not pre-cached and
-          # pulls exceed the job time budget; full service-registration validation is
-          # covered by the Vagrant 4-VM cluster suite. This step reports what registered
-          # to aid debugging but does not gate the build.
-          echo "Checking openstudio service registrations (informational only)..."
-          registered_count=0
-          for svc in openstudio-db openstudio-redis openstudio-web openstudio-rserve; do
-            if consul catalog services | grep -qx "${svc}"; then
-              echo "INFO: ${svc} registered in Consul"
-              registered_count=$((registered_count + 1))
-            else
-              echo "INFO: ${svc} not yet registered (image pull pending or task not started)"
+
+          # HARD assertion in e2e stub-image mode: openstudio-* registrations must appear.
+          # This e2e job deploys examples/e2e-test.hcl, which uses lightweight stub images
+          # specifically so service-registration checks are deterministic and CI-gating.
+          # Full-image behavior is still covered by longer-running cluster-level suites.
+          timeout_seconds="${CONSUL_APP_SERVICE_TIMEOUT_SECONDS}"
+          retry_interval_seconds="${CONSUL_APP_SERVICE_RETRY_INTERVAL_SECONDS}"
+          if [ "${timeout_seconds}" -le 0 ] || [ "${retry_interval_seconds}" -le 0 ]; then
+            echo "FAIL: timeout/interval must be positive values"
+            exit 1
+          fi
+          max_attempts=$(( (timeout_seconds + retry_interval_seconds - 1) / retry_interval_seconds ))
+
+          echo "Checking required openstudio services (timeout=${timeout_seconds}s, retry=${retry_interval_seconds}s, attempts=${max_attempts})..."
+          required_openstudio_services=(openstudio-db openstudio-redis openstudio-web openstudio-rserve)
+          for attempt in $(seq 1 "${max_attempts}"); do
+            consul_services="$(consul catalog services)"
+            missing_services=()
+            for svc in "${required_openstudio_services[@]}"; do
+              if ! printf '%s\n' "${consul_services}" | grep -qx "${svc}"; then
+                missing_services+=("${svc}")
+              fi
+            done
+
+            if [ "${#missing_services[@]}" -eq 0 ]; then
+              echo "PASS: All required openstudio services are registered in Consul"
+              echo "Consul service-registration validation complete."
+              exit 0
             fi
+
+            echo "Attempt ${attempt}/${max_attempts}: waiting for services: ${missing_services[*]}"
+            if [ "${attempt}" -eq "${max_attempts}" ]; then
+              echo "FAIL: Required openstudio services were not all registered before timeout"
+              echo "Missing services: ${missing_services[*]}"
+              exit 1
+            fi
+            sleep "${retry_interval_seconds}"
           done
-          echo "Openstudio services registered in this run: ${registered_count}/4"
-          echo "Consul-Nomad integration validation complete."
 
       - name: Dispatch smoke-test batch job
         env:
