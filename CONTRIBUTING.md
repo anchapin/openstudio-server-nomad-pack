@@ -74,7 +74,7 @@ bash scripts/test_nomad_pack_integration.sh
 6. All required CI checks must pass before merge:
    - `pack-validation.yml` — format, render, validate
    - `acl-policy-validation.yml` — ACL policy lint
-   - `integration-test.yml` — end-to-end stack test (runs on merge to `develop`)
+   - `integration-test.yml` — end-to-end stack test (triggered on PRs to `develop` that touch `templates/**`, `variables.hcl`, `packs/**`, `scripts/**`, `examples/**`, `metadata.hcl`, or the workflow file itself)
 
 ---
 
