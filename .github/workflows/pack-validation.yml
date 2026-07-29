@@ -43,6 +43,10 @@ jobs:
           ./scripts/test_bump_metadata_version.sh
           ./scripts/test_release_version_bump_workflow.sh
 
+      - name: Run pre-teardown script tests
+        run: |
+          ./scripts/test_pre_teardown.sh
+
       - name: Check variables.md is up-to-date
         run: |
           GENERATED_DOC=docs/variables.generated.md

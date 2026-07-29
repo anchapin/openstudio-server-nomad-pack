@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `main` branch triggers to `acl-policy-validation.yml` for both push and pull request events so ACL policy changes are validated before and after merge on release branch updates (#306)
 - Clarified Vault flag behavior in variables and docs: `vault_integration_enabled` now explicitly documents KV template secret injection, `vault_enabled` documents explicit role-based `vault` blocks, and docs now describe recommended dual-enable and fallback behavior when only one flag is set (#303)
 - Synced `packs/openstudio-server/metadata.hcl` during automated release version bumps and added CI checks/docs coverage to prevent future registry metadata drift (#296)
+- Fixed `scripts/pre-teardown.sh` to stop all optional teardown-sensitive jobs when present by adding missing `<JOB_NAME>-state-restore`, `<JOB_NAME>-batch-verify`, and `<JOB_NAME>-test` stop calls; also documented the full stop order in `docs/operations-guide.md` and added `scripts/test_pre_teardown.sh` coverage in CI (#297)
 
 ## [0.2.67] - 2026-07-29
 
