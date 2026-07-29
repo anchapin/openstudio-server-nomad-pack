@@ -41,6 +41,7 @@ worker_count               = 2
 worker_autoscaling_enabled = false   # No external Prometheus in air-gapped env
 worker_cpu                 = 4000
 worker_memory              = 8192
+worker_memory_max          = 10240
 
 # ---------- Logging ----------
 # Use journald so logs go to the host journal without requiring network egress.
