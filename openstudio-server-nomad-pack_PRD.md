@@ -256,16 +256,22 @@ variable "app_version" {
   default     = "3.6.1"
 }
 
-variable "mongodb_storage_type" {
+variable "db_storage_type" {
   type        = string
   description = "Persistent storage mechanism: 'csi' or 'host'"
   default     = "host"
 }
 
-variable "mongodb_volume_source" {
+variable "db_volume_source" {
   type        = string
   description = "The registered CSI volume ID or host path volume identifier"
   default     = "mongodb-data"
+}
+
+variable "db_backup_uri" {
+  type        = string
+  description = "MongoDB URI used by backup and restore jobs"
+  default     = "mongodb://openstudio-db.service.consul:27017"
 }
 
 variable "worker_min_replicas" {
