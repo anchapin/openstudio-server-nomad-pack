@@ -27,17 +27,63 @@ def normalize_default(raw: str) -> str:
 def escape_cell(value: str) -> str:
     return value.replace("|", "\\|")
 
+def extract_default(block: str) -> str:
+    match = re.search(r'^\s*default\s*=\s*(.*)$', block, re.MULTILINE)
+    if not match:
+        return ""
+
+    first_line_value = match.group(1).rstrip()
+    if not first_line_value:
+        return ""
+
+    remaining_block = block[match.end():]
+    source = first_line_value
+    if remaining_block:
+        source += "\n" + remaining_block
+
+    opening_to_closing = {"[": "]", "{": "}", "(": ")"}
+    first_non_whitespace = next((ch for ch in first_line_value.lstrip()[:1]), "")
+    if first_non_whitespace not in opening_to_closing:
+        return first_line_value.strip()
+
+    expected_closing = opening_to_closing[first_non_whitespace]
+    depth = 0
+    in_string = False
+    escaped = False
+
+    for index, ch in enumerate(source):
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+            continue
+
+        if ch == '"':
+            in_string = True
+            continue
+
+        if ch == first_non_whitespace:
+            depth += 1
+        elif ch == expected_closing:
+            depth -= 1
+            if depth == 0:
+                return source[: index + 1].strip()
+
+    return first_line_value.strip()
+
 variables = []
 for match in block_pattern.finditer(content):
     name, block = match.groups()
 
     type_match = re.search(r'^\s*type\s*=\s*(.+)$', block, re.MULTILINE)
     desc_match = re.search(r'^\s*description\s*=\s*"(.*)"\s*$', block, re.MULTILINE)
-    default_match = re.search(r'^\s*default\s*=\s*(.+)$', block, re.MULTILINE | re.DOTALL)
 
     var_type = type_match.group(1).strip() if type_match else ""
     description = desc_match.group(1).strip() if desc_match else ""
-    default = normalize_default(default_match.group(1)) if default_match else ""
+    default = normalize_default(extract_default(block))
 
     variables.append({
         "name": name,
