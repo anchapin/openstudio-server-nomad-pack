@@ -87,7 +87,7 @@ vagrant destroy -f
 
 ## CI Validation
 
-GitHub Actions validates pull requests targeting `develop` with:
+GitHub Actions validates pull requests targeting `develop` or `main` with:
 
 - `nomad-pack fmt -check -recursive .`
 - `nomad-pack render .`

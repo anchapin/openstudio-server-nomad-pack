@@ -261,8 +261,8 @@ variable "worker_update_healthy_deadline" {
 
 variable "worker_update_progress_deadline" {
   type        = string
-  description = "Maximum time for the worker rolling update to make progress."
-  default     = "10m"
+  description = "Maximum time for the worker rolling update to make progress. Must be greater than worker_kill_timeout (default 5200s ≈ 87m). Defaults to 2h to ensure kill_timeout never exceeds progress_deadline."
+  default     = "2h"
 }
 
 variable "worker_update_auto_revert" {

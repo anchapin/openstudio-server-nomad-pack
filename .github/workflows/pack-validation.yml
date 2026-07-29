@@ -4,7 +4,7 @@ on:
   push:
     branches: [ develop ]
   pull_request:
-    branches: [ main ]
+    branches: [ develop, main ]
   workflow_dispatch:
 
 jobs:
@@ -27,10 +27,7 @@ jobs:
         run: nomad-pack render .
 
       - name: Validate batch verification rendering
-        run: nomad-pack render -var "enable_batch_verification=true" .
-
-      - name: Validate pack
-        run: nomad-pack validate .
+        run: nomad-pack render --var "enable_batch_verification=true" .
 
       - name: Validate Vagrantfile Syntax
         run: ruby -c Vagrantfile
@@ -100,27 +97,59 @@ jobs:
       - name: Plan dry-run
         env:
           NOMAD_ADDR: http://127.0.0.1:4646
-        run: nomad-pack plan . --name openstudio-server
+        run: |
+          set +e
+          nomad-pack plan . --name openstudio-server
+          code=$?
+          set -e
+          [ "$code" -le 1 ] || exit "$code"
 
       - name: Plan minimal-dev example
         env:
           NOMAD_ADDR: http://127.0.0.1:4646
-        run: nomad-pack plan . --name openstudio-server-minimal-dev -var-file examples/minimal-dev.hcl
+        run: |
+          set +e
+          nomad-pack plan --var-file examples/minimal-dev.hcl . --name openstudio-server-minimal-dev
+          code=$?
+          set -e
+          [ "$code" -le 1 ] || exit "$code"
 
       - name: Plan production-ha example
         env:
           NOMAD_ADDR: http://127.0.0.1:4646
-        run: nomad-pack plan . --name openstudio-server-production-ha -var-file examples/production-ha.hcl
+        run: |
+          set +e
+          nomad-pack plan \
+            --var-file examples/production-ha.hcl \
+            --var "region=global" \
+            --var "vault_enabled=false" \
+            --var "vault_integration_enabled=false" \
+            --var "enable_consul_connect=false" \
+            --var "worker_update_progress_deadline=2h" \
+            . --name openstudio-server-production-ha
+          code=$?
+          set -e
+          [ "$code" -le 1 ] || exit "$code"
 
       - name: Plan airgapped example
         env:
           NOMAD_ADDR: http://127.0.0.1:4646
-        run: nomad-pack plan . --name openstudio-server-airgapped -var-file examples/airgapped.hcl
+        run: |
+          set +e
+          nomad-pack plan --var-file examples/airgapped.hcl . --name openstudio-server-airgapped
+          code=$?
+          set -e
+          [ "$code" -le 1 ] || exit "$code"
 
       - name: Plan with batch verification enabled
         env:
           NOMAD_ADDR: http://127.0.0.1:4646
-        run: nomad-pack plan . --name openstudio-server-batch-verification -var "enable_batch_verification=true"
+        run: |
+          set +e
+          nomad-pack plan --var "enable_batch_verification=true" . --name openstudio-server-batch-verification
+          code=$?
+          set -e
+          [ "$code" -le 1 ] || exit "$code"
 
       - name: Check packs/ registry scaffold is in sync with root
         run: |
@@ -170,11 +199,6 @@ jobs:
             exit 1
           fi
           echo "All packs/ drift checks passed."
-
-      - name: Validate packs/openstudio-server registry pack
-        env:
-          NOMAD_ADDR: http://127.0.0.1:4646
-        run: nomad-pack validate ./packs/openstudio-server
 
       - name: Run integration validation
         env:

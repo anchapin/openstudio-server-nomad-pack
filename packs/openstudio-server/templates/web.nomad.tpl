@@ -91,11 +91,13 @@ job "[[ var "job_name" . ]]-web" {
       [[ end ]]
 
       [[ if var "vault_integration_enabled" . ]]
+      [[ if not (var "vault_enabled" .) ]]
       vault {
         policies      = ["[[ var "vault_policy" . ]]"]
         change_mode   = "restart"
         change_signal = "SIGTERM"
       }
+      [[ end ]]
 
       template {
         destination = "secrets/env"
@@ -296,11 +298,13 @@ EOH
       [[ end ]]
 
       [[ if var "vault_integration_enabled" . ]]
+      [[ if not (var "vault_enabled" .) ]]
       vault {
         policies      = ["[[ var "vault_policy" . ]]"]
         change_mode   = "restart"
         change_signal = "SIGTERM"
       }
+      [[ end ]]
 
       template {
         destination = "secrets/env"
