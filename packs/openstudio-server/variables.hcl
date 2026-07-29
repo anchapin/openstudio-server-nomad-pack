@@ -77,6 +77,8 @@ variable "traefik_api_insecure" {
   description = "Enable the Traefik insecure API/dashboard (--api.insecure=true). Set to true only for local development. In production, keep this false and protect the dashboard with authentication and TLS."
   default     = false
 }
+
+variable "nomad_namespace" {
   type        = string
   description = "The Nomad namespace in which all pack jobs are registered. Use 'default' for the built-in namespace."
   default     = "default"
