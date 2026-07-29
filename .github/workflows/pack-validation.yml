@@ -98,31 +98,51 @@ jobs:
         env:
           NOMAD_ADDR: http://127.0.0.1:4646
         run: |
-          nomad-pack plan . --name openstudio-server; code=$?; [ "$code" -le 1 ] || exit "$code"
+          set +e
+          nomad-pack plan . --name openstudio-server
+          code=$?
+          set -e
+          [ "$code" -le 1 ] || exit "$code"
 
       - name: Plan minimal-dev example
         env:
           NOMAD_ADDR: http://127.0.0.1:4646
         run: |
-          nomad-pack plan . --name openstudio-server-minimal-dev -var-file examples/minimal-dev.hcl; code=$?; [ "$code" -le 1 ] || exit "$code"
+          set +e
+          nomad-pack plan . --name openstudio-server-minimal-dev -var-file examples/minimal-dev.hcl
+          code=$?
+          set -e
+          [ "$code" -le 1 ] || exit "$code"
 
       - name: Plan production-ha example
         env:
           NOMAD_ADDR: http://127.0.0.1:4646
         run: |
-          nomad-pack plan . --name openstudio-server-production-ha -var-file examples/production-ha.hcl; code=$?; [ "$code" -le 1 ] || exit "$code"
+          set +e
+          nomad-pack plan . --name openstudio-server-production-ha -var-file examples/production-ha.hcl
+          code=$?
+          set -e
+          [ "$code" -le 1 ] || exit "$code"
 
       - name: Plan airgapped example
         env:
           NOMAD_ADDR: http://127.0.0.1:4646
         run: |
-          nomad-pack plan . --name openstudio-server-airgapped -var-file examples/airgapped.hcl; code=$?; [ "$code" -le 1 ] || exit "$code"
+          set +e
+          nomad-pack plan . --name openstudio-server-airgapped -var-file examples/airgapped.hcl
+          code=$?
+          set -e
+          [ "$code" -le 1 ] || exit "$code"
 
       - name: Plan with batch verification enabled
         env:
           NOMAD_ADDR: http://127.0.0.1:4646
         run: |
-          nomad-pack plan . --name openstudio-server-batch-verification -var "enable_batch_verification=true"; code=$?; [ "$code" -le 1 ] || exit "$code"
+          set +e
+          nomad-pack plan . --name openstudio-server-batch-verification -var "enable_batch_verification=true"
+          code=$?
+          set -e
+          [ "$code" -le 1 ] || exit "$code"
 
       - name: Check packs/ registry scaffold is in sync with root
         run: |
