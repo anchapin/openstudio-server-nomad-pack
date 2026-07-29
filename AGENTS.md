@@ -206,7 +206,7 @@ MongoDB and Redis each support three storage modes set via `*_storage_type`:
 
 Volume names default to `openstudio-mongodb` and `openstudio-redis`. MongoDB data mounts at `/data/db`; Redis data mounts at `/data`.
 
-Volume ownership must be set before first deploy: MongoDB and Redis both run as UID/GID `999:999`.
+Volume ownership must be set before first deploy: MongoDB and Redis run as UID/GID `999:999` by default (configurable via `db_docker_user` and `redis_docker_user`). The global `docker_user` variable (default `1000:1000`) applies to web, worker, and rserve tasks.
 
 **NFS shared volume** (for web + worker): enabled via `nfs_shared_volume_enabled = true`. Recommended approach is an OS-level NFS mount registered as a Nomad host volume, not a CSI NFS driver. NFS alone does **not** provide distributed file locking — it shares the filesystem but does not make `web_count > 1` safe.
 

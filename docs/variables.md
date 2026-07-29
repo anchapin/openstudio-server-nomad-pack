@@ -129,7 +129,9 @@
 | `redis_backup_host` | `string` | `"openstudio-redis.service.consul"` | Redis host used by backup and restore jobs. |
 | `redis_backup_port` | `number` | `6379` | Redis port used by backup and restore jobs. |
 | `restore_enabled` | `bool` | `true` | Enable the on-demand restore batch job definition. |
-| `docker_user` | `string` | `"1000:1000"` | UID:GID to run containers as (non-root). |
+| `docker_user` | `string` | `"1000:1000"` | UID:GID to run containers as (non-root). Applies to web, worker, and rserve tasks. |
+| `db_docker_user` | `string` | `"999:999"` | User to run the MongoDB container as. MongoDB official images expect UID/GID 999. |
+| `redis_docker_user` | `string` | `"999:999"` | User to run the Redis container as. Redis official images expect UID/GID 999. |
 | `docker_readonly_rootfs` | `bool` | `true` | Enable Docker read-only root filesystem. |
 | `docker_cap_drop` | `list(string)` | `["ALL"]` | Linux capabilities to drop from Docker containers. |
 | `enable_image_prepull` | `bool` | `true` | When true, renders the system-hooks job that pre-pulls all heavy images on every eligible node before scheduling. |

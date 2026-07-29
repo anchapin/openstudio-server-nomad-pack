@@ -40,7 +40,7 @@ job "[[ var "job_name" . ]]-db" {
 
     task "mongodb" {
       driver = "docker"
-      user   = "[[ var "docker_user" . ]]"
+      user   = "[[ var "db_docker_user" . ]]"
 
       [[ if var "vault_enabled" . ]]
       [[ if var "vault_db_role" . ]]
