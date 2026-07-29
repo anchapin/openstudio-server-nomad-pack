@@ -33,7 +33,7 @@ All configurable inputs are defined in [`variables.hcl`](./variables.hcl).
 Commonly overridden variables include:
 - `job_name`
 - `datacenters`
-- `mongodb_storage_type` / `mongodb_volume_source`
+- `db_storage_type` / `db_volume_source`
 - `redis_storage_type` / `redis_volume_source`
 - `nfs_shared_volume_enabled` / `nfs_volume_source`
 - `worker_count` and autoscaling variables

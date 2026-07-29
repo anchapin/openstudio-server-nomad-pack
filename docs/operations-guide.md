@@ -206,7 +206,7 @@ termination, protect critical tasks with Nomad controls such as:
 | `datacenters` | `["dc1"]` | Eligible datacenters |
 | `worker_count` | `1` | Number of worker replicas |
 | `worker_autoscaling_enabled` | `false` | Enable Nomad Autoscaler |
-| `mongodb_storage_type` | `host_volume` | `host_volume`, `csi`, or `ephemeral` |
+| `db_storage_type` | `host_volume` | `host_volume`, `csi`, or `ephemeral` |
 | `redis_storage_type` | `host_volume` | `host_volume`, `csi`, or `ephemeral` |
 | `vault_integration_enabled` | `false` | Enable Vault secrets injection |
 | `vault_enabled` | `false` | Render Vault `vault` blocks in jobs |

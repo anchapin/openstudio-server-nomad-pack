@@ -82,8 +82,8 @@
 | `db_memory` | `number` | `4096` | Memory (MB) allocated to the MongoDB task. |
 | `db_health_check_interval` | `string` | `"10s"` | Interval between Consul health checks for the MongoDB service. |
 | `db_health_check_timeout` | `string` | `"2s"` | Timeout for Consul health checks for the MongoDB service. |
-| `mongodb_storage_type` | `string` | `"host_volume"` | MongoDB storage type: host_volume, csi, or ephemeral. Use ephemeral to disable persistent volume wiring. |
-| `mongodb_volume_source` | `string` | `"openstudio-mongodb"` | Nomad volume source name for MongoDB persistent storage (host_volume name or CSI volume ID). |
+| `db_storage_type` | `string` | `"host_volume"` | MongoDB storage type: host_volume, csi, or ephemeral. Use ephemeral to disable persistent volume wiring. |
+| `db_volume_source` | `string` | `"openstudio-mongodb"` | Nomad volume source name for MongoDB persistent storage (host_volume name or CSI volume ID). |
 | `redis_image` | `string` | `"redis:6.2-alpine"` | The Redis image name and tag. Intentionally diverges from the Helm chart default (redis:6.0.9) by using redis:6.2-alpine; align Redis major.minor with your target OpenStudio Server release requirements. |
 | `redis_cpu` | `number` | `250` | CPU shares allocated to the Redis task. |
 | `redis_memory` | `number` | `1024` | Memory (MB) allocated to the Redis task. |
@@ -92,7 +92,7 @@
 | `redis_health_check_interval` | `string` | `"10s"` | Interval between Consul health checks for the Redis service. |
 | `redis_health_check_timeout` | `string` | `"2s"` | Timeout for Consul health checks for the Redis service. |
 | `nfs_shared_volume_enabled` | `bool` | `false` | When true, an NFS shared volume is declared and mounted in both web and worker task groups. Volume type is controlled by nfs_volume_type. |
-| `nfs_volume_type` | `string` | `"host_volume"` | Storage backend for the NFS shared volume. Use \"host_volume\" (default, recommended) for an OS-level NFS mount registered as a Nomad host volume, or \"csi\" for a CSI-managed NFS volume. Mirrors the mongodb_storage_type / redis_storage_type pattern. |
+| `nfs_volume_type` | `string` | `"host_volume"` | Storage backend for the NFS shared volume. Use \"host_volume\" (default, recommended) for an OS-level NFS mount registered as a Nomad host volume, or \"csi\" for a CSI-managed NFS volume. Mirrors the db_storage_type / redis_storage_type pattern. |
 | `nfs_volume_source` | `string` | `"openstudio-nfs"` | Nomad volume ID for the NFS shared volume used by web and worker task groups. For host_volume this is the host_volume name; for csi this is the CSI volume ID. |
 | `nfs_volume_mount_path` | `string` | `"/mnt/openstudio"` | Mount path inside web and worker tasks where the NFS shared volume is attached. |
 | `rserve_image` | `string` | `"nrel/openstudio-rserve:3.11.0"` | The Rserve image name and tag. |
@@ -125,7 +125,7 @@
 | `backup_mount_path` | `string` | `"/backups"` | Path inside backup tasks where the backup state volume is mounted. |
 | `backup_subdirectory` | `string` | `"openstudio-state"` | Subdirectory name under the backup mount where OpenStudio state backups are written. |
 | `backup_retention_days` | `number` | `14` | How many days of backup files to retain. |
-| `mongodb_backup_uri` | `string` | `"mongodb://openstudio-db.service.consul:27017"` | MongoDB URI used by backup and restore jobs. |
+| `db_backup_uri` | `string` | `"mongodb://openstudio-db.service.consul:27017"` | MongoDB URI used by backup and restore jobs. |
 | `redis_backup_host` | `string` | `"openstudio-redis.service.consul"` | Redis host used by backup and restore jobs. |
 | `redis_backup_port` | `number` | `6379` | Redis port used by backup and restore jobs. |
 | `restore_enabled` | `bool` | `true` | Enable the on-demand restore batch job definition. |

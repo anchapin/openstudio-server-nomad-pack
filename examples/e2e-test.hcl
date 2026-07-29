@@ -4,7 +4,7 @@
 job_name    = "openstudio-server-e2e"
 datacenters = ["dc1"]
 
-mongodb_storage_type = "ephemeral"
+db_storage_type = "ephemeral"
 redis_storage_type   = "ephemeral"
 
 enable_vector_collection  = false

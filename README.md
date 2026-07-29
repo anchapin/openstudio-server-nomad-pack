@@ -122,7 +122,7 @@ The `web` task group includes a `prestart` init task that blocks web container s
 
 ## Persistent Storage
 
-By default, MongoDB and Redis use **host volumes** (`mongodb_storage_type = "host_volume"`, `redis_storage_type = "host_volume"`), ensuring data survives container restarts and rescheduling. Set either to `"ephemeral"` to disable persistent volume wiring (useful for throwaway CI environments).
+By default, MongoDB and Redis use **host volumes** (`db_storage_type = "host_volume"`, `redis_storage_type = "host_volume"`), ensuring data survives container restarts and rescheduling. Set either to `"ephemeral"` to disable persistent volume wiring (useful for throwaway CI environments).
 
 ### MongoDB and Redis storage types
 
@@ -388,7 +388,7 @@ The following defaults differ from the [NREL OpenStudio Server Helm chart](https
 
 ## Stateful DB/Redis Storage
 
-By default, MongoDB and Redis use `host_volume` storage. To change the persistence mode, set `mongodb_storage_type` and `redis_storage_type` to `host_volume`, `csi`, or `ephemeral`. Set `mongodb_volume_source` and `redis_volume_source` to the corresponding host_volume name or CSI volume ID.
+By default, MongoDB and Redis use `host_volume` storage. To change the persistence mode, set `db_storage_type` and `redis_storage_type` to `host_volume`, `csi`, or `ephemeral`. Set `db_volume_source` and `redis_volume_source` to the corresponding host_volume name or CSI volume ID.
 
 See the [Persistent Storage](#persistent-storage) section above for pre-provisioning instructions.
 
