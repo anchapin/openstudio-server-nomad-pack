@@ -193,7 +193,16 @@ jobs:
             echo "OK: variables.hcl matches exactly"
           fi
 
-          # 3. Template files must be identical
+          # 3. outputs.tpl must be byte-for-byte identical
+          if ! diff -q outputs.tpl packs/openstudio-server/outputs.tpl > /dev/null 2>&1; then
+            echo "ERROR: outputs.tpl differs between root and packs/openstudio-server/"
+            diff -u outputs.tpl packs/openstudio-server/outputs.tpl || true
+            FAIL=1
+          else
+            echo "OK: outputs.tpl matches exactly"
+          fi
+
+          # 4. Template files must be identical
           for tpl in templates/*.tpl templates/*.nomad.tpl; do
             [ -f "${tpl}" ] || continue
             fname=$(basename "${tpl}")
@@ -214,6 +223,7 @@ jobs:
             echo "packs/openstudio-server/ is out of sync with root."
             echo "Run: cp variables.hcl packs/openstudio-server/variables.hcl"
             echo "     cp metadata.hcl packs/openstudio-server/metadata.hcl"
+            echo "     cp outputs.tpl packs/openstudio-server/outputs.tpl"
             echo "     cp templates/*.tpl templates/*.nomad.tpl packs/openstudio-server/templates/"
             exit 1
           fi
