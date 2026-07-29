@@ -34,10 +34,13 @@ Please read this guide before opening a PR.
 nomad-pack fmt --check .
 
 # Render templates to stdout and inspect output
-nomad-pack render . --var-file=variables.hcl
+nomad-pack render .
+
+# Render with an example var-file override
+nomad-pack render . -var-file examples/minimal-dev.hcl
 
 # Validate the rendered job spec against a live Nomad cluster
-nomad-pack validate . --var-file=variables.hcl
+nomad-pack validate .
 ```
 
 ### Running CI locally with `act`
