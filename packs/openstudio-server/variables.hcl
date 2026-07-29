@@ -695,7 +695,7 @@ variable "rserve_spreads" {
 variable "backup_enabled" {
   type        = bool
   description = "Enable the periodic MongoDB and Redis backup batch job."
-  default     = true
+  default     = false
 }
 
 variable "backup_cron" {
@@ -761,7 +761,7 @@ variable "redis_backup_port" {
 variable "restore_enabled" {
   type        = bool
   description = "Enable the on-demand restore batch job definition."
-  default     = true
+  default     = false
 }
 
 # Docker runtime hardening variables

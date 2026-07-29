@@ -308,6 +308,8 @@ backup_enabled             = false
 restore_enabled            = false
 ```
 
+> Backup and restore jobs are disabled by default. Enable `backup_enabled = true` and/or `restore_enabled = true` only after you have provisioned the `openstudio-backups` host/CSI volume used by `backup_nfs_host_volume`.
+
 For the fastest zero-to-running experience (no persistent volumes needed), use the pre-built ephemeral config:
 
 ```bash
