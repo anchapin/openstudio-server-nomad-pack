@@ -48,7 +48,7 @@
 | `worker_update_health_check` | `string` | `"task_states"` | Health check mode for worker rolling updates. |
 | `worker_update_min_healthy_time` | `string` | `"30s"` | How long a worker allocation must remain healthy before promotion. |
 | `worker_update_healthy_deadline` | `string` | `"5m"` | Maximum time for a worker allocation to become healthy. |
-| `worker_update_progress_deadline` | `string` | `"10m"` | Maximum time for the worker rolling update to make progress. |
+| `worker_update_progress_deadline` | `string` | `"2h"` | Maximum time for the worker rolling update to make progress. Must be greater than worker_kill_timeout (default 5200s ≈ 87m). Defaults to 2h to ensure kill_timeout never exceeds progress_deadline. |
 | `worker_update_auto_revert` | `bool` | `true` | Automatically revert a worker deployment if the update fails. |
 | `worker_priority` | `number` | `40` | Nomad job priority for calculation workers (Nomad scale 1–100). Must always be less than web_priority so the web UI is scheduled preferentially during resource contention. Mirrors the Kubernetes low-priority PriorityClass (value 10000) used by the Helm chart. WARNING: do not set this higher than or equal to web_priority. |
 | `worker_queues` | `string` | `"requeued,simulations"` | Comma-separated queue list processed by worker tasks. |
