@@ -112,15 +112,8 @@ vault_default_role        = "openstudio-server"
 vault_db_role             = "openstudio-db"
 vault_redis_role          = "openstudio-redis"
 vault_rserve_role         = "openstudio-rserve"
-vault_vector_role         = "openstudio-vector"
 vault_policies            = ["openstudio-kv-read"]
 vault_change_mode         = "restart"
-
-# Pull MongoDB credentials from Vault rather than environment variables.
-enable_vault_mongo_secrets = true
-vault_mongo_secret_path    = "secret/data/prod/openstudio/mongodb"
-vault_mongo_username_key   = "username"
-vault_mongo_password_key   = "password"
 
 # ---------- Backups ----------
 backup_enabled          = true
