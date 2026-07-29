@@ -67,7 +67,6 @@ job "[[ var "job_name" . ]]-rserve" {
         [[ if var "rserve_args" . ]]
         args = [[ var "rserve_args" . | toJson ]]
         [[ end ]]
-        user = "[[ var "docker_user" . ]]"
         readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
         cap_drop = [[ var "docker_cap_drop" . | toJson ]]
       }
