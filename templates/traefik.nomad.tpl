@@ -42,7 +42,7 @@ job "[[ var "job_name" . ]]-traefik" {
           "--entrypoints.web.address=:[[ var "traefik_http_port" . ]]",
           "--entrypoints.websecure.address=:[[ var "traefik_https_port" . ]]",
           "--api.dashboard=true",
-          "--api.insecure=true",
+          "--api.insecure=[[ if var "traefik_api_insecure" . ]]true[[ else ]]false[[ end ]]",
         ]
       }
 
