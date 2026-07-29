@@ -129,8 +129,11 @@ EOT
       [[ end ]]
 
       config {
-        image   = "[[ var "worker_image" . ]]"
-        command = "[[ var "worker_command" . ]]"
+        image           = "[[ var "worker_image" . ]]"
+        command         = "[[ var "worker_command" . ]]"
+        user            = "[[ var "docker_user" . ]]"
+        readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
+        cap_drop        = [[ var "docker_cap_drop" . | toJson ]]
         [[ if var "worker_args" . ]]
         args = [[ var "worker_args" . | toJson ]]
         [[ end ]]

@@ -84,10 +84,11 @@ job "[[ var "job_name" . ]]-db" {
       [[ end ]]
 
       config {
-        image = "[[ var "db_image" . ]]"
-        ports = ["db"]
+        image           = "[[ var "db_image" . ]]"
+        ports           = ["db"]
+        user            = "[[ var "docker_user" . ]]"
         readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
-        cap_drop = [[ var "docker_cap_drop" . | toJson ]]
+        cap_drop        = [[ var "docker_cap_drop" . | toJson ]]
         logging {
           type = "[[ var "log_driver_type" . ]]"
           config {

@@ -133,8 +133,11 @@ EOT
       [[ end ]]
 
       config {
-        image = "[[ var "web_image" . ]]"
-        ports = ["http"]
+        image           = "[[ var "web_image" . ]]"
+        ports           = ["http"]
+        user            = "[[ var "docker_user" . ]]"
+        readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
+        cap_drop        = [[ var "docker_cap_drop" . | toJson ]]
         [[ if ne (var "web_command" .) "" ]]
         command = "[[ var "web_command" . ]]"
         [[ end ]]
@@ -341,7 +344,10 @@ EOT
       [[ end ]]
 
       config {
-        image = "[[ var "web_background_image" . ]]"
+        image           = "[[ var "web_background_image" . ]]"
+        user            = "[[ var "docker_user" . ]]"
+        readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
+        cap_drop        = [[ var "docker_cap_drop" . | toJson ]]
         [[ if ne (var "web_background_command" .) "" ]]
         command = "[[ var "web_background_command" . ]]"
         [[ end ]]
