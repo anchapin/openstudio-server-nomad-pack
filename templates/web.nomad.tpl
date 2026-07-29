@@ -235,13 +235,13 @@ EOH
         cooldown            = "[[ var "autoscaler_cooldown" . ]]"
         evaluation_interval = "30s"
 
-        [[ if var "worker_autoscaling_cpu_enabled" . ]]
+        [[ if var "web_background_autoscaling_cpu_enabled" . ]]
         check "cpu-utilization" {
           source = "nomad-apm"
           query  = "avg_cpu"
 
           strategy "target-value" {
-            target = [[ var "worker_cpu_target_utilization" . ]]
+            target = [[ var "web_background_cpu_target_utilization" . ]]
           }
         }
         [[ end ]]
