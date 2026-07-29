@@ -94,9 +94,16 @@ jobs:
           docker info > /dev/null
 
           # Start Consul dev agent (required for service registration and wait-for-deps prestart tasks).
-          # Bind client to 0.0.0.0 so Docker containers can reach the HTTP API
-          # (e.g. http://consul.service.consul:8500 from within the busybox prestart task).
+          # -bind=127.0.0.1    : Consul cluster/RPC traffic stays on loopback.
+          # -client=0.0.0.0    : HTTP API and DNS are reachable on all interfaces
+          #                      (including the Docker bridge at ${DOCKER_BRIDGE_IP}).
+          # -advertise=${DOCKER_BRIDGE_IP}: Consul advertises the Docker bridge IP so that
+          #                      "consul.service.consul" DNS lookups return ${DOCKER_BRIDGE_IP}
+          #                      rather than 127.0.0.1 (which is unreachable inside containers).
+          #                      The wait-for-deps busybox prestart tasks use this DNS name to
+          #                      reach the Consul health API.
           consul agent -dev -bind=127.0.0.1 -client=0.0.0.0 \
+            -advertise="${DOCKER_BRIDGE_IP}" \
             -recursor=8.8.8.8 -log-level=WARN &
           for i in $(seq 1 30); do
             if consul members >/dev/null 2>&1; then
@@ -125,16 +132,21 @@ jobs:
 
           # Wait for the Nomad Docker driver to be fingerprinted before returning.
           # Submitting jobs before fingerprinting completes leaves them un-schedulable.
+          # Use the node-detail API endpoint (not the list view) since only the detail
+          # view includes per-driver "Detected: true" status.
           echo "Waiting for Nomad Docker driver fingerprint..."
           for i in $(seq 1 60); do
-            if NOMAD_ADDR=http://127.0.0.1:4646 nomad node status -verbose 2>/dev/null \
-                | grep -q "docker.*true"; then
+            NODE_ID=$(NOMAD_ADDR=http://127.0.0.1:4646 nomad node status 2>/dev/null \
+              | awk 'NR>1 && NF>0 {print $1; exit}')
+            if [ -n "${NODE_ID}" ] && \
+               NOMAD_ADDR=http://127.0.0.1:4646 nomad node status -verbose "${NODE_ID}" \
+                 2>/dev/null | grep -q "docker.*true"; then
               echo "Nomad Docker driver fingerprinted successfully"
               break
             fi
             if [ "${i}" -eq 60 ]; then
               echo "WARNING: Docker driver not fingerprinted after 120s; dumping node status"
-              NOMAD_ADDR=http://127.0.0.1:4646 nomad node status -verbose || true
+              NOMAD_ADDR=http://127.0.0.1:4646 nomad node status -verbose "${NODE_ID}" || true
             fi
             sleep 2
           done
@@ -155,18 +167,26 @@ jobs:
           NOMAD_ADDR: http://127.0.0.1:4646
         continue-on-error: true
         run: |
+          NODE_ID=$(nomad node status 2>/dev/null | awk 'NR>1 && NF>0 {print $1; exit}')
           echo "=== Nomad Node Status (drivers) ==="
-          nomad node status -verbose || true
+          nomad node status -verbose "${NODE_ID}" || true
           echo "=== Nomad Job Status ==="
           nomad status || true
           echo "=== DB Job Allocations ==="
+          DB_ALLOC=$(nomad job allocs openstudio-server-e2e-db 2>/dev/null | awk 'NR==2{print $1}')
           nomad job allocs openstudio-server-e2e-db 2>/dev/null || true
+          [ -n "${DB_ALLOC}" ] && nomad alloc status "${DB_ALLOC}" 2>/dev/null || true
           echo "=== Redis Job Allocations ==="
+          REDIS_ALLOC=$(nomad job allocs openstudio-server-e2e-redis 2>/dev/null | awk 'NR==2{print $1}')
           nomad job allocs openstudio-server-e2e-redis 2>/dev/null || true
+          [ -n "${REDIS_ALLOC}" ] && nomad alloc status "${REDIS_ALLOC}" 2>/dev/null || true
           echo "=== Docker containers ==="
           docker ps -a || true
           echo "=== Consul catalog services ==="
           consul catalog services || true
+          echo "=== Consul health checks ==="
+          consul watch -type=checks || true &
+          sleep 2 && kill $! 2>/dev/null || true
 
       - name: Assert Consul service registrations
         run: |
