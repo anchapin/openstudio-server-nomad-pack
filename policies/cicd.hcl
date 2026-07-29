@@ -9,29 +9,36 @@
 # ╔══════════════════════════════════════════════════════════════════════════╗
 # ║  NAMESPACE CONFIGURATION — READ BEFORE APPLYING                        ║
 # ║                                                                        ║
-# ║  This file uses the placeholder OPENSTUDIO_NAMESPACE.                  ║
-# ║  Replace it with your actual deployment namespace before applying.     ║
+# ║  This file targets namespace "openstudio".                             ║
 # ║  The pack's nomad_namespace variable defaults to "default".            ║
 # ║                                                                        ║
-# ║  One-liner (single file):                                              ║
-# ║    sed 's/OPENSTUDIO_NAMESPACE/myns/g' policies/cicd.hcl \            ║
-# ║      | nomad acl policy apply -name cicd \                            ║
-# ║          -description "OpenStudio Server CI/CD service token role" -   ║
+# ║  If you deployed to "default" (or any namespace other than             ║
+# ║  "openstudio"), applying this policy as-is grants access to the        ║
+# ║  WRONG namespace — the token will be a no-op for your jobs.            ║
 # ║                                                                        ║
-# ║  Or use the helper script for all policy files at once:               ║
-# ║    bash scripts/apply-acl-policies.sh --namespace myns                 ║
+# ║  Fix: replace "openstudio" with your actual deployment namespace       ║
+# ║  before applying. One-liner for all four policy files:                 ║
+# ║                                                                        ║
+# ║    sed -i 's/namespace "openstudio"/namespace "default"/g' \           ║
+# ║      policies/*.hcl                                                    ║
+# ║                                                                        ║
+# ║  Or use the helper script:                                             ║
+# ║    bash scripts/apply-acl-policies.sh --namespace default              ║
 # ║                                                                        ║
 # ║  See docs/acl-policies.md § "Namespace Configuration" for details.    ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
 #
 # Apply with:
-#   sed 's/OPENSTUDIO_NAMESPACE/<your-namespace>/g' policies/cicd.hcl \
-#     | nomad acl policy apply \
-#         -name cicd \
-#         -description "OpenStudio Server CI/CD service token role" \
-#         -
+#   nomad acl policy apply \
+#     -name cicd \
+#     -description "OpenStudio Server CI/CD service token role" \
+#     - < policies/cicd.hcl
 
-namespace "OPENSTUDIO_NAMESPACE" {
+namespace "default" {
+  policy = "deny"
+}
+
+namespace "openstudio" {
   capabilities = [
     "submit-job",
     "dispatch-job",
