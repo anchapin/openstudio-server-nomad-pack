@@ -69,7 +69,7 @@ job "[[ var "job_name" . ]]-web" {
         command = "sh"
         args = [
           "-ec",
-          "until wget -qO- \"http://consul.service.consul:8500/v1/health/service/openstudio-db?passing=true\" | grep -q '\"ServiceName\":\"openstudio-db\"'; do sleep 2; done; until wget -qO- \"http://consul.service.consul:8500/v1/health/service/openstudio-redis?passing=true\" | grep -q '\"ServiceName\":\"openstudio-redis\"'; do sleep 2; done",
+          "until wget -qO- \"http://consul.service.consul:8500/v1/health/service/openstudio-db?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-db\"'; do sleep 2; done; until wget -qO- \"http://consul.service.consul:8500/v1/health/service/openstudio-redis?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-redis\"'; do sleep 2; done",
         ]
       }
 
@@ -276,7 +276,7 @@ EOH
         command = "sh"
         args = [
           "-ec",
-          "until wget -qO- \"http://consul.service.consul:8500/v1/health/service/openstudio-db?passing=true\" | grep -q '\"ServiceName\":\"openstudio-db\"'; do sleep 2; done; until wget -qO- \"http://consul.service.consul:8500/v1/health/service/openstudio-redis?passing=true\" | grep -q '\"ServiceName\":\"openstudio-redis\"'; do sleep 2; done; until wget -qO- \"http://consul.service.consul:8500/v1/health/service/openstudio-web?passing=true\" | grep -q '\"ServiceName\":\"openstudio-web\"'; do sleep 2; done",
+          "until wget -qO- \"http://consul.service.consul:8500/v1/health/service/openstudio-db?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-db\"'; do sleep 2; done; until wget -qO- \"http://consul.service.consul:8500/v1/health/service/openstudio-redis?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-redis\"'; do sleep 2; done; until wget -qO- \"http://consul.service.consul:8500/v1/health/service/openstudio-web?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-web\"'; do sleep 2; done",
         ]
       }
 
