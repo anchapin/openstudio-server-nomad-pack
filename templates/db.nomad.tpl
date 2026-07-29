@@ -123,8 +123,9 @@ job "[[ var "job_name" . ]]-db" {
       }
 
       resources {
-        cpu    = [[ var "db_cpu" . ]]
-        memory = [[ var "db_memory" . ]]
+        cpu        = [[ var "db_cpu" . ]]
+        memory     = [[ var "db_memory" . ]]
+        memory_max = [[ var "db_memory_max" . ]]
       }
 
       env {

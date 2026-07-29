@@ -182,8 +182,9 @@ EOT
       }
 
       resources {
-        cpu    = [[ var "worker_cpu" . ]]
-        memory = [[ var "worker_memory" . ]]
+        cpu        = [[ var "worker_cpu" . ]]
+        memory     = [[ var "worker_memory" . ]]
+        memory_max = [[ var "worker_memory_max" . ]]
       }
 
       kill_timeout = "[[ var "worker_kill_timeout" . ]]"

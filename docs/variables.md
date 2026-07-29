@@ -56,6 +56,7 @@
 | `worker_process_count` | `string` | `"1"` | COUNT environment variable passed to worker containers. |
 | `worker_cpu` | `number` | `2000` | CPU shares allocated to the OpenStudio worker task. These defaults are intentionally higher than Helm to support higher simulation concurrency per Nomad allocation. |
 | `worker_memory` | `number` | `4096` | Memory (MB) allocated to the OpenStudio worker task. These defaults are intentionally higher than Helm to support higher simulation concurrency per Nomad allocation. |
+| `worker_memory_max` | `number` | `6144` | Memory hard limit (MB) for the OpenStudio worker task (Nomad memory_max). |
 | `worker_kill_timeout` | `string` | `"5200s"` | Grace period Nomad grants the worker task to finish in-flight work before force-killing it on drain or update. Must be >= the longest expected simulation run. Matches Helm terminationGracePeriodSeconds: 5200. WARNING: reducing this below the longest simulation duration will result in data loss on node drains and rolling updates. |
 | `worker_autoscaling_enabled` | `bool` | `false` | Enable Nomad Autoscaler integration for the worker task group. When false (default), the scaling block is omitted and worker_count controls the fixed allocation count. |
 | `worker_autoscaling_cpu_enabled` | `bool` | `true` | Enable the built-in Nomad APM CPU autoscaling check for workers (avg_cpu target-value strategy). |
@@ -80,6 +81,7 @@
 | `db_image` | `string` | `"mongo:6.0.7"` | The MongoDB database image name and tag. BREAKING UPGRADE NOTE: persisted data volumes created on mongo:4.2 must be migrated in sequence 4.2 -> 4.4 -> 5.0 -> 6.0.7; do not skip major versions. See docs/upgrading.md for the full procedure. |
 | `db_cpu` | `number` | `1000` | CPU shares allocated to the MongoDB task. |
 | `db_memory` | `number` | `4096` | Memory (MB) allocated to the MongoDB task. |
+| `db_memory_max` | `number` | `6144` | Memory hard limit (MB) for the MongoDB task (Nomad memory_max). |
 | `db_health_check_interval` | `string` | `"10s"` | Interval between Consul health checks for the MongoDB service. |
 | `db_health_check_timeout` | `string` | `"2s"` | Timeout for Consul health checks for the MongoDB service. |
 | `db_storage_type` | `string` | `"host_volume"` | MongoDB storage type: host_volume, csi, or ephemeral. Use ephemeral to disable persistent volume wiring. |

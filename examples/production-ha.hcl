@@ -39,6 +39,7 @@ web_background_max_replicas        = 5
 worker_priority      = 60
 worker_cpu           = 4000
 worker_memory        = 8192
+worker_memory_max    = 10240
 worker_process_count = "2"
 
 # Static seed count; autoscaler owns the actual count.
