@@ -24,6 +24,7 @@ on:
 env:
   NOMAD_VERSION: "1.7.7"
   CONSUL_VERSION: "1.17.1"
+  E2E_VAR_FILE: "examples/e2e-test.hcl"
 
 jobs:
   integration-test:
@@ -173,7 +174,17 @@ jobs:
       - name: Deploy with lightweight e2e stubs
         env:
           NOMAD_ADDR: http://127.0.0.1:4646
-        run: nomad-pack run --detach . --var-file examples/e2e-test.hcl
+        run: |
+          E2E_JOB_PREFIX=$(awk -F'"' '/^[[:space:]]*job_name[[:space:]]*=[[:space:]]*"/{print $2; exit}' "${E2E_VAR_FILE}")
+          if [ -z "${E2E_JOB_PREFIX}" ]; then
+            echo "ERROR: unable to derive job_name from ${E2E_VAR_FILE}"
+            exit 1
+          fi
+          echo "E2E_JOB_PREFIX=${E2E_JOB_PREFIX}" >> "${GITHUB_ENV}"
+          echo "E2E_WEB_JOB=${E2E_JOB_PREFIX}-web" >> "${GITHUB_ENV}"
+          echo "E2E_DB_JOB=${E2E_JOB_PREFIX}-db" >> "${GITHUB_ENV}"
+          echo "E2E_REDIS_JOB=${E2E_JOB_PREFIX}-redis" >> "${GITHUB_ENV}"
+          nomad-pack run --detach . --var-file "${E2E_VAR_FILE}"
 
       - name: Wait for Nomad web allocations
         env:
@@ -181,15 +192,15 @@ jobs:
         run: |
           TIMEOUT=120
           DEADLINE=$(( $(date +%s) + TIMEOUT ))
-          echo "Waiting for openstudio-server-e2e-web allocations to reach running state (timeout ${TIMEOUT}s)..."
-          until nomad job allocs openstudio-server-e2e-web 2>/dev/null | grep -q "running"; do
+          echo "Waiting for ${E2E_WEB_JOB} allocations to reach running state (timeout ${TIMEOUT}s)..."
+          until nomad job allocs "${E2E_WEB_JOB}" 2>/dev/null | grep -q "running"; do
             if [ "$(date +%s)" -ge "${DEADLINE}" ]; then
-              echo "ERROR: timed out waiting for openstudio-server-e2e-web allocations after ${TIMEOUT}s"
+              echo "ERROR: timed out waiting for ${E2E_WEB_JOB} allocations after ${TIMEOUT}s"
               exit 1
             fi
             sleep 5
           done
-          echo "openstudio-server-e2e-web has running allocations"
+          echo "${E2E_WEB_JOB} has running allocations"
 
       - name: Dump Nomad and Docker diagnostics
         if: always()
@@ -203,13 +214,13 @@ jobs:
           echo "=== Nomad Job Status ==="
           nomad status || true
           echo "=== DB Job Allocations ==="
-          nomad job allocs openstudio-server-e2e-db 2>/dev/null || true
-          DB_ALLOC=$(nomad job allocs -json openstudio-server-e2e-db 2>/dev/null \
+          nomad job allocs "${E2E_DB_JOB}" 2>/dev/null || true
+          DB_ALLOC=$(nomad job allocs -json "${E2E_DB_JOB}" 2>/dev/null \
             | python3 -c "import json,sys; a=json.load(sys.stdin); print(next((x['ID'] for x in a if x.get('ClientStatus')=='failed'), ''))" 2>/dev/null || echo "")
           [ -n "${DB_ALLOC}" ] && { echo "=== DB Alloc Status ==="; nomad alloc status -verbose "${DB_ALLOC}" || true; }
           echo "=== Redis Job Allocations ==="
-          nomad job allocs openstudio-server-e2e-redis 2>/dev/null || true
-          REDIS_ALLOC=$(nomad job allocs -json openstudio-server-e2e-redis 2>/dev/null \
+          nomad job allocs "${E2E_REDIS_JOB}" 2>/dev/null || true
+          REDIS_ALLOC=$(nomad job allocs -json "${E2E_REDIS_JOB}" 2>/dev/null \
             | python3 -c "import json,sys; a=json.load(sys.stdin); print(next((x['ID'] for x in a if x.get('ClientStatus')=='failed'), ''))" 2>/dev/null || echo "")
           [ -n "${REDIS_ALLOC}" ] && { echo "=== Redis Alloc Status ==="; nomad alloc status -verbose "${REDIS_ALLOC}" || true; }
           echo "=== Docker containers ==="
@@ -329,4 +340,4 @@ jobs:
         if: always()
         env:
           NOMAD_ADDR: http://127.0.0.1:4646
-        run: nomad-pack destroy . --var-file examples/e2e-test.hcl || true
+        run: nomad-pack destroy . --var-file "${E2E_VAR_FILE}" || true
