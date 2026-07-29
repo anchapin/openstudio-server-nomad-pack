@@ -158,7 +158,7 @@ Both can be active simultaneously. When neither is enabled, credentials are supp
 | `acl-policy-validation.yml` | push/PR on `policies/**` | `nomad fmt -check policies/` |
 | `integration-test.yml` | PR to `develop` (path-filtered) | template render + e2e stack test |
 | `release.yml` | push to `main` | creates GitHub Release from `metadata.hcl` version |
-| `release-version-bump.yml` | push to `main` | auto-bumps patch version, creates git tag |
+| `release-version-bump.yml` | push to `main` | auto-bumps patch version, syncs `packs/openstudio-server/metadata.hcl`, commits both files, creates git tag |
 
 ## Key conventions
 
@@ -204,7 +204,7 @@ When bumping OpenStudio Server version, update all four together:
 - Release prep: move unreleased entries to versioned section + add row to `docs/compatibility.md`
 
 Release automation on `main`:
-1. **`release-version-bump.yml`** — auto-bumps patch in `metadata.hcl`, commits, pushes `v*` tag
+1. **`release-version-bump.yml`** — auto-bumps patch in `metadata.hcl`, syncs `packs/openstudio-server/metadata.hcl`, commits both files, pushes `v*` tag
 2. **`release.yml`** — triggers on the tag, publishes GitHub Release
 
 For a non-patch increment, run before opening the PR:

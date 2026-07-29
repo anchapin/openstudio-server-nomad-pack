@@ -41,6 +41,7 @@ jobs:
       - name: Run version bump script tests
         run: |
           ./scripts/test_bump_metadata_version.sh
+          ./scripts/test_release_version_bump_workflow.sh
 
       - name: Check variables.md is up-to-date
         run: |
