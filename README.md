@@ -215,7 +215,7 @@ redis_affinities = [
 
 ## Included Job Templates
 
-- `templates/openstudio-server.nomad.tpl`: Core OpenStudio Server scaffolding and MongoDB (`openstudio-db`) service.
+- `templates/openstudio-server.nomad.tpl`: Architecture marker file (renders nothing). The monolithic job that previously duplicated all task groups has been removed; all service components are rendered exclusively by their dedicated per-component templates (fix #223).
 - `templates/redis.nomad.tpl`: Redis cache service (`openstudio-redis`) on port `6379`.
 - `templates/rserve.nomad.tpl`: Rserve service (`openstudio-rserve`) on port `6311`.
 - `templates/worker.nomad.tpl`: Resque worker task group with rolling deploys, Nomad Autoscaler scaling, and optional Vector sidecar.
