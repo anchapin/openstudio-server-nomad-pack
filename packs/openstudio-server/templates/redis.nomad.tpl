@@ -84,6 +84,7 @@ job "[[ var "job_name" . ]]-redis" {
       [[ end ]]
 
       config {
+        image = "[[ var "redis_image" . ]]"
         ports = ["redis"]
         user = "[[ var "docker_user" . ]]"
         readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]

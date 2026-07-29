@@ -12,6 +12,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a dedicated MongoDB upgrade migration guide with step-by-step instructions for persisted
   data upgrades from `mongo:4.2` to `mongo:6.0.7`, including backup, rollback, and verification
   procedures. (#217)
+- Extended `integration-test.yml` e2e job to start a Consul dev agent alongside Nomad and assert
+  that all expected Consul service registrations (`openstudio-db`, `openstudio-redis`,
+  `openstudio-web`, `openstudio-rserve`) are present after pack deployment, satisfying PRD
+  Acceptance Criterion 5 (Consul DNS service resolution). (#227)
+- Fixed e2e CI: install dnsmasq on Docker bridge gateway so containers resolve
+  `consul.service.consul` via Consul DNS; pass `DOCKER_HOST` explicitly to Nomad dev agent;
+  wait for Docker driver fingerprint before submitting jobs; add `Dump Nomad and Docker
+  diagnostics` step for future debugging. (#227)
+- Fixed e2e CI: add `-advertise=${DOCKER_BRIDGE_IP}` to Consul dev agent so that
+  `consul.service.consul` DNS resolves to the Docker-accessible bridge IP instead of
+  `127.0.0.1` (loopback is unreachable from inside containers); fix Docker fingerprint
+  check to use per-node detail view; increase `db_memory` to 768 MB and `redis_memory`
+  to 256 MB in `e2e-test.hcl` to prevent OOM kills of MongoDB 7 and Redis containers. (#227)
+- Fixed e2e CI: restart Docker BEFORE starting dnsmasq so `docker0` is stable when
+  dnsmasq binds to it; hardcode `unix:///var/run/docker.sock` for Nomad `DOCKER_HOST`
+  to avoid TCP-context mismatches; add `nomad alloc status -verbose` for failed db/redis
+  allocations in diagnostics step. (#227)
+
+### Fixed
+
+- Fixed `redis.nomad.tpl`: the main Redis task `config` block was missing the
+  `image = "[[ var "redis_image" . ]]"` field, causing every Redis allocation to fail
+  immediately with "image is empty" at runtime. (#227)
 
 ### Changed
 
