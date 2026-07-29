@@ -194,7 +194,8 @@ This pack controls these fields through the following variables:
 
 | Variable | Maps to |
 |----------|---------|
-| `vault_enabled` | Whether to render the `vault` block |
+| `vault_integration_enabled` | Whether to render KV secret templates (`secrets/env`) for app credentials |
+| `vault_enabled` | Whether to render explicit role-based `vault` blocks |
 | `vault_default_role` | `role` for all tasks (Nomad ≥ 1.7) |
 | `vault_db_role` | `role` override for MongoDB task |
 | `vault_redis_role` | `role` override for Redis task |
@@ -205,6 +206,10 @@ This pack controls these fields through the following variables:
 | `vault_change_mode` | `change_mode` (`restart`/`noop`/`signal`) |
 | `vault_change_signal` | Signal used when `change_mode = "signal"` |
 | `vault_env` | Expose Vault token in task environment |
+
+> For most production deployments, set both `vault_integration_enabled = true` and `vault_enabled = true`.
+> If `vault_integration_enabled = true` but `vault_enabled = false`, the pack uses `vault_policy`
+> as a fallback policy-only `vault` block so templates can still read KV secrets.
 
 ## Token TTL and Renewal Recommendations
 

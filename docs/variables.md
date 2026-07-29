@@ -9,7 +9,7 @@
 | `app_version` | `string` | `"3.11.0"` | Application version tag injected as APP_VERSION into all OpenStudio Server containers. Must match the image tag used in web_image, worker_image, web_background_image, and rserve_image to avoid version mismatch. |
 | `worker_min_replicas` | `number` | `2` | Minimum number of worker replicas. Aligned with Helm chart worker-hpa.yaml minReplicas: 2. |
 | `worker_max_replicas` | `number` | `20` | Maximum number of worker replicas. Aligned with Helm chart worker-hpa.yaml maxReplicas: 20. |
-| `vault_integration_enabled` | `bool` | `false` | Enable Nomad Vault integration stanzas for tasks. |
+| `vault_integration_enabled` | `bool` | `false` | Enable Vault KV v2 secrets injection via Nomad template stanzas (`secrets/env`). Typically enabled together with vault_enabled so tasks use explicit Vault roles. |
 | `ingress_domain` | `string` | `"localhost"` | Ingress domain used when constructing service hostnames and Traefik router rules. |
 | `ingress_tls_enabled` | `bool` | `false` | When true, adds Traefik TLS router tags for the websecure entrypoint on the web service. |
 | `deploy_traefik` | `bool` | `false` | When true, deploy a Traefik ingress job alongside the OpenStudio Server stack. |
@@ -141,14 +141,14 @@
 | `enable_batch_verification` | `bool` | `false` | Enable standalone batch connectivity verification job. |
 | `verification_image` | `string` | `"busybox:1.36"` | The image used for batch connectivity verification checks. |
 | `verification_targets` | `list(string)` | `[ "db=openstudio-db.service.consul:27017", "redis=openstudio-redis.service.consul:6379", "rserve=openstudio-rserve.service.consul:6311", ]` | Connectivity targets in component=host:port format for batch verification. |
-| `vault_policy` | `string` | `"openstudio-server"` | Name of the Vault policy granted to all OpenStudio Server tasks when vault_integration_enabled is true. |
+| `vault_policy` | `string` | `"openstudio-server"` | Fallback Vault policy attached to task tokens when vault_integration_enabled is true and vault_enabled is false. |
 | `vault_kv_mongodb_path` | `string` | `"secret/data/openstudio/mongodb"` | Vault KV v2 path for MongoDB credentials (must contain a 'password' key). |
 | `vault_kv_redis_path` | `string` | `"secret/data/openstudio/redis"` | Vault KV v2 path for Redis credentials (must contain a 'password' key). |
 | `vault_kv_app_path` | `string` | `"secret/data/openstudio/app"` | Vault KV v2 path for application secrets (must contain a 'secret_key_base' key). |
 | `mongo_password` | `string` | `""` | Plaintext MongoDB password used when vault_integration_enabled is false. |
 | `redis_password` | `string` | `""` | Plaintext Redis password used when vault_integration_enabled is false. |
 | `app_secret_key_base` | `string` | `""` | Plaintext application secret key base used when vault_integration_enabled is false. |
-| `vault_enabled` | `bool` | `false` | Enable Vault role-based authorization blocks in Nomad tasks. |
+| `vault_enabled` | `bool` | `false` | Enable explicit Nomad `vault { role = ... }` blocks for task token issuance. Usually set with vault_integration_enabled for full role-based + KV secret injection. |
 | `vault_default_role` | `string` | `""` | Default Vault role used by tasks when a task-specific role is not set. |
 | `vault_db_role` | `string` | `""` | Vault role override for the MongoDB task. |
 | `vault_redis_role` | `string` | `""` | Vault role override for the Redis task. |

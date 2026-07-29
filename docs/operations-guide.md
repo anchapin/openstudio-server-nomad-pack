@@ -208,8 +208,8 @@ termination, protect critical tasks with Nomad controls such as:
 | `worker_autoscaling_enabled` | `false` | Enable Nomad Autoscaler |
 | `db_storage_type` | `host_volume` | `host_volume`, `csi`, or `ephemeral` |
 | `redis_storage_type` | `host_volume` | `host_volume`, `csi`, or `ephemeral` |
-| `vault_integration_enabled` | `false` | Enable Vault secrets injection |
-| `vault_enabled` | `false` | Render Vault `vault` blocks in jobs |
+| `vault_integration_enabled` | `false` | Enable Vault KV secret template injection (`secrets/env`) |
+| `vault_enabled` | `false` | Enable explicit role-based Vault blocks in tasks |
 | `enable_consul_connect` | `false` | Enable Consul Connect mTLS mesh |
 | `backup_enabled` | `false` | Enable MongoDB backup batch job |
 

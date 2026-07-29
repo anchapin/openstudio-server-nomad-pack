@@ -26,7 +26,7 @@ variable "worker_max_replicas" {
 
 variable "vault_integration_enabled" {
   type        = bool
-  description = "Enable Nomad Vault integration stanzas for tasks."
+  description = "Enable Vault KV v2 secrets injection via Nomad template stanzas (`secrets/env`). Typically enabled together with vault_enabled so tasks use explicit Vault roles."
   default     = false
 }
 
@@ -836,7 +836,7 @@ variable "verification_targets" {
 # Vault KV secrets integration variables (vault_integration_enabled mechanism)
 variable "vault_policy" {
   type        = string
-  description = "Name of the Vault policy granted to all OpenStudio Server tasks when vault_integration_enabled is true."
+  description = "Fallback Vault policy attached to task tokens when vault_integration_enabled is true and vault_enabled is false."
   default     = "openstudio-server"
 }
 
@@ -879,7 +879,7 @@ variable "app_secret_key_base" {
 # Vault role-based authorization variables
 variable "vault_enabled" {
   type        = bool
-  description = "Enable Vault role-based authorization blocks in Nomad tasks."
+  description = "Enable explicit Nomad `vault { role = ... }` blocks for task token issuance. Usually set with vault_integration_enabled for full role-based + KV secret injection."
   default     = false
 }
 

@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Aligned Nomad ACL policy defaults with the pack default namespace by switching policy files from `openstudio` to `default`, and updated ACL docs/script guidance for custom namespace substitution (#309)
 - Added an explicit `nomad job validate examples/test-batch.nomad` gate to `pack-validation.yml` so smoke-test batch spec errors fail fast in validation CI instead of surfacing only in slower e2e runs (#305)
 - Added `main` branch triggers to `acl-policy-validation.yml` for both push and pull request events so ACL policy changes are validated before and after merge on release branch updates (#306)
+- Clarified Vault flag behavior in variables and docs: `vault_integration_enabled` now explicitly documents KV template secret injection, `vault_enabled` documents explicit role-based `vault` blocks, and docs now describe recommended dual-enable and fallback behavior when only one flag is set (#303)
 
 ## [0.2.67] - 2026-07-29
 

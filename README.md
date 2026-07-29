@@ -480,7 +480,12 @@ nomad-pack run -var "test_timeout_seconds=30" -var "test_web_port=8080" .
 
 ## Vault Integration
 
-When `vault_integration_enabled` is `true`, every task group receives a `vault` block and a `template` stanza that securely injects credentials via Nomad's `secrets/env` mechanism. This replaces the plaintext fallback variables with dynamic secrets fetched from HashiCorp Vault KV v2.
+`vault_integration_enabled` and `vault_enabled` control different Vault features:
+
+- `vault_integration_enabled`: renders KV v2 secret templates (`secrets/env`) for app credentials.
+- `vault_enabled`: renders explicit role-based `vault { role = "..." }` blocks.
+
+For most production deployments, enable **both** so secrets are injected and task token issuance is controlled with explicit roles.
 
 ### What gets injected
 
@@ -521,6 +526,8 @@ vault policy write openstudio-server openstudio-server.hcl
 ```bash
 nomad-pack run \
   -var "vault_integration_enabled=true" \
+  -var "vault_enabled=true" \
+  -var "vault_default_role=openstudio-server" \
   -var "vault_policy=openstudio-server" \
   .
 ```
@@ -529,14 +536,25 @@ nomad-pack run \
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `vault_integration_enabled` | `false` | Toggle Vault secrets integration on or off |
-| `vault_policy` | `"openstudio-server"` | Vault policy name attached to all task tokens |
+| `vault_integration_enabled` | `false` | Enable Vault KV v2 secret injection via `template` stanzas |
+| `vault_enabled` | `false` | Render role-based Nomad `vault` blocks (`role`, `namespace`, `change_mode`, etc.) |
+| `vault_default_role` | `""` | Default Vault role used when `vault_enabled=true` |
+| `vault_policy` | `"openstudio-server"` | Fallback policy used only when `vault_integration_enabled=true` and `vault_enabled=false` |
 | `vault_kv_mongodb_path` | `"secret/data/openstudio/mongodb"` | KV v2 path for MongoDB credentials |
 | `vault_kv_redis_path` | `"secret/data/openstudio/redis"` | KV v2 path for Redis credentials |
 | `vault_kv_app_path` | `"secret/data/openstudio/app"` | KV v2 path for application secrets |
 | `mongo_password` | `""` | Plaintext MongoDB password (used when `vault_integration_enabled=false`) |
 | `redis_password` | `""` | Plaintext Redis password (used when `vault_integration_enabled=false`) |
 | `app_secret_key_base` | `""` | Plaintext app secret key base (used when `vault_integration_enabled=false`) |
+
+### Flag interaction
+
+| `vault_integration_enabled` | `vault_enabled` | Behavior |
+|---|---|---|
+| `false` | `false` | Plaintext fallback variables are used (`mongo_password`, `redis_password`, `app_secret_key_base`) |
+| `true` | `false` | KV templates are rendered and a fallback `vault { policies = [vault_policy] }` block is rendered |
+| `false` | `true` | Role-based Vault blocks are rendered, but app credentials still come from plaintext fallback variables |
+| `true` | `true` | KV templates + explicit role-based Vault blocks (recommended for production) |
 
 When `vault_integration_enabled` is `false` (default), the `mongo_password`, `redis_password`, and `app_secret_key_base` variables are injected as plaintext environment variables. This preserves backwards-compatible behaviour for development deployments.
 
