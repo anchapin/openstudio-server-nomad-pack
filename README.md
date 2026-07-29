@@ -25,10 +25,24 @@ Quick start (assumes Nomad and Consul are already running):
    nomad-pack run .
    ```
 
-The pack currently renders separate jobs for:
-- `<job_name>-db` (MongoDB, registered in Consul as `openstudio-db`)
-- `<job_name>-rserve`
-- `<job_name>` (OpenStudio placeholder job with Redis scaffold)
+The pack renders a dedicated Nomad job for each service component:
+
+| Job | Template | Conditional |
+|---|---|---|
+| `<job_name>-web` | `web.nomad.tpl` | always |
+| `<job_name>-worker` | `worker.nomad.tpl` | always |
+| `<job_name>-db` | `db.nomad.tpl` | always (MongoDB, Consul: `openstudio-db`) |
+| `<job_name>-redis` | `redis.nomad.tpl` | always (Consul: `openstudio-redis`) |
+| `<job_name>-rserve` | `rserve.nomad.tpl` | always (Consul: `openstudio-rserve`) |
+| `<job_name>-system-hooks` | `system-hooks.nomad.tpl` | `enable_image_prepull = true` (default) |
+| `<job_name>-state-backup` | `state-backup.nomad.tpl` | `backup_enabled = true` (default) |
+| `<job_name>-state-restore` | `state-restore.nomad.tpl` | `restore_enabled = true` (default) |
+| `<job_name>-test` | `openstudio_test.nomad.tpl` | always |
+| `<job_name>-autoscaler` | `nomad-autoscaler.nomad.tpl` | `nomad_autoscaler_enabled = true` |
+| `<job_name>-batch-verify` | `batch-verification.nomad.tpl` | `enable_batch_verification = true` |
+| `<job_name>-traefik` | `traefik.nomad.tpl` | `traefik_enabled = true` |
+
+`templates/openstudio-server.nomad.tpl` is an architecture marker file that renders no job — it documents the split-job design.
 
 ## Deployment Checklist (Preflight)
 
@@ -87,10 +101,16 @@ vagrant destroy -f
 
 ## CI Validation
 
-GitHub Actions validates pull requests targeting `develop` or `main` with:
+GitHub Actions validation includes:
 
-- `nomad-pack fmt -check -recursive .`
-- `nomad-pack render .`
+| Workflow | Trigger | What it checks |
+|---|---|---|
+| `pack-validation.yml` | push to `develop`, PR to `main`, `workflow_dispatch` | fmt, render (default + batch-verification), validate, Vagrantfile syntax, script syntax, version-bump tests, `variables.md` diff, README → `docs/variables.md` reference, `compatibility.md` version gate, Nomad dev-agent plan for all example var-files, `packs/` registry sync, integration test script |
+| `acl-policy-validation.yml` | push/PR on `policies/**` | `nomad fmt -check policies/` |
+| `integration-test.yml` | PR to `develop` (path-filtered: `templates/**`, `variables.hcl`, `examples/e2e-test.hcl`) | template render + e2e stack test against live Consul/Nomad dev agents |
+| `release-version-bump.yml` | push to `main` | auto-bumps patch version in `metadata.hcl`, creates git tag and GitHub Release |
+
+The `pack-validation.yml` workflow runs on **push to `develop`** and on **pull requests targeting `main`** (not `develop`). The `integration-test.yml` workflow runs on **pull requests targeting `develop`** only when template or variable files change.
 
 ## Startup Dependency Checks
 
@@ -215,12 +235,19 @@ redis_affinities = [
 
 ## Included Job Templates
 
-- `templates/openstudio-server.nomad.tpl`: Architecture marker file (renders nothing). The monolithic job that previously duplicated all task groups has been removed; all service components are rendered exclusively by their dedicated per-component templates (fix #223).
-- `templates/redis.nomad.tpl`: Redis cache service (`openstudio-redis`) on port `6379`.
-- `templates/rserve.nomad.tpl`: Rserve service (`openstudio-rserve`) on port `6311`.
-- `templates/worker.nomad.tpl`: Resque worker task group with rolling deploys, Nomad Autoscaler scaling, and optional Vector sidecar.
-- `templates/nomad-autoscaler.nomad.tpl`: Optional Nomad Autoscaler daemon job stub (disabled by default).
-- `templates/batch-verification.nomad.tpl`: Optional batch connectivity verification job.
+- `templates/openstudio-server.nomad.tpl`: **Architecture marker file — renders no job.** Documents the split-job design; the previous monolithic job has been removed (fix #223).
+- `templates/web.nomad.tpl`: Web application service (`<job_name>-web`, Consul: `openstudio-web`) on `web_port`.
+- `templates/worker.nomad.tpl`: Resque worker job (`<job_name>-worker`) with rolling deploys, Nomad Autoscaler scaling, and optional Vector sidecar.
+- `templates/db.nomad.tpl`: MongoDB service (`<job_name>-db`, Consul: `openstudio-db`) on port `27017`.
+- `templates/redis.nomad.tpl`: Redis cache service (`<job_name>-redis`, Consul: `openstudio-redis`) on port `6379`.
+- `templates/rserve.nomad.tpl`: Rserve service (`<job_name>-rserve`, Consul: `openstudio-rserve`) on port `6311`.
+- `templates/system-hooks.nomad.tpl`: System job that pre-pulls all service images on every eligible node (`enable_image_prepull = true`, default).
+- `templates/state-backup.nomad.tpl`: Periodic batch job (`<job_name>-state-backup`) that runs `mongodump` + Redis backup on `backup_cron` schedule (`backup_enabled = true`, default).
+- `templates/state-restore.nomad.tpl`: On-demand parameterized batch job (`<job_name>-state-restore`) for manual restore dispatch (`restore_enabled = true`, default).
+- `templates/openstudio_test.nomad.tpl`: Parameterized batch test job (`<job_name>-test`) for post-deploy service validation (always rendered).
+- `templates/traefik.nomad.tpl`: Optional Traefik ingress job (`<job_name>-traefik`), enabled by `traefik_enabled = true`.
+- `templates/nomad-autoscaler.nomad.tpl`: Optional Nomad Autoscaler daemon job stub (`<job_name>-autoscaler`), enabled by `nomad_autoscaler_enabled = true`.
+- `templates/batch-verification.nomad.tpl`: Optional batch connectivity verification job (`<job_name>-batch-verify`), enabled by `enable_batch_verification = true`.
 
 ## Worker Scaling Configuration
 
@@ -299,17 +326,6 @@ When `enable_consul_connect = true`, the pack configures Consul Connect sidecar 
 - `openstudio-rserve` on port `6311`
 
 These sidecars enforce mutual TLS for service-to-service traffic through the Connect mesh.
-| `vault_enabled` | `bool` | Enable task-level Vault role authorization blocks | `false` |
-| `vault_default_role` | `string` | Default Vault role for all tasks when no task override is set | `""` |
-| `vault_db_role` | `string` | Vault role override for MongoDB task | `""` |
-| `vault_redis_role` | `string` | Vault role override for Redis task | `""` |
-| `vault_rserve_role` | `string` | Vault role override for Rserve task | `""` |
-| `vault_vector_role` | `string` | Vault role override for Vector sidecars | `""` |
-| `vault_policies` | `list(string)` | Additional policies to attach to Nomad-issued Vault tokens | `[]` |
-| `vault_namespace` | `string` | Vault Enterprise namespace for token requests | `""` |
-| `vault_change_mode` | `string` | Token/secret change handling mode (`restart`/`noop`/`signal`) | `"restart"` |
-| `vault_change_signal` | `string` | Signal used when `vault_change_mode = "signal"` | `"SIGHUP"` |
-| `vault_env` | `bool` | Expose Vault token in task environment | `true` |
 
 ## Nomad ACL Policies
 
@@ -408,7 +424,6 @@ Or with:
 ```bash
 ./scripts/run-batch-verification.sh
 ```
-| Helm Hooks | Nomad Lifecycle hooks / Periodic Jobs | Implemented (see above) |
 
 ## Running Tests
 
