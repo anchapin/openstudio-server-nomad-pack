@@ -130,11 +130,11 @@ stop_optional_job() {
   fi
 
   echo "--> Stopping optional job ${job_name} ..."
-  if ! nomad job stop -detach "${stop_args[@]}" -namespace "${NAMESPACE}" "${job_name}" >/dev/null; then
+  if ! nomad job stop "${stop_args[@]}" -namespace "${NAMESPACE}" "${job_name}"; then
     echo "ERROR: Failed to stop optional job '${job_name}'." >&2
     exit 1
   fi
-  echo "    ${job_name}: stop requested with -detach."
+  echo "    ${job_name}: all allocations dead."
 }
 
 echo "--> Stopping ${JOB_NAME}-worker ..."
