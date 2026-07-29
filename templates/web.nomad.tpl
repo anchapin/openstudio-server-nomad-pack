@@ -55,7 +55,7 @@ job "[[ var "job_name" . ]]-web" {
       }
     }
 
-    # Prestart: wait for MongoDB and Redis to be registered and healthy in Consul
+    # Prestart: wait for MongoDB, Redis, and Rserve to be registered and healthy in Consul
     task "wait-for-deps" {
       lifecycle {
         hook    = "prestart"
@@ -70,7 +70,7 @@ job "[[ var "job_name" . ]]-web" {
         command = "sh"
         args = [
           "-ec",
-          "until wget -qO- \"http://127.0.0.1:8500/v1/health/service/openstudio-db?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-db\"'; do sleep 2; done; until wget -qO- \"http://127.0.0.1:8500/v1/health/service/openstudio-redis?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-redis\"'; do sleep 2; done",
+          "until wget -qO- \"http://127.0.0.1:8500/v1/health/service/openstudio-db?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-db\"'; do sleep 2; done; until wget -qO- \"http://127.0.0.1:8500/v1/health/service/openstudio-redis?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-redis\"'; do sleep 2; done; until wget -qO- \"http://127.0.0.1:8500/v1/health/service/openstudio-rserve?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-rserve\"'; do sleep 2; done",
         ]
       }
 

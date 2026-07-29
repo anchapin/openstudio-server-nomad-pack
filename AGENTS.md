@@ -144,7 +144,7 @@ Consul service names registered by this pack:
 | `openstudio-rserve` | Rserve |
 | `openstudio-web` | Web (HTTP on `web_port`) |
 
-Web and worker tasks include a `wait-for-deps` **prestart lifecycle task** (`busybox:1.36`) that polls the Consul health API before the main container starts. The prestart task waits for `openstudio-db` and `openstudio-redis` to report healthy passing checks.
+Web and worker tasks include a `wait-for-deps` **prestart lifecycle task** (`busybox:1.36`) that polls the Consul health API before the main container starts. The web prestart task waits for `openstudio-db`, `openstudio-redis`, and `openstudio-rserve`; the worker prestart task waits for `openstudio-db` and `openstudio-redis`.
 
 Optional **Consul Connect** mTLS sidecar proxies for all services are enabled via `enable_consul_connect = true`. When enabled, each service task gets a `sidecar_service` proxy block.
 
