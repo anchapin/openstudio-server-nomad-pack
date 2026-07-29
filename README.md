@@ -197,6 +197,7 @@ The raw variable declarations and defaults live in [`variables.hcl`](./variables
 
 - Root pack metadata: [`metadata.hcl`](./metadata.hcl)
 - Pack-scoped metadata: [`packs/openstudio-server/metadata.hcl`](./packs/openstudio-server/metadata.hcl)
+- Keep both metadata files synchronized when pack metadata changes.
 
 > **Variable reference:** All configurable variables — types, defaults, and descriptions — are
 > documented in **[docs/variables.md](./docs/variables.md)** (auto-generated from `variables.hcl`
