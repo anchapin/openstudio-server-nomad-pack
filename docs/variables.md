@@ -117,7 +117,7 @@
 | `rserve_constraints` | `any` | `[]` | Placement constraints for the rserve group. |
 | `rserve_affinities` | `any` | `[]` | Placement affinities for the rserve group. |
 | `rserve_spreads` | `any` | `[]` | Spread rules for the rserve group. |
-| `backup_enabled` | `bool` | `true` | Enable the periodic MongoDB and Redis backup batch job. |
+| `backup_enabled` | `bool` | `false` | Enable the periodic MongoDB and Redis backup batch job. |
 | `backup_cron` | `string` | `"0 2 * * * *"` | Cron expression for the periodic backup schedule. The value is used in a crons list in the periodic stanza. |
 | `backup_prohibit_overlap` | `bool` | `true` | Prevent overlapping backup runs. |
 | `backup_volume_type` | `string` | `"host_volume"` | Storage backend for the backup and restore state volume. Use \"host_volume\" (default) for a Nomad host volume or \"csi\" for a CSI-managed volume. |
@@ -128,7 +128,7 @@
 | `mongodb_backup_uri` | `string` | `"mongodb://openstudio-db.service.consul:27017"` | MongoDB URI used by backup and restore jobs. |
 | `redis_backup_host` | `string` | `"openstudio-redis.service.consul"` | Redis host used by backup and restore jobs. |
 | `redis_backup_port` | `number` | `6379` | Redis port used by backup and restore jobs. |
-| `restore_enabled` | `bool` | `true` | Enable the on-demand restore batch job definition. |
+| `restore_enabled` | `bool` | `false` | Enable the on-demand restore batch job definition. |
 | `docker_user` | `string` | `"1000:1000"` | UID:GID to run containers as (non-root). Applies to web, worker, and rserve tasks. |
 | `db_docker_user` | `string` | `"999:999"` | User to run the MongoDB container as. MongoDB official images expect UID/GID 999. |
 | `redis_docker_user` | `string` | `"999:999"` | User to run the Redis container as. Redis official images expect UID/GID 999. |

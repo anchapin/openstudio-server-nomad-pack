@@ -94,8 +94,8 @@ Each Nomad job is a separate `.nomad.tpl` file under `templates/`. The pack rend
 | `system-hooks.nomad.tpl` | `<job_name>-system-hooks` (image pre-pull) | `enable_image_prepull = true` (default) |
 | `nomad-autoscaler.nomad.tpl` | autoscaler daemon job | `nomad_autoscaler_enabled = true` |
 | `batch-verification.nomad.tpl` | `<job_name>-batch-verify` | `enable_batch_verification = true` |
-| `state-backup.nomad.tpl` | `<job_name>-state-backup` (periodic batch) | `backup_enabled = true` (default) |
-| `state-restore.nomad.tpl` | `<job_name>-state-restore` (on-demand batch) | `restore_enabled = true` (default) |
+| `state-backup.nomad.tpl` | `<job_name>-state-backup` (periodic batch) | `backup_enabled = true` |
+| `state-restore.nomad.tpl` | `<job_name>-state-restore` (on-demand batch) | `restore_enabled = true` |
 | `openstudio_test.nomad.tpl` | `<job_name>-test` (parameterized batch) | always |
 
 `templates/_helpers.tpl` defines reusable named templates called throughout all job templates:

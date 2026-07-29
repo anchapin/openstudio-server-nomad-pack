@@ -77,8 +77,8 @@ worker ──► mongodb
 | `rserve.nomad.tpl` | `<job_name>-rserve` | always |
 | `openstudio_test.nomad.tpl` | `<job_name>-test` (parameterized batch) | always |
 | `system-hooks.nomad.tpl` | `<job_name>-system-hooks` (system job, image pre-pull) | `enable_image_prepull = true` (default) |
-| `state-backup.nomad.tpl` | `<job_name>-state-backup` (periodic batch) | `backup_enabled = true` (default) |
-| `state-restore.nomad.tpl` | `<job_name>-state-restore` (on-demand parameterized batch) | `restore_enabled = true` (default) |
+| `state-backup.nomad.tpl` | `<job_name>-state-backup` (periodic batch) | `backup_enabled = true` |
+| `state-restore.nomad.tpl` | `<job_name>-state-restore` (on-demand parameterized batch) | `restore_enabled = true` |
 | `batch-verification.nomad.tpl` | `<job_name>-batch-verify` | `enable_batch_verification = true` |
 | `nomad-autoscaler.nomad.tpl` | autoscaler daemon job | `nomad_autoscaler_enabled = true` |
 | `traefik.nomad.tpl` | Traefik ingress job | `traefik_enabled = true` |
