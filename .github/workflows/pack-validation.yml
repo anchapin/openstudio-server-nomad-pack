@@ -179,6 +179,11 @@ jobs:
           set -e
           [ "$code" -le 1 ] || exit "$code"
 
+      - name: Validate test-batch job spec
+        env:
+          NOMAD_ADDR: http://127.0.0.1:4646
+        run: nomad job validate examples/test-batch.nomad
+
       - name: Check packs/ registry scaffold is in sync with root
         run: |
           FAIL=0

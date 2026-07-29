@@ -154,7 +154,7 @@ Both can be active simultaneously. When neither is enabled, credentials are supp
 
 | Workflow | Trigger | What it checks |
 |---|---|---|
-| `pack-validation.yml` | push/PR to `develop` or `main` | fmt, render, validate, script syntax, `variables.md` diff, `compatibility.md` version gate, plan for all example var-files, registry sync |
+| `pack-validation.yml` | push/PR to `develop` or `main` | fmt, render, validate, `examples/test-batch.nomad` job spec validation, script syntax, `variables.md` diff, `compatibility.md` version gate, plan for all example var-files, registry sync |
 | `acl-policy-validation.yml` | push/PR on `policies/**` | `nomad fmt -check policies/` |
 | `integration-test.yml` | PR to `develop` (path-filtered) | template render + e2e stack test |
 | `release.yml` | push to `main` | creates GitHub Release from `metadata.hcl` version |
