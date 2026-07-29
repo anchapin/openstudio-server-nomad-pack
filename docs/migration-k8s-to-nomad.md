@@ -104,8 +104,8 @@ Nomad Pack variable names (`variables.hcl`).
 | Helm `values.yaml` key                        | Nomad Pack variable              | Notes |
 |-----------------------------------------------|----------------------------------|-------|
 | `replicaCount` (workers)                      | `worker_count`                   | Static count; for autoscaling use `worker_autoscaling_enabled` |
-| `autoscaling.minReplicas`                      | `worker_autoscaling_min`         | |
-| `autoscaling.maxReplicas`                      | `worker_autoscaling_max`         | |
+| `autoscaling.minReplicas`                      | `worker_min_replicas`            | Effective only when `worker_autoscaling_enabled = true` |
+| `autoscaling.maxReplicas`                      | `worker_max_replicas`            | Effective only when `worker_autoscaling_enabled = true` |
 | `image.repository` + `image.tag` (web)        | `web_image`                      | Full `repo:tag` string |
 | `image.repository` + `image.tag` (worker)     | `worker_image`                   | Full `repo:tag` string |
 | `mongodb.image`                                | `db_image`                       | |
