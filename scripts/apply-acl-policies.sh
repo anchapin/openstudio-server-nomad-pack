@@ -39,16 +39,30 @@ POLICIES_DIR="$(cd "${SCRIPT_DIR}/../policies" && pwd)"
 
 usage() {
   grep '^#' "$0" | grep -v '^#!/' | sed 's/^# \{0,1\}//'
-  exit 0
+  exit "${1:-0}"
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    -n|--namespace) NAMESPACE="$2"; shift 2 ;;
-    -r|--roles)     ROLES="$2";     shift 2 ;;
+    -n|--namespace)
+      if [[ -z "${2:-}" ]]; then
+        echo "Error: --namespace requires a value" >&2
+        usage 1
+      fi
+      NAMESPACE="$2"
+      shift 2
+      ;;
+    -r|--roles)
+      if [[ -z "${2:-}" ]]; then
+        echo "Error: --roles requires a value" >&2
+        usage 1
+      fi
+      ROLES="$2"
+      shift 2
+      ;;
     --dry-run)      DRY_RUN=true;   shift   ;;
     -h|--help)      usage ;;
-    *) echo "Unknown option: $1" >&2; exit 1 ;;
+    *) echo "Error: Unknown option: $1" >&2; usage 1 ;;
   esac
 done
 
