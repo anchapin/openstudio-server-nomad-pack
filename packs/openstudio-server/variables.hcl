@@ -420,6 +420,19 @@ variable "web_background_max_replicas" {
   description = "Maximum number of web-background replicas when autoscaling is enabled."
   default     = 5
 }
+
+variable "web_background_autoscaling_cpu_enabled" {
+  type        = bool
+  description = "Enable the built-in Nomad APM CPU autoscaling check for the web-background task group (avg_cpu target-value strategy). Only applies when web_background_autoscaling_enabled is true."
+  default     = false
+}
+
+variable "web_background_cpu_target_utilization" {
+  type        = number
+  description = "Target CPU utilization percentage for the web-background nomad-apm avg_cpu scaling check."
+  default     = 50
+}
+
 variable "db_image" {
   type        = string
   description = "The MongoDB database image name and tag. BREAKING UPGRADE NOTE: persisted data volumes created on mongo:4.2 must be migrated in sequence 4.2 -> 4.4 -> 5.0 -> 6.0.7; do not skip major versions. See docs/upgrading.md for the full procedure."
