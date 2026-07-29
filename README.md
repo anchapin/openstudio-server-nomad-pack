@@ -347,11 +347,11 @@ For full instructions — including token creation, namespace scoping, and token
 
 | Kubernetes / Helm | Nomad Equivalent | Status |
 | --- | --- | --- |
-| Helm chart | Nomad Pack | Scaffolded |
-| `values.yaml` | `variables.hcl` | Scaffolded |
-| Deployment/Pod | Job & Task Groups | Scaffolded (Web, DB, Redis, Worker, Rserve) |
-| Container | Task (`docker` driver) | Scaffolded |
-| Service | Consul `service` registration | Scaffolded |
+| Helm chart | Nomad Pack | ✅ Implemented |
+| `values.yaml` | `variables.hcl` | ✅ Implemented |
+| Deployment/Pod | Job & Task Groups | ✅ Implemented (Web, DB, Redis, Worker, Rserve) |
+| Container | Task (`docker` driver) | ✅ Implemented |
+| Service | Consul `service` registration | ✅ Implemented |
 | HPA / KEDA ScaledObject | Nomad Autoscaler | Implemented (Worker, Prometheus target-value checks) |
 | StorageClass / PVC | Nomad CSI volumes / `host_volume` | Implemented (DB/Redis) |
 | ServiceAccount / RBAC | Nomad ACLs / Vault Roles | Implemented |
