@@ -4,7 +4,7 @@ A [Nomad Pack](https://github.com/hashicorp/nomad-pack) for deploying [OpenStudi
 
 ## Prerequisites
 
-- **Nomad Cluster**: A running Nomad cluster (v1.0+) with the Docker task driver enabled.
+- **Nomad Cluster**: A running Nomad cluster (v1.4.0+) with the Docker task driver enabled.
 - **Consul**: A Consul cluster integrated with Nomad for service discovery and DNS resolution.
 - **Vault** (Optional): A Vault cluster integrated with Nomad for secrets management.
 - **Nomad Pack**: The `nomad-pack` CLI installed locally.
@@ -40,7 +40,7 @@ The pack renders a dedicated Nomad job for each service component:
 | `<job_name>-test` | `openstudio_test.nomad.tpl` | always |
 | `<job_name>-autoscaler` | `nomad-autoscaler.nomad.tpl` | `nomad_autoscaler_enabled = true` |
 | `<job_name>-batch-verify` | `batch-verification.nomad.tpl` | `enable_batch_verification = true` |
-| `<job_name>-traefik` | `traefik.nomad.tpl` | `traefik_enabled = true` |
+| `<job_name>-traefik` | `traefik.nomad.tpl` | `deploy_traefik = true` |
 
 `templates/openstudio-server.nomad.tpl` is an architecture marker file that renders no job — it documents the split-job design.
 
@@ -105,12 +105,12 @@ GitHub Actions validation includes:
 
 | Workflow | Trigger | What it checks |
 |---|---|---|
-| `pack-validation.yml` | push to `develop`, PR to `main`, `workflow_dispatch` | fmt, render (default + batch-verification), validate, Vagrantfile syntax, script syntax, version-bump tests, `variables.md` diff, README → `docs/variables.md` reference, `compatibility.md` version gate, Nomad dev-agent plan for all example var-files, `packs/` registry sync, integration test script |
+| `pack-validation.yml` | push to `develop`, PR to `develop` or `main`, `workflow_dispatch` | fmt, render (default + batch-verification), validate, Vagrantfile syntax, script syntax, version-bump tests, `variables.md` diff, README → `docs/variables.md` reference, `compatibility.md` version gate, Nomad dev-agent plan for all example var-files, `packs/` registry sync, integration test script |
 | `acl-policy-validation.yml` | push/PR on `policies/**` | `nomad fmt -check policies/` |
-| `integration-test.yml` | PR to `develop` (path-filtered: `templates/**`, `variables.hcl`, `examples/e2e-test.hcl`) | template render + e2e stack test against live Consul/Nomad dev agents |
+| `integration-test.yml` | PR to `develop` (path-filtered: `templates/**`, `variables.hcl`, `packs/**`, `scripts/**`, `examples/**`, `metadata.hcl`) | template render + e2e stack test against live Consul/Nomad dev agents |
 | `release-version-bump.yml` | push to `main` | auto-bumps patch version in `metadata.hcl`, creates git tag and GitHub Release |
 
-The `pack-validation.yml` workflow runs on **push to `develop`** and on **pull requests targeting `main`** (not `develop`). The `integration-test.yml` workflow runs on **pull requests targeting `develop`** only when template or variable files change.
+The `pack-validation.yml` workflow runs on **push to `develop`** and on **pull requests targeting `develop` or `main`**. The `integration-test.yml` workflow runs on **pull requests targeting `develop`** only when template or variable files change.
 
 ## Startup Dependency Checks
 
@@ -245,7 +245,7 @@ redis_affinities = [
 - `templates/state-backup.nomad.tpl`: Periodic batch job (`<job_name>-state-backup`) that runs `mongodump` + Redis backup on `backup_cron` schedule (`backup_enabled = true`, default).
 - `templates/state-restore.nomad.tpl`: On-demand parameterized batch job (`<job_name>-state-restore`) for manual restore dispatch (`restore_enabled = true`, default).
 - `templates/openstudio_test.nomad.tpl`: Parameterized batch test job (`<job_name>-test`) for post-deploy service validation (always rendered).
-- `templates/traefik.nomad.tpl`: Optional Traefik ingress job (`<job_name>-traefik`), enabled by `traefik_enabled = true`.
+- `templates/traefik.nomad.tpl`: Optional Traefik ingress job (`<job_name>-traefik`), enabled by `deploy_traefik = true`.
 - `templates/nomad-autoscaler.nomad.tpl`: Optional Nomad Autoscaler daemon job stub (`<job_name>-autoscaler`), enabled by `nomad_autoscaler_enabled = true`.
 - `templates/batch-verification.nomad.tpl`: Optional batch connectivity verification job (`<job_name>-batch-verify`), enabled by `enable_batch_verification = true`.
 

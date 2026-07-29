@@ -10,17 +10,17 @@
 
 # ---------- Identity ----------
 job_name    = "openstudio-server"
-app_version = "3.7.0"
+app_version = "3.11.0"
 datacenters = ["dc1"]
 
 # ---------- Private registry images ----------
 # Replace "registry.internal" with your organisation's registry hostname/path.
-web_image            = "registry.internal/openstudio-server:3.7.0"
-web_background_image = "registry.internal/openstudio-server:3.7.0"
-worker_image         = "registry.internal/openstudio-server:3.7.0"
+web_image            = "registry.internal/openstudio-server:3.11.0"
+web_background_image = "registry.internal/openstudio-server:3.11.0"
+worker_image         = "registry.internal/openstudio-server:3.11.0"
 db_image             = "registry.internal/mongo:6.0.7"
 redis_image          = "registry.internal/redis:6.2-alpine"
-rserve_image         = "registry.internal/openstudio-rserve:3.7.0"
+rserve_image         = "registry.internal/openstudio-rserve:3.11.0"
 vector_image         = "registry.internal/vector:0.30.0-alpine"
 poststop_cleanup_image = "registry.internal/alpine:3.20"
 verification_image   = "registry.internal/busybox:1.36"

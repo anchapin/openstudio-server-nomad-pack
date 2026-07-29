@@ -32,16 +32,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to avoid TCP-context mismatches; add `nomad alloc status -verbose` for failed db/redis
   allocations in diagnostics step. (#227)
 
-### Fixed
-
-- Added `develop` to `pull_request.branches` in `pack-validation.yml` so pack validation runs on PRs targeting `develop`, not just `main`. PRs to `develop` can no longer merge without passing pack validation. (#245)
-- Applied `docker_user` (`user` field) non-root hardening to `web`, `web-background`, and `worker` main task `config` blocks, which were missing it; also added `docker_user` to `db`, `redis`, and `rserve` config blocks for complete enforcement across all service tasks. Added a CI step (`Check docker_user non-root hardening is applied to all main service tasks`) to `pack-validation.yml` to prevent future drift (#246).
-- Made `integration-test.yml` fail in e2e stub-image mode when required `openstudio-*` Consul services are not registered before a configurable timeout/retry window, while keeping `nomad` and `nomad-client` checks as hard assertions. (#239)
-- Removed all duplicated task groups from `openstudio-server.nomad.tpl` to enforce split-job architecture; eliminates duplicate Consul service registrations (`openstudio-web`, `openstudio-db`, `openstudio-redis`) and double resource consumption when deployed alongside dedicated per-component templates. (#223)
-- Fixed `redis.nomad.tpl`: the main Redis task `config` block was missing the
-  `image = "[[ var "redis_image" . ]]"` field, causing every Redis allocation to fail
-  immediately with "image is empty" at runtime. (#227)
-
 ### Changed
 
 - **BREAKING** Bumped `db_image` default from `mongo:4.2` to `mongo:6.0.7` to align with the
@@ -55,20 +45,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Added `develop` to `pull_request.branches` in `pack-validation.yml` so pack validation runs on PRs targeting `develop`, not just `main`. PRs to `develop` can no longer merge without passing pack validation. (#245)
+- Applied `docker_user` (`user` field) non-root hardening to `web`, `web-background`, and `worker` main task `config` blocks, which were missing it; also added `docker_user` to `db`, `redis`, and `rserve` config blocks for complete enforcement across all service tasks. Added a CI step (`Check docker_user non-root hardening is applied to all main service tasks`) to `pack-validation.yml` to prevent future drift (#246).
+- Made `integration-test.yml` fail in e2e stub-image mode when required `openstudio-*` Consul services are not registered before a configurable timeout/retry window, while keeping `nomad` and `nomad-client` checks as hard assertions. (#239)
+- Removed all duplicated task groups from `openstudio-server.nomad.tpl` to enforce split-job architecture; eliminates duplicate Consul service registrations (`openstudio-web`, `openstudio-db`, `openstudio-redis`) and double resource consumption when deployed alongside dedicated per-component templates. (#223)
+- Fixed `redis.nomad.tpl`: the main Redis task `config` block was missing the
+  `image = "[[ var "redis_image" . ]]"` field, causing every Redis allocation to fail
+  immediately with "image is empty" at runtime. (#227)
 - Strengthened the `packs/` drift CI gate to compare `variables.hcl` as a full file (not just variable names), so defaults and descriptions cannot silently diverge between root and `packs/openstudio-server/`. (#216)
 - Made backup/restore state volume backend configurable via `backup_volume_type` and removed hardcoded host volume type in backup/restore templates. (#214)
-- Replaced phantom autoscaling variable names in README variable reference table
+- Replaced phantom autoscaling variable names in README variable reference table (`worker_autoscaling_min`, `worker_autoscaling_max`, `worker_autoscaling_cooldown`) with the correct names (`worker_min_replicas`, `worker_max_replicas`, `autoscaler_cooldown`) that match `variables.hcl` (resolves #123).
 - Synced `packs/openstudio-server/variables.hcl`, `metadata.hcl`, and all templates under `packs/openstudio-server/templates/` to match root pack (was 20 patch versions and several variables behind). Added CI drift gate in `pack-validation.yml` that fails if `packs/` diverges from root. (#189)
-  (`worker_autoscaling_min`, `worker_autoscaling_max`, `worker_autoscaling_cooldown`) with the
-  correct names (`worker_min_replicas`, `worker_max_replicas`, `autoscaler_cooldown`) that match
-  `variables.hcl` (resolves #123).
 - Updated stale defaults in README: `worker_autoscaling_enabled` `true` → `false`,
   `worker_max_replicas` `3` → `10`, `autoscaler_cooldown` `"2m"` → `"60m"`,
   `autoscaler_prometheus_address` `""` → `"http://prometheus:9090"` (resolves #123).
 - Removed `develop` and `master` from `release-version-bump.yml` `on.push.branches` so automated patch releases only fire on merges to `main`, preventing spurious public releases on every `develop` push (#192).
 - Updated `CONTRIBUTING.md` release process section to document the `develop → main` promotion flow (#192).
 
-## [0.1.0] - Unreleased
+## [0.1.0] - 2026-07-28
 
 ### Added
 
