@@ -178,7 +178,18 @@ jobs:
       - name: Wait for Nomad web allocations
         env:
           NOMAD_ADDR: http://127.0.0.1:4646
-        run: sleep 60
+        run: |
+          TIMEOUT=120
+          DEADLINE=$(( $(date +%s) + TIMEOUT ))
+          echo "Waiting for openstudio-server-e2e-web allocations to reach running state (timeout ${TIMEOUT}s)..."
+          until nomad job allocs openstudio-server-e2e-web 2>/dev/null | grep -q "running"; do
+            if [ "$(date +%s)" -ge "${DEADLINE}" ]; then
+              echo "ERROR: timed out waiting for openstudio-server-e2e-web allocations after ${TIMEOUT}s"
+              exit 1
+            fi
+            sleep 5
+          done
+          echo "openstudio-server-e2e-web has running allocations"
 
       - name: Dump Nomad and Docker diagnostics
         if: always()
