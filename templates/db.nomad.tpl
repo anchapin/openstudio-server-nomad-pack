@@ -40,6 +40,7 @@ job "[[ var "job_name" . ]]-db" {
 
     task "mongodb" {
       driver = "docker"
+      user   = "[[ var "docker_user" . ]]"
 
       [[ if var "vault_enabled" . ]]
       [[ if var "vault_db_role" . ]]
@@ -86,7 +87,6 @@ job "[[ var "job_name" . ]]-db" {
       config {
         image           = "[[ var "db_image" . ]]"
         ports           = ["db"]
-        user            = "[[ var "docker_user" . ]]"
         readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
         cap_drop        = [[ var "docker_cap_drop" . | toJson ]]
         logging {

@@ -23,6 +23,7 @@ job "[[ var "job_name" . ]]-rserve" {
 
     task "rserve" {
       driver = "docker"
+      user   = "[[ var "docker_user" . ]]"
 
       [[ if var "vault_enabled" . ]]
       [[ if var "vault_rserve_role" . ]]
@@ -61,7 +62,6 @@ job "[[ var "job_name" . ]]-rserve" {
       config {
         image           = "[[ var "rserve_image" . ]]"
         ports           = ["rserve"]
-        user            = "[[ var "docker_user" . ]]"
         [[ if ne (var "rserve_command" .) "" ]]
         command = "[[ var "rserve_command" . ]]"
         [[ end ]]
