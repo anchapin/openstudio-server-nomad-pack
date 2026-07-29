@@ -135,8 +135,8 @@ variable "web_memory" {
 
 variable "web_memory_max" {
   type        = number
-  description = "Memory hard limit (MB) for the OpenStudio Web task (Nomad memory_max)."
-  default     = 2048
+  description = "Memory hard limit (MB) for the OpenStudio Web task (Nomad memory_max). Must be greater than web_memory for burst capacity."
+  default     = 4096
 }
 
 variable "web_count" {
