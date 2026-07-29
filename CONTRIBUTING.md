@@ -129,7 +129,14 @@ To prepare a release:
    - **`release.yml`** picks up the new tag and publishes the GitHub Release.
    - _Triage:_ If Step 1 fails, check write permissions to `main` and that `scripts/bump_metadata_version.sh` runs cleanly. If Step 2 is missing, confirm the `v*` tag exists in the repo and that the workflow has `contents: write` permission.
 
-> **Note:** `scripts/bump_metadata_version.sh <new-version>` can still be used to manually set a specific version before opening the `develop → main` PR if a non-patch increment (minor/major) is needed.
+> **Note:** For a non-patch increment (minor/major), manually run `scripts/bump_metadata_version.sh` with the appropriate bump type or explicit version before opening the `develop → main` PR:
+> ```bash
+> # Increment minor version (e.g. 0.2.0 → 0.3.0)
+> scripts/bump_metadata_version.sh metadata.hcl minor
+>
+> # Set an explicit target version
+> scripts/bump_metadata_version.sh metadata.hcl 0.3.0
+> ```
 
 ---
 
