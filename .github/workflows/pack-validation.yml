@@ -109,7 +109,7 @@ jobs:
           NOMAD_ADDR: http://127.0.0.1:4646
         run: |
           set +e
-          nomad-pack plan . --name openstudio-server-minimal-dev -var-file examples/minimal-dev.hcl
+          nomad-pack plan -var-file examples/minimal-dev.hcl . --name openstudio-server-minimal-dev
           code=$?
           set -e
           [ "$code" -le 1 ] || exit "$code"
@@ -119,7 +119,7 @@ jobs:
           NOMAD_ADDR: http://127.0.0.1:4646
         run: |
           set +e
-          nomad-pack plan . --name openstudio-server-production-ha -var-file examples/production-ha.hcl
+          nomad-pack plan -var-file examples/production-ha.hcl . --name openstudio-server-production-ha
           code=$?
           set -e
           [ "$code" -le 1 ] || exit "$code"
@@ -129,7 +129,7 @@ jobs:
           NOMAD_ADDR: http://127.0.0.1:4646
         run: |
           set +e
-          nomad-pack plan . --name openstudio-server-airgapped -var-file examples/airgapped.hcl
+          nomad-pack plan -var-file examples/airgapped.hcl . --name openstudio-server-airgapped
           code=$?
           set -e
           [ "$code" -le 1 ] || exit "$code"
@@ -139,7 +139,7 @@ jobs:
           NOMAD_ADDR: http://127.0.0.1:4646
         run: |
           set +e
-          nomad-pack plan . --name openstudio-server-batch-verification -var "enable_batch_verification=true"
+          nomad-pack plan -var "enable_batch_verification=true" . --name openstudio-server-batch-verification
           code=$?
           set -e
           [ "$code" -le 1 ] || exit "$code"
