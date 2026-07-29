@@ -118,6 +118,6 @@ vault_change_mode         = "restart"
 # ---------- Backups ----------
 backup_enabled          = true
 backup_cron             = "0 0 2 * * *"
-backup_nfs_host_volume  = "openstudio-backups"
+backup_volume_source    = "openstudio-backups"
 backup_retention_days   = 30
 restore_enabled         = true

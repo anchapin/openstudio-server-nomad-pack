@@ -20,7 +20,7 @@ job "[[ var "job_name" . ]]-state-restore" {
       [[ else ]]
       type      = "host"
       [[ end ]]
-      source    = "[[ var "backup_nfs_host_volume" . ]]"
+      source    = "[[ var "backup_volume_source" . ]]"
       read_only = true
     }
 

@@ -704,7 +704,7 @@ variable "backup_volume_type" {
   default     = "host_volume"
 }
 
-variable "backup_nfs_host_volume" {
+variable "backup_volume_source" {
   type        = string
   description = "Nomad volume source for state backups. For host_volume this is the host volume name; for csi this is the CSI volume ID."
   default     = "openstudio-backups"
@@ -712,7 +712,7 @@ variable "backup_nfs_host_volume" {
 
 variable "backup_mount_path" {
   type        = string
-  description = "Path inside backup tasks where the NFS host volume is mounted."
+  description = "Path inside backup tasks where the backup state volume is mounted."
   default     = "/backups"
 }
 
