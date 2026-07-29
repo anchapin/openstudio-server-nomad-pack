@@ -119,7 +119,14 @@ jobs:
           NOMAD_ADDR: http://127.0.0.1:4646
         run: |
           set +e
-          nomad-pack plan --var-file examples/production-ha.hcl --var "region=global" . --name openstudio-server-production-ha
+          nomad-pack plan \
+            --var-file examples/production-ha.hcl \
+            --var "region=global" \
+            --var "vault_enabled=false" \
+            --var "vault_integration_enabled=false" \
+            --var "enable_consul_connect=false" \
+            --var "worker_update_progress_deadline=2h" \
+            . --name openstudio-server-production-ha
           code=$?
           set -e
           [ "$code" -le 1 ] || exit "$code"
