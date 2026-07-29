@@ -171,6 +171,11 @@ jobs:
           fi
           echo "All packs/ drift checks passed."
 
+      - name: Validate packs/openstudio-server registry pack
+        env:
+          NOMAD_ADDR: http://127.0.0.1:4646
+        run: nomad-pack validate ./packs/openstudio-server
+
       - name: Run integration validation
         env:
           NOMAD_ADDR: http://127.0.0.1:4646
