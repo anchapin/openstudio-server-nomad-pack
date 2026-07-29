@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Broadened `integration-test.yml` path filter to include `packs/**`, `scripts/**`, `examples/**`, and `metadata.hcl` so pack-impacting changes always trigger integration validation (#240)
 - Added explicit `nomad-pack validate ./packs/openstudio-server` step to pack-validation.yml CI workflow (#228)
 - Added a dedicated MongoDB upgrade migration guide with step-by-step instructions for persisted
   data upgrades from `mongo:4.2` to `mongo:6.0.7`, including backup, rollback, and verification

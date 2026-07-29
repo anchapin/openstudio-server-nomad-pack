@@ -3,10 +3,22 @@ name: Integration Test
 on:
   pull_request:
     branches: [ develop ]
+    # Path coverage policy: run integration validation whenever any pack-impacting
+    # path changes. This includes:
+    #   - templates/**         : Nomad job template files
+    #   - variables.hcl        : all user-facing variable definitions
+    #   - packs/**             : registry-aligned pack mirror (must stay in sync with root)
+    #   - scripts/**           : validation helpers used by CI and operators
+    #   - examples/**          : var-files used by render/plan/e2e (covers e2e-test.hcl)
+    #   - metadata.hcl         : pack version and app_version metadata
+    #   - workflow file itself  : changes to this CI definition
     paths:
       - 'templates/**'
       - 'variables.hcl'
-      - 'examples/e2e-test.hcl'
+      - 'packs/**'
+      - 'scripts/**'
+      - 'examples/**'
+      - 'metadata.hcl'
       - '.github/workflows/integration-test.yml'
 
 env:
