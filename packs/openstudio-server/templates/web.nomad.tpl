@@ -82,6 +82,7 @@ job "[[ var "job_name" . ]]-web" {
 
     task "web" {
       driver = "docker"
+      user   = "[[ var "docker_user" . ]]"
 
       [[ if var "nfs_shared_volume_enabled" . ]]
       volume_mount {
@@ -133,8 +134,10 @@ EOT
       [[ end ]]
 
       config {
-        image = "[[ var "web_image" . ]]"
-        ports = ["http"]
+        image           = "[[ var "web_image" . ]]"
+        ports           = ["http"]
+        readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
+        cap_drop        = [[ var "docker_cap_drop" . | toJson ]]
         [[ if ne (var "web_command" .) "" ]]
         command = "[[ var "web_command" . ]]"
         [[ end ]]
@@ -290,6 +293,7 @@ EOH
 
     task "web-background" {
       driver = "docker"
+      user   = "[[ var "docker_user" . ]]"
 
       [[ if var "nfs_shared_volume_enabled" . ]]
       volume_mount {
@@ -341,7 +345,9 @@ EOT
       [[ end ]]
 
       config {
-        image = "[[ var "web_background_image" . ]]"
+        image           = "[[ var "web_background_image" . ]]"
+        readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
+        cap_drop        = [[ var "docker_cap_drop" . | toJson ]]
         [[ if ne (var "web_background_command" .) "" ]]
         command = "[[ var "web_background_command" . ]]"
         [[ end ]]

@@ -80,6 +80,25 @@ jobs:
           fi
           echo "OK: Pack version ${PACK_VERSION} found in docs/compatibility.md."
 
+      - name: Check docker_user non-root hardening is applied to all main service tasks
+        run: |
+          FAIL=0
+          # All main service tasks must include docker_user at the task level.
+          # Lifecycle tasks (wait-for-deps, vector, cleanup-poststop) are intentionally excluded.
+          for tpl in templates/web.nomad.tpl templates/worker.nomad.tpl templates/db.nomad.tpl templates/redis.nomad.tpl templates/rserve.nomad.tpl; do
+            if ! grep -q 'var "docker_user"' "${tpl}"; then
+              echo "ERROR: ${tpl} is missing docker_user non-root hardening"
+              FAIL=1
+            else
+              echo "OK: ${tpl} contains docker_user"
+            fi
+          done
+          if [ "${FAIL}" -ne 0 ]; then
+            echo ""
+            echo "Add 'user = \"[[ var \"docker_user\" . ]]\"' at the task level (not inside the config block) for each main service task."
+            exit 1
+          fi
+
       - name: Start Nomad dev agent
         env:
           NOMAD_ADDR: http://127.0.0.1:4646

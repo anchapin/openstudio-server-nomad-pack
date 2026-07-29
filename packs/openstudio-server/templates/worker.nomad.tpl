@@ -86,6 +86,7 @@ job "[[ var "job_name" . ]]-worker" {
 
     task "worker" {
       driver = "docker"
+      user   = "[[ var "docker_user" . ]]"
 
       [[ if var "nfs_shared_volume_enabled" . ]]
       volume_mount {
@@ -129,8 +130,10 @@ EOT
       [[ end ]]
 
       config {
-        image   = "[[ var "worker_image" . ]]"
-        command = "[[ var "worker_command" . ]]"
+        image           = "[[ var "worker_image" . ]]"
+        command         = "[[ var "worker_command" . ]]"
+        readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
+        cap_drop        = [[ var "docker_cap_drop" . | toJson ]]
         [[ if var "worker_args" . ]]
         args = [[ var "worker_args" . | toJson ]]
         [[ end ]]

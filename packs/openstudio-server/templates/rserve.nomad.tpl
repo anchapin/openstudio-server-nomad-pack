@@ -23,6 +23,7 @@ job "[[ var "job_name" . ]]-rserve" {
 
     task "rserve" {
       driver = "docker"
+      user   = "[[ var "docker_user" . ]]"
 
       [[ if var "vault_enabled" . ]]
       [[ if var "vault_rserve_role" . ]]
@@ -59,8 +60,8 @@ job "[[ var "job_name" . ]]-rserve" {
       [[ end ]]
 
       config {
-        image = "[[ var "rserve_image" . ]]"
-        ports = ["rserve"]
+        image           = "[[ var "rserve_image" . ]]"
+        ports           = ["rserve"]
         [[ if ne (var "rserve_command" .) "" ]]
         command = "[[ var "rserve_command" . ]]"
         [[ end ]]
@@ -68,7 +69,7 @@ job "[[ var "job_name" . ]]-rserve" {
         args = [[ var "rserve_args" . | toJson ]]
         [[ end ]]
         readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
-        cap_drop = [[ var "docker_cap_drop" . | toJson ]]
+        cap_drop        = [[ var "docker_cap_drop" . | toJson ]]
       }
 
       service {
