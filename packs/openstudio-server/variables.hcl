@@ -463,13 +463,13 @@ variable "db_health_check_timeout" {
   default     = "2s"
 }
 
-variable "mongodb_storage_type" {
+variable "db_storage_type" {
   type        = string
   description = "MongoDB storage type: host_volume, csi, or ephemeral. Use ephemeral to disable persistent volume wiring."
   default     = "host_volume"
 }
 
-variable "mongodb_volume_source" {
+variable "db_volume_source" {
   type        = string
   description = "Nomad volume source name for MongoDB persistent storage (host_volume name or CSI volume ID)."
   default     = "openstudio-mongodb"
@@ -528,7 +528,7 @@ variable "nfs_shared_volume_enabled" {
 
 variable "nfs_volume_type" {
   type        = string
-  description = "Storage backend for the NFS shared volume. Use \"host_volume\" (default, recommended) for an OS-level NFS mount registered as a Nomad host volume, or \"csi\" for a CSI-managed NFS volume. Mirrors the mongodb_storage_type / redis_storage_type pattern."
+  description = "Storage backend for the NFS shared volume. Use \"host_volume\" (default, recommended) for an OS-level NFS mount registered as a Nomad host volume, or \"csi\" for a CSI-managed NFS volume. Mirrors the db_storage_type / redis_storage_type pattern."
   default     = "host_volume"
 }
 
@@ -728,7 +728,7 @@ variable "backup_retention_days" {
   default     = 14
 }
 
-variable "mongodb_backup_uri" {
+variable "db_backup_uri" {
   type        = string
   description = "MongoDB URI used by backup and restore jobs."
   default     = "mongodb://openstudio-db.service.consul:27017"

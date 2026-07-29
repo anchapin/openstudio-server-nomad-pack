@@ -36,8 +36,8 @@ Override via pack variables:
 
 ```hcl
 # override.hcl
-mongodb_storage_type  = "host_volume"   # "host_volume", "csi", or "ephemeral"
-mongodb_volume_source = "openstudio-mongodb"
+db_storage_type  = "host_volume"   # "host_volume", "csi", or "ephemeral"
+db_volume_source = "openstudio-mongodb"
 
 redis_storage_type    = "host_volume"
 redis_volume_source   = "openstudio-redis"
@@ -257,8 +257,8 @@ Set pack variables to use CSI:
 
 ```hcl
 # override.hcl
-mongodb_storage_type  = "csi"
-mongodb_volume_source = "openstudio-mongodb"
+db_storage_type  = "csi"
+db_volume_source = "openstudio-mongodb"
 
 redis_storage_type    = "csi"
 redis_volume_source   = "openstudio-redis"
@@ -274,7 +274,7 @@ redis_volume_source   = "openstudio-redis"
 > directly to `mongo:6.0.7`. Follow the stepwise migration sequence in
 > [`docs/upgrading.md`](./upgrading.md#mongodb-upgrade-path-for-persisted-42-data) first.
 
-The pack renders the following volume stanza for MongoDB when `mongodb_storage_type = "host_volume"`:
+The pack renders the following volume stanza for MongoDB when `db_storage_type = "host_volume"`:
 
 ```hcl
 volume "mongodb" {

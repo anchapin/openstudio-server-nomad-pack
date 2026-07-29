@@ -10,7 +10,7 @@ job_name    = "openstudio-server-dev"
 datacenters = ["dc1"]
 
 # Ephemeral storage — suitable for CI and local dev only.
-mongodb_storage_type = "ephemeral"
+db_storage_type = "ephemeral"
 redis_storage_type   = "ephemeral"
 
 # Reduce resource usage for a single-node developer environment.

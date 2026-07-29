@@ -40,7 +40,7 @@ EOH
       }
 
       env {
-        MONGODB_URI         = "[[ var "mongodb_backup_uri" . ]]"
+        MONGODB_URI         = "[[ var "db_backup_uri" . ]]"
         BACKUP_MOUNT_PATH   = "[[ var "backup_mount_path" . ]]"
         BACKUP_SUBDIRECTORY = "[[ var "backup_subdirectory" . ]]"
       }

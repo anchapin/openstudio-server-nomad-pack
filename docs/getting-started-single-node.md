@@ -276,8 +276,8 @@ job_name    = "openstudio-server-dev"
 datacenters = ["dc1"]
 
 # Persistent host volumes (must match host_volume names in nomad-dev.hcl)
-mongodb_storage_type  = "host_volume"
-mongodb_volume_source = "openstudio-mongodb"
+db_storage_type  = "host_volume"
+db_volume_source = "openstudio-mongodb"
 redis_storage_type    = "host_volume"
 redis_volume_source   = "openstudio-redis"
 

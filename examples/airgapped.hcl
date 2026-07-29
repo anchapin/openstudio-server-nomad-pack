@@ -26,8 +26,8 @@ poststop_cleanup_image = "registry.internal/alpine:3.20"
 verification_image   = "registry.internal/busybox:1.36"
 
 # ---------- Storage (persistent, no cloud CSI required) ----------
-mongodb_storage_type = "host_volume"
-mongodb_volume_source  = "openstudio-mongodb"
+db_storage_type = "host_volume"
+db_volume_source  = "openstudio-mongodb"
 
 redis_storage_type = "host_volume"
 redis_volume_source  = "openstudio-redis"

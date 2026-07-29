@@ -15,12 +15,12 @@ intervention. The current required migration is MongoDB `4.2` → `6.0.7` for pe
 
 Use this guide if **all** of the following are true:
 
-- your deployment has existing MongoDB data on a persistent volume (`mongodb_storage_type` is
+- your deployment has existing MongoDB data on a persistent volume (`db_storage_type` is
   `host_volume` or `csi`)
 - your currently running MongoDB major version is `4.2`
 - you are upgrading to a pack configuration that sets `db_image = "mongo:6.0.7"` (or higher)
 
-If you use `mongodb_storage_type = "ephemeral"` or are deploying a new empty environment, you do
+If you use `db_storage_type = "ephemeral"` or are deploying a new empty environment, you do
 not need the stepwise migration path.
 
 ## Version-gated upgrade matrix
@@ -28,7 +28,7 @@ not need the stepwise migration path.
 | Current deployment state | Target deployment state | Manual migration required? | Why |
 |---|---|---|---|
 | Pack/job currently running with `db_image = "mongo:4.2"` and persisted MongoDB volume | Any release/config using `db_image = "mongo:6.0.7"` default | **Yes** | MongoDB does not support skipping major data-file upgrades (`4.2 → 6.0`) |
-| Pack/job currently running with `db_image = "mongo:4.2"` and `mongodb_storage_type = "ephemeral"` | Any release/config using `db_image = "mongo:6.0.7"` default | No (data is disposable) | No persistent data to migrate |
+| Pack/job currently running with `db_image = "mongo:4.2"` and `db_storage_type = "ephemeral"` | Any release/config using `db_image = "mongo:6.0.7"` default | No (data is disposable) | No persistent data to migrate |
 | Fresh deployment (no existing MongoDB data volume) | `db_image = "mongo:6.0.7"` | No | New data files are created directly on 6.0.7 |
 
 ## MongoDB upgrade path for persisted 4.2 data
