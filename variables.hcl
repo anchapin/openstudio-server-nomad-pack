@@ -307,6 +307,12 @@ variable "worker_memory" {
   default     = 4096
 }
 
+variable "worker_memory_max" {
+  type        = number
+  description = "Memory hard limit (MB) for the OpenStudio worker task (Nomad memory_max)."
+  default     = 6144
+}
+
 variable "worker_kill_timeout" {
   type        = string
   description = "Grace period Nomad grants the worker task to finish in-flight work before force-killing it on drain or update. Must be >= the longest expected simulation run. Matches Helm terminationGracePeriodSeconds: 5200. WARNING: reducing this below the longest simulation duration will result in data loss on node drains and rolling updates."
@@ -449,6 +455,12 @@ variable "db_memory" {
   type        = number
   description = "Memory (MB) allocated to the MongoDB task."
   default     = 4096
+}
+
+variable "db_memory_max" {
+  type        = number
+  description = "Memory hard limit (MB) for the MongoDB task (Nomad memory_max)."
+  default     = 6144
 }
 
 variable "db_health_check_interval" {
