@@ -35,7 +35,6 @@ redis_volume_source  = "openstudio-redis"
 # ---------- Vault — disabled (air-gapped clusters typically lack Vault) ----------
 vault_integration_enabled  = false
 vault_enabled               = false
-enable_vault_mongo_secrets  = false
 
 # ---------- Worker ----------
 worker_count               = 2

@@ -13,7 +13,6 @@ enable_batch_verification = false
 
 vault_integration_enabled = false
 vault_enabled             = false
-enable_vault_mongo_secrets = false
 
 backup_enabled  = false
 restore_enabled = false

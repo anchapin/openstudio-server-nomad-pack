@@ -38,7 +38,6 @@ enable_batch_verification = false
 # No Vault in a local dev cluster.
 vault_integration_enabled  = false
 vault_enabled               = false
-enable_vault_mongo_secrets  = false
 
 # Disable backups for ephemeral dev deployments.
 backup_enabled  = false
