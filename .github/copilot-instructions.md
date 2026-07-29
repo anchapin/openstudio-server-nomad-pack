@@ -277,7 +277,7 @@ Rendered by `nomad-pack run` on successful deployment — prints Consul service 
 | `cicd.hcl` | CI/CD service token | Minimal: render, plan, run, stop — automated pipelines |
 | `teardown.hcl` | Teardown | Stop lifecycle access for cleanup without deploy or exec |
 
-All policies default to the `openstudio` namespace. Must pass `nomad fmt -check policies/` (enforced by `acl-policy-validation.yml`).
+All policies default to the `default` namespace (matching the pack default `nomad_namespace`). Must pass `nomad fmt -check policies/` (enforced by `acl-policy-validation.yml`).
 
 ### Example var-files (`examples/`)
 

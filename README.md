@@ -349,14 +349,14 @@ nomad acl policy apply \
   - < policies/operator.hcl
 ```
 
-Policies use the `openstudio` namespace by default. The pack's `nomad_namespace` variable defaults to `"default"`, so **if you deployed to the `default` namespace you must update the namespace before applying** — otherwise the token will be a no-op. Quick fix:
+Policies default to the `default` namespace, which matches the pack's `nomad_namespace` default. If you deployed to a custom namespace, update the namespace labels before applying:
 
 ```sh
-sed -i 's/namespace "openstudio"/namespace "default"/g' policies/*.hcl
-# macOS: sed -i '' 's/namespace "openstudio"/namespace "default"/g' policies/*.hcl
+sed -i 's/namespace "default"/namespace "my-namespace"/g' policies/*.hcl
+# macOS: sed -i '' 's/namespace "default"/namespace "my-namespace"/g' policies/*.hcl
 ```
 
-Or use the helper script: `bash scripts/apply-acl-policies.sh --namespace default`
+Or use the helper script: `bash scripts/apply-acl-policies.sh --namespace my-namespace`
 
 For full instructions — including token creation, namespace scoping, and token rotation — see **[docs/acl-policies.md](./docs/acl-policies.md)**.
 

@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Reconciled CI workflow trigger documentation in AGENTS.md and README.md with actual `.github/workflows/` configurations: `pack-validation.yml` runs on push to `develop` **and** `main`; `acl-policy-validation.yml` is scoped to the `develop` branch and also covers `scripts/apply-acl-policies.sh` changes; added missing `release.yml` row to README CI table (#279)
 - Renamed backup/restore volume selector variable from `backup_nfs_host_volume` to `backup_volume_source` across templates, examples, and docs to clarify support for both `host_volume` and `csi` backends. (#315)
+- Aligned Nomad ACL policy defaults with the pack default namespace by switching policy files from `openstudio` to `default`, and updated ACL docs/script guidance for custom namespace substitution (#309)
 
 ## [0.2.67] - 2026-07-29
 

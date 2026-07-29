@@ -2,9 +2,7 @@
 # apply-acl-policies.sh — Apply Nomad ACL policies for the OpenStudio Server pack.
 #
 # This script substitutes the correct namespace into all policy files and
-# applies them to the cluster in one step, avoiding the common mistake of
-# applying policies that hardcode "openstudio" when the pack is deployed to
-# a different namespace (e.g., the default "default" namespace).
+# applies them to the cluster in one step.
 #
 # Usage:
 #   bash scripts/apply-acl-policies.sh [OPTIONS]
@@ -100,14 +98,7 @@ for role in "${ROLE_LIST[@]}"; do
     continue
   fi
 
-  substituted=$(sed "s/namespace \"openstudio\"/namespace \"${NAMESPACE}\"/g" "$policy_file")
-
-  # Guard: fail fast if any placeholder was not replaced
-  if echo "$substituted" | grep -q 'OPENSTUDIO_NAMESPACE'; then
-    echo "ERROR: Policy file '${policy_file}' still contains the literal placeholder 'OPENSTUDIO_NAMESPACE' after substitution. Fix the policy file to use the standard 'openstudio' placeholder." >&2
-    FAILED+=("$role")
-    continue
-  fi
+  substituted=$(sed "s/namespace \"default\"/namespace \"${NAMESPACE}\"/g" "$policy_file")
 
   if [[ "$DRY_RUN" == "true" ]]; then
     echo "=== DRY RUN: ${role} (namespace: ${NAMESPACE}) ==="
