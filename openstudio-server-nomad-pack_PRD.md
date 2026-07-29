@@ -166,28 +166,43 @@ Every subdirectory and template within `openstudio-server/templates/` must be ma
 
 ## 4. Repository Structure Blueprint
 
-The `NatLabRockies/openstudio-server-nomad-pack` repository must match the standard layouts defined by the Nomad Pack Community Registry.
+This repository now lives at `anchapin/openstudio-server-nomad-pack` and follows a dual-layout model: a root runnable pack plus a registry-aligned pack under `packs/openstudio-server/`.
 
 ```text
 openstudio-server-nomad-pack/
-├── README.md                           # Documentation, prerequisites, configuration schema
-├── LICENSE                             # MIT/BSD
+├── README.md                           # Primary operator docs
+├── LICENSE*                            # Dual-license files (MIT + BSD-3-Clause)
 ├── .github/
-│   └── workflows/
-│       └── pack-validation.yml          # CI/CD: runs nomad-pack validate & job plans
+│   └── workflows/                      # CI pipelines (validation, integration, release)
+│       ├── acl-policy-validation.yml
+│       ├── integration-test.yml
+│       ├── pack-validation.yml
+│       ├── release-version-bump.yml
+│       └── release.yml
+├── docs/                               # Deep-dive ops and migration documentation
+├── examples/                           # Deploy scenario var-files
+├── templates/                          # Root pack templates (source of truth)
+│   ├── _helpers.tpl
+│   ├── openstudio-server.nomad.tpl     # Architecture marker file (intentionally non-rendering)
+│   ├── web.nomad.tpl
+│   ├── worker.nomad.tpl
+│   ├── db.nomad.tpl
+│   ├── redis.nomad.tpl
+│   ├── rserve.nomad.tpl
+│   ├── system-hooks.nomad.tpl
+│   ├── nomad-autoscaler.nomad.tpl
+│   ├── batch-verification.nomad.tpl
+│   ├── state-backup.nomad.tpl
+│   ├── state-restore.nomad.tpl
+│   ├── openstudio_test.nomad.tpl
+│   └── traefik.nomad.tpl
 └── packs/
     └── openstudio-server/
-        ├── metadata.hcl                # Version, description, minimal Nomad/Consul requirements
-        ├── variables.hcl               # All input variables (mirroring values.schema.json)
-        ├── outputs.tpl                 # Dynamic post-deploy endpoints info
-        └── templates/
-            ├── _helpers.tpl            # Go template scheduling / affinity macros
-            ├── web.nomad.tpl           # Main web & web-background job template
-            ├── worker.nomad.tpl        # Scalable worker job template
-            ├── db.nomad.tpl            # MongoDB stateful template
-            ├── redis.nomad.tpl         # Redis caching template
-            ├── rserve.nomad.tpl        # RServe template
-            └── system-hooks.nomad.tpl  # Pre-pulling, system tasks, daemonset equivalents
+        ├── README.md                   # Registry-facing package README
+        ├── metadata.hcl                # Mirrors root metadata.hcl
+        ├── variables.hcl               # Mirrors root variables.hcl
+        ├── outputs.tpl                 # Mirrors root outputs.tpl
+        └── templates/                  # Mirrors root templates/*
 ```
 
 ---
@@ -196,99 +211,39 @@ openstudio-server-nomad-pack/
 
 ```mermaid
 flowchart TD
-    P1[Phase 1: Repository Scaffolding & Manifest Flattening] --> P2[Phase 2: Core Infrastructure Variables & Scheduling Helpers]
-    P2 --> P3[Phase 3: Stateful Storage & Datastore Pack Construction]
-    P3 --> P4[Phase 4: Compute Cluster Setup Web & Scaling Workers]
-    P4 --> P5[Phase 5: Routing, Load Balancers, Security & Secrets]
-    P5 --> P6[Phase 6: CI/CD Setup, Automated Validation, & Documentation]
+    P1[Phase 1: Repository Scaffolding & Manifest Flattening ✅] --> P2[Phase 2: Core Infrastructure Variables & Scheduling Helpers ✅]
+    P2 --> P3[Phase 3: Stateful Storage & Datastore Pack Construction ✅]
+    P3 --> P4[Phase 4: Compute Cluster Setup Web & Scaling Workers ✅]
+    P4 --> P5[Phase 5: Routing, Load Balancers, Security & Secrets ✅]
+    P5 --> P6[Phase 6: CI/CD Setup, Automated Validation, & Documentation ⏳]
 ```
 
-### Phase 1: Repository Scaffolding & Manifest Flattening
+### Current implementation status (living roadmap)
 
-1. **Create Git Repository**: Initialize `NatLabRockies/openstudio-server-nomad-pack` with an MIT/BSD dual license. Set up the correct path nesting (`packs/openstudio-server/`).
-2. **Flatten Helm Chart**: In a local development environment running `openstudio-server-helm`, execute the following workflow to extract raw K8s manifests without Helm templating wrappers:
-   ```bash
-   helm template my-release openstudio-server \
-     --values values.yaml \
-     --output-dir ./k8s-flat-manifests
-   ```
-   This serves as a static baseline to guide manual HCL conversion.
+1. **Delivered**
+   - Split-job architecture implemented (`<job_name>-web`, `-worker`, `-db`, `-redis`, `-rserve`) with dedicated templates.
+   - Web + web-background are co-defined in `web.nomad.tpl` with dependency prestart checks.
+   - Worker includes rolling-update controls and optional autoscaling policy blocks.
+   - Datastore persistence modes implemented for MongoDB and Redis (`host_volume`, `csi`, `ephemeral`).
+   - Optional operational jobs implemented: image pre-pull system job, batch verification, state backup, state restore, OpenStudio test batch, optional Traefik job.
+   - Registry mirror under `packs/openstudio-server/` is enforced by CI drift checks.
 
-### Phase 2: Core Infrastructure Variables & Scheduling Helpers
+2. **In progress / open alignment work**
+   - CI trigger and gating alignment improvements tracked in:
+     - #237 (`pack-validation` PR trigger scope)
+     - #239 (gating Consul app-service registration checks in integration)
+     - #240 (integration workflow path coverage breadth)
+   - README/PRD consistency cleanup tracked in:
+     - #238
 
-1. **Initialize metadata.hcl**: Specify dependency parameters, support ranges, and operational descriptions:
-   ```hcl
-   # packs/openstudio-server/metadata.hcl
-   app {
-     name        = "openstudio-server"
-     version     = "1.0.0"
-     description = "Nomad pack to run OpenStudio Server on Nomad and Consul clusters."
-   }
-   pack {
-     name        = "openstudio-server"
-     version     = "0.1.0"
-   }
-   ```
-2. **Map Configuration Parameters (variables.hcl)**: Convert configuration settings from the Helm schema into clean HCL. Provide default values matching the Kubernetes equivalents.
-3. **Create _helpers.tpl**: Standardize node affinities, system architectures (`linux/amd64`), and node pools.
-
-### Phase 3: Stateful Storage & Datastore Pack Construction
-
-1. **Set Up MongoDB (db.nomad.tpl)**: Translate the MongoDB deployment. Add structural declarations to handle data volumes.
-2. **Set Up Redis (redis.nomad.tpl)**: Translate the caching layer.
-3. **Storage Layer Registration Guide**: Draft step-by-step instructions in the documentation explaining how to registers NFS and local stateful CSI plugins inside Nomad before deploying.
-
-### Phase 4: Compute Cluster Setup (Web & Scaling Workers)
-
-1. **Build Web & Web-Background Templates (web.nomad.tpl)**: Standardize port communication. Establish startup sequences: `web` must verify that MongoDB and Redis are reachable.
-2. **Build Worker Templates (worker.nomad.tpl)**: Map workers to scale according to execution queues.
-3. **Implement Autoscaler Configurations**: Embed scaling blocks directly inside worker task groups:
-   ```hcl
-   scaling {
-     enabled = var.worker_autoscaling_enabled
-     min     = var.worker_min_replicas
-     max     = var.worker_max_replicas
-     policy {
-       cooldown = "30s"
-       check "queue_depth" {
-         source   = "prometheus"
-         query    = "sum(openstudio_queue_depth_metric)"
-         strategy = "target-value"
-         target   = 10
-       }
-     }
-   }
-   ```
-
-### Phase 5: Routing, Load Balancers, Security & Secrets
-
-1. **Vault Integration Blueprint**: Incorporate the `vault` block within task templates to configure automated token renewals and secret ingestion.
-2. **Routing & Edge Ingress**: Map external connections through Traefik or Fabio. Include sample router configuration snippets using Consul tags.
-
-### Phase 6: CI/CD Setup, Automated Validation, & Documentation
-
-1. **Configure GitHub Actions Workflow**: Build `.github/workflows/pack-validation.yml` to lint the pack on every pull request using the official `nomad-pack` CLI:
-   ```yaml
-   name: Nomad Pack Validation
-   on: [push, pull_request]
-   jobs:
-     validate:
-       runs-on: ubuntu-latest
-       steps:
-         - uses: actions/checkout@v3
-         - name: Install HashiCorp Nomad Pack
-           run: |
-             curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
-             echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
-             sudo apt-get update && sudo apt-get install nomad-pack
-         - name: Run Pack Validation
-           run: nomad-pack validate ./packs/openstudio-server
-   ```
-2. **Draft K8s vs. Nomad Feature Matrix**: Write the comparison guidelines for cluster operators (details in section 7).
+3. **Operational rule**
+   - This PRD is updated whenever architecture, CI behavior, acceptance criteria, or template inventory changes.
 
 ---
 
 ## 6. Detailed Variable Mapping Blueprint
+
+> Note: This section is illustrative. `variables.hcl` and `docs/variables.md` are the operational source of truth for current defaults and descriptions.
 
 To maintain variable parity with `values.yaml` / `values.schema.json`, map configuration variables to HCL. Below is a sample mapping structure showing how inputs in `variables.hcl` should be defined.
 
@@ -365,10 +320,22 @@ This section details how to address features that behave differently on Nomad co
 
 The `openstudio-server-nomad-pack` project is considered complete when the following verification milestones are met:
 
-- **Repository Creation**: Repository is initialized at `NatLabRockies/openstudio-server-nomad-pack` with correct directory configurations and matching licenses.
+- **Repository Creation**: Repository is maintained at `anchapin/openstudio-server-nomad-pack` with root + registry pack layouts kept in sync.
 - **Zero-Error Syntax**: Command `nomad-pack validate` executes successfully with no linter warnings.
 - **Functional Local Deployment**: The entire stack successfully spins up on a standard single-node Nomad + Consul developer setup.
 - **Stateful Database Health Checks**: MongoDB and Redis mount persistent volumes and retain database state across task restarts.
 - **Consul Service Integration**: All components resolve service connections natively via Consul DNS names (e.g., `db.service.consul`).
 - **Comprehensive Setup Documentation**: The README provides clear steps on setup, storage preparation, and variables overrides.
 - **Automated CI Validation**: GitHub Actions block non-conforming or syntactically invalid PRs.
+
+### 8.1 Acceptance status snapshot (as of 2026-07-28)
+
+| Criterion | Status | Notes |
+| :--- | :--- | :--- |
+| Repository Creation | ✅ Met | Repository and dual pack layout are in place. |
+| Zero-Error Syntax | ✅ Met | Validation workflows and local commands are present. |
+| Functional Local Deployment | ✅ Met | Single-node guide and example var-files are provided. |
+| Stateful DB Health Checks | ✅ Met | Persistent volume modes implemented for MongoDB/Redis. |
+| Consul Service Integration | ⚠️ Partially gated in CI | Integration workflow asserts Nomad+Consul registration; stronger app-service gating tracked in #239. |
+| Comprehensive Setup Documentation | ⚠️ In progress | Documentation exists; README consistency fixes tracked in #238. |
+| Automated CI Validation | ⚠️ In progress | CI is substantial but trigger/gating scope improvements tracked in #237 and #240. |

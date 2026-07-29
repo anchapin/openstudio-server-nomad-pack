@@ -85,7 +85,7 @@ Each Nomad job is a separate `.nomad.tpl` file under `templates/`. The pack rend
 
 | Template | Nomad job rendered | Conditional |
 |---|---|---|
-| `openstudio-server.nomad.tpl` | `<job_name>` — scaffold/meta job | always |
+| `openstudio-server.nomad.tpl` | Architecture marker file (intentionally renders no job) | always |
 | `web.nomad.tpl` | `<job_name>-web` | always |
 | `worker.nomad.tpl` | `<job_name>-worker` | always |
 | `db.nomad.tpl` | `<job_name>-db` (MongoDB) | always |
@@ -401,6 +401,6 @@ cp templates/*.tpl templates/*.nomad.tpl packs/openstudio-server/templates/
 |---|---|---|
 | `pack-validation.yml` | push to `develop`, PR to `main` | fmt, render, validate, Vagrantfile syntax, script syntax, version-bump tests, `variables.md` diff, README links to `docs/variables.md`, `compatibility.md` version gate, Nomad dev-agent plan for all example var-files, `packs/` registry sync, integration test script |
 | `acl-policy-validation.yml` | push/PR on `policies/**` | `nomad fmt -check policies/` |
-| `integration-test.yml` | merge to `develop` | end-to-end stack test |
+| `integration-test.yml` | PR to `develop` (path-filtered) | template render + e2e stack test |
 | `release.yml` | push to `main` | reads version from `metadata.hcl`, creates GitHub Release |
 | `release-version-bump.yml` | push to `main` | auto-bumps patch version in `metadata.hcl`, creates git tag |
