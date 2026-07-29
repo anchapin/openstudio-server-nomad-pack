@@ -486,7 +486,7 @@ The Nomad `consul` block in `nomad-dev.hcl` must point to the correct address. R
 
 **Symptom**: The `web` group stays in `Starting` for several minutes.
 
-**Explanation**: The `web` task group includes a `prestart` init task that waits for `openstudio-db` and `openstudio-redis` to be registered as healthy in Consul before starting the web container. This is expected on first deploy while images are being pulled. Wait up to 5 minutes on a slow connection.
+**Explanation**: The `web` task group includes a `prestart` init task that waits for `openstudio-db`, `openstudio-redis`, and `openstudio-rserve` to be registered as healthy in Consul before starting the web container. This is expected on first deploy while images are being pulled. Wait up to 5 minutes on a slow connection.
 
 To check what the prestart task is waiting on:
 

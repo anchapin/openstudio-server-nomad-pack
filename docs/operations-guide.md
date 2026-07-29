@@ -17,8 +17,9 @@ graph LR
   worker --> mongodb
 ```
 
-The `web` task group blocks on a `prestart` check that waits for `openstudio-db` and
-`openstudio-redis` to be healthy in Consul before the web container starts.
+The `web` task group blocks on a `prestart` check that waits for `openstudio-db`,
+`openstudio-redis`, and `openstudio-rserve` to be healthy in Consul before the web
+container starts.
 
 ---
 
