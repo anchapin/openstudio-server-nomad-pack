@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.67] - 2026-07-29
+
 ### Added
 
 - Broadened `integration-test.yml` path filter to include `packs/**`, `scripts/**`, `examples/**`, and `metadata.hcl` so pack-impacting changes always trigger integration validation (#240)
@@ -62,6 +64,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed `develop` and `master` from `release-version-bump.yml` `on.push.branches` so automated patch releases only fire on merges to `main`, preventing spurious public releases on every `develop` push (#192).
 - Updated `CONTRIBUTING.md` release process section to document the `develop → main` promotion flow (#192).
 
+## [0.2.41] - 2026-07-28
+
+### Changed
+
+- Pinned `web_image`, `web_background_image`, and `worker_image` to `nrel/openstudio-server:3.8.0-1`,
+  aligning with the Helm chart `Chart.yaml` `appVersion`. CI uses Nomad `1.7.7` (`NOMAD_VERSION`
+  in `integration-test.yml`).
+
+## [0.2.0] - 2026-07-28
+
+### Added
+
+- Extended pack with optional Traefik ingress integration (`traefik_enabled`, `ingress_domain`,
+  `ingress_tls_enabled`) and optional Vault secrets injection (`vault_enabled`,
+  `vault_integration_enabled`)
+- Added Nomad Autoscaler support for the worker job (`nomad_autoscaler_enabled`,
+  `worker_autoscaling_enabled`) with both CPU-utilisation and Prometheus queue-depth strategies
+- Added image pre-pull system job (`enable_image_prepull`, `system-hooks.nomad.tpl`) to cache
+  heavy images on all eligible nodes before first deploy
+- Added periodic state-backup and on-demand state-restore batch jobs
+  (`state-backup.nomad.tpl`, `state-restore.nomad.tpl`)
+- Added batch verification job (`batch-verification.nomad.tpl`, `enable_batch_verification`)
+- Added Vector log-collection sidecar to all service tasks (`enable_vector_collection`)
+- Added `poststop` cleanup lifecycle task to all service tasks (`poststop_cleanup_paths`)
+- Added Consul Connect mTLS sidecar proxy support (`enable_consul_connect`)
+- Added NFS shared-volume support for web and worker (`nfs_shared_volume_enabled`)
+- Added CSI volume backend support for MongoDB and Redis (`db_storage_type`, `redis_storage_type`)
+- Added Docker hardening defaults: non-root user (`docker_user`), read-only rootfs
+  (`docker_readonly_rootfs`), capability drop (`docker_cap_drop`)
+- Added `web-background` task group inside the web job for background Rails processing
+- Added `openstudio_test.nomad.tpl` parameterised batch job for integration test runs
+- Added ACL policy HCL files under `policies/` with CI format validation
+- Added Vagrant-based 4-VM local cluster for end-to-end testing (`Vagrantfile`,
+  `vagrant/provision/`)
+- Added `docs/` operator reference: getting-started guide, operations guide, storage guide,
+  upgrade guide, Vault and ACL policy references, compatibility matrix, and auto-generated
+  variables reference
+- Added example var-files (`examples/minimal-dev.hcl`, `examples/production-ha.hcl`,
+  `examples/airgapped.hcl`, `examples/e2e-test.hcl`)
+- Added `scripts/generate-vars-doc.sh` for auto-generating `docs/variables.md` from
+  `variables.hcl`; CI enforces sync with a diff check
+- Added `scripts/test_nomad_pack_integration.sh` integration test runner
+- Added `scripts/bump_metadata_version.sh` version-bump helper with isolated fixture tests
+- Added `scripts/pre-teardown.sh` helper for safe job stop ordering before volume teardown
+- Added `scripts/run-batch-verification.sh` operational helper
+- Added registry-aligned mirror under `packs/openstudio-server/` with CI drift enforcement
+- Added `outputs.tpl` post-deploy output showing Consul service and Traefik URLs
+- Added `release-version-bump.yml` CI workflow for automated patch-version bumps on `main`
+- Added `integration-test.yml` CI workflow for e2e stack validation on PRs
+
 ## [0.1.0] - 2026-07-28
 
 ### Added
@@ -76,4 +128,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pack validation CI workflow (`.github/workflows/pack-validation.yml`)
 - Release process documented in `metadata.hcl` comments
 
+[Unreleased]: https://github.com/anchapin/openstudio-server-nomad-pack/compare/v0.2.67...HEAD
+[0.2.67]: https://github.com/anchapin/openstudio-server-nomad-pack/compare/v0.2.41...v0.2.67
+[0.2.41]: https://github.com/anchapin/openstudio-server-nomad-pack/compare/v0.2.0...v0.2.41
+[0.2.0]: https://github.com/anchapin/openstudio-server-nomad-pack/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/anchapin/openstudio-server-nomad-pack/releases/tag/v0.1.0
