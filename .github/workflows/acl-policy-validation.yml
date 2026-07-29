@@ -20,7 +20,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Setup Nomad
-        uses: hashicorp/setup-nomad@6e88df50dd00f3737f04fddde2bf2bd446e313dd # main (v1.0.0)
+        uses: hashicorp/setup-nomad@ceba9087d4322dbdd7b35dafac5a87a8c459a157  # v1.0.0
 
       - name: Validate ACL Policy Syntax
         run: |
