@@ -164,7 +164,7 @@
 | `test_rserve_port` | `number` | `6311` | Port for the TCP check against openstudio-rserve.service.consul. |
 | `test_timeout_seconds` | `number` | `10` | Per-check timeout in seconds passed to curl --max-time and nc -w. |
 | `test_retry_count` | `number` | `3` | Number of curl retries for the web HTTP health check. |
-| `test_curl_image_tag` | `string` | `"latest"` | Tag for the curlimages/curl image used in the web HTTP check task. |
+| `test_curl_image_tag` | `string` | `"8.9.1"` | Tag for the curlimages/curl image used in the web HTTP check task. |
 | `test_busybox_image_tag` | `string` | `"stable"` | Tag for the busybox image used in TCP check tasks. |
 | `compute_node_class` | `string` | `"compute"` | Nomad node class label for CPU-intensive compute nodes. Used by the openstudio_server.compute_node_constraint helper macro. |
 | `system_node_class` | `string` | `"system"` | Nomad node class label for infrastructure/system nodes. Used by the openstudio_server.system_node_constraint helper macro. |

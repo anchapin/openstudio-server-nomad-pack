@@ -977,7 +977,7 @@ variable "test_retry_count" {
 variable "test_curl_image_tag" {
   type        = string
   description = "Tag for the curlimages/curl image used in the web HTTP check task."
-  default     = "latest"
+  default     = "8.9.1"
 }
 
 variable "test_busybox_image_tag" {
