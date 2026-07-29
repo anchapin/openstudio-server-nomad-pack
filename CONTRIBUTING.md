@@ -43,8 +43,11 @@ nomad-pack validate . --var-file=variables.hcl
 ### Running CI locally with `act`
 
 ```bash
-# Run the pack-validation workflow
+# Run the pack-validation workflow (simulates push to develop)
 act push -W .github/workflows/pack-validation.yml
+
+# Run the pack-validation workflow (simulates pull_request to develop or main)
+act pull_request -W .github/workflows/pack-validation.yml
 
 # Run all workflows triggered by push
 act push
