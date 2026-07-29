@@ -45,6 +45,9 @@ diff docs/variables.md docs/variables.generated.md
 # Regenerate docs/variables.md after editing variables.hcl (required before committing)
 ./scripts/generate-vars-doc.sh
 
+# Check backup/restore default docs stay aligned with variables.hcl
+./scripts/test_backup_restore_docs_defaults.sh
+
 # Operational helpers (not part of CI — run manually against a live cluster)
 # Stop all jobs in teardown-safe order before destroying volumes/NFS
 ./scripts/pre-teardown.sh [--namespace <ns>] [JOB_NAME]
@@ -94,8 +97,8 @@ Each Nomad job is a separate `.nomad.tpl` file under `templates/`. The pack rend
 | `system-hooks.nomad.tpl` | `<job_name>-system-hooks` (image pre-pull) | `enable_image_prepull = true` (default) |
 | `nomad-autoscaler.nomad.tpl` | autoscaler daemon job | `nomad_autoscaler_enabled = true` |
 | `batch-verification.nomad.tpl` | `<job_name>-batch-verify` | `enable_batch_verification = true` |
-| `state-backup.nomad.tpl` | `<job_name>-state-backup` (periodic batch) | `backup_enabled = true` |
-| `state-restore.nomad.tpl` | `<job_name>-state-restore` (on-demand batch) | `restore_enabled = true` |
+| `state-backup.nomad.tpl` | `<job_name>-state-backup` (periodic batch) | `backup_enabled = false` (default) |
+| `state-restore.nomad.tpl` | `<job_name>-state-restore` (on-demand batch) | `restore_enabled = false` (default) |
 | `openstudio_test.nomad.tpl` | `<job_name>-test` (parameterized batch) | always |
 
 `templates/_helpers.tpl` defines reusable named templates called throughout all job templates:
@@ -215,6 +218,8 @@ Volume ownership must be set before first deploy: MongoDB and Redis run as UID/G
 `state-backup.nomad.tpl` renders a **periodic batch job** (`type = "batch"` with a `periodic` stanza) that runs `mongodump` and `redis-cli BGSAVE` on the schedule defined by `backup_cron` (default: `0 2 * * * *`). Backups write to a backup state volume (`backup_volume_source`) and rotate files older than `backup_retention_days` (default `14`).
 
 `state-restore.nomad.tpl` renders an **on-demand parameterized batch job** dispatched manually.
+
+Both jobs are disabled by default (`backup_enabled = false`, `restore_enabled = false`). Enable backup only after provisioning and validating the backup volume; enable restore only in environments where operators need manual restore dispatch and have validated restore runbooks.
 
 ### Batch verification job
 
@@ -411,7 +416,7 @@ cp templates/*.tpl templates/*.nomad.tpl packs/openstudio-server/templates/
 
 | Workflow | Trigger | What it checks |
 |---|---|---|
-| `pack-validation.yml` | push to `develop` or `main`, PR to `develop` or `main`, `workflow_dispatch` | fmt, render, validate, `examples/test-batch.nomad` job spec validation, Vagrantfile syntax, script syntax, version-bump tests, `variables.md` diff, README links to `docs/variables.md`, `compatibility.md` version gate, Nomad dev-agent plan for all example var-files, `packs/` registry sync, integration test script |
+| `pack-validation.yml` | push to `develop` or `main`, PR to `develop` or `main`, `workflow_dispatch` | fmt, render, validate, `examples/test-batch.nomad` job spec validation, Vagrantfile syntax, script syntax, version-bump tests, `variables.md` diff, backup/restore default-doc consistency, README links to `docs/variables.md`, `compatibility.md` version gate, Nomad dev-agent plan for all example var-files, `packs/` registry sync, integration test script |
 | `acl-policy-validation.yml` | push/PR to `develop` or `main` on `policies/**` or `scripts/apply-acl-policies.sh` changes | `nomad fmt -check policies/` |
 | `integration-test.yml` | PR to `develop` (path-filtered) | template render + e2e stack test |
 | `release-version-bump.yml` | push to `main` | **Step 1:** auto-bumps patch version in `metadata.hcl`, syncs `packs/openstudio-server/metadata.hcl`, commits both files, creates and pushes `v*` git tag — triggers `release.yml` |

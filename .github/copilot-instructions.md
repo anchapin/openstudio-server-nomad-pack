@@ -43,6 +43,9 @@ nomad-pack render . -var "web_image=nrel/openstudio-server:3.8.0"
 # Regenerate docs/variables.md after editing variables.hcl (required before committing)
 ./scripts/generate-vars-doc.sh
 
+# Check backup/restore default docs stay aligned with variables.hcl
+./scripts/test_backup_restore_docs_defaults.sh
+
 # Run all CI workflows locally (requires act + Docker)
 act push -W .github/workflows/pack-validation.yml
 act push
@@ -77,8 +80,8 @@ worker ──► mongodb
 | `rserve.nomad.tpl` | `<job_name>-rserve` | always |
 | `openstudio_test.nomad.tpl` | `<job_name>-test` (parameterized batch) | always |
 | `system-hooks.nomad.tpl` | `<job_name>-system-hooks` (system job, image pre-pull) | `enable_image_prepull = true` (default) |
-| `state-backup.nomad.tpl` | `<job_name>-state-backup` (periodic batch) | `backup_enabled = true` |
-| `state-restore.nomad.tpl` | `<job_name>-state-restore` (on-demand parameterized batch) | `restore_enabled = true` |
+| `state-backup.nomad.tpl` | `<job_name>-state-backup` (periodic batch) | `backup_enabled = false` (default) |
+| `state-restore.nomad.tpl` | `<job_name>-state-restore` (on-demand parameterized batch) | `restore_enabled = false` (default) |
 | `batch-verification.nomad.tpl` | `<job_name>-batch-verify` | `enable_batch_verification = true` |
 | `nomad-autoscaler.nomad.tpl` | autoscaler daemon job | `nomad_autoscaler_enabled = true` |
 | `traefik.nomad.tpl` | Traefik ingress job | `traefik_enabled = true` |
@@ -156,7 +159,7 @@ Both can be active simultaneously. When neither is enabled, credentials are supp
 
 | Workflow | Trigger | What it checks |
 |---|---|---|
-| `pack-validation.yml` | push/PR to `develop` or `main`, `workflow_dispatch` | fmt, render, validate, `examples/test-batch.nomad` job spec validation, Vagrantfile syntax, script syntax, version-bump tests, `variables.md` diff, README links to `docs/variables.md`, `compatibility.md` version gate, Nomad dev-agent plan for all example var-files, registry sync, integration test script |
+| `pack-validation.yml` | push/PR to `develop` or `main`, `workflow_dispatch` | fmt, render, validate, `examples/test-batch.nomad` job spec validation, Vagrantfile syntax, script syntax, version-bump tests, `variables.md` diff, backup/restore default-doc consistency, README links to `docs/variables.md`, `compatibility.md` version gate, Nomad dev-agent plan for all example var-files, registry sync, integration test script |
 | `acl-policy-validation.yml` | push/PR on `policies/**` | `nomad fmt -check policies/` |
 | `integration-test.yml` | PR to `develop` (path-filtered) | template render + e2e stack test |
 | `release.yml` | push of tag matching `v*` | reads version from `metadata.hcl`, publishes GitHub Release |
