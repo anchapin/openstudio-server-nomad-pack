@@ -35,22 +35,26 @@ err()   { echo -e "${RED}✗${NC} $*"; }
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 # Call the Nomad HTTP API and return JSON.
+# NOTE: no `|| true` here — callers handle failure (in `if` conditions
+# or via their own `|| true`). Without the exit code, readiness loops
+# never detect failure.
 nomad_api() {
   local path="$1"
   shift
-  curl -sf "${NOMAD_API}${path}" "$@" 2>/dev/null || true
+  curl -sf "${NOMAD_API}${path}" "$@"
 }
 
 # Call the Consul HTTP API and return JSON.
 consul_api() {
   local path="$1"
   shift
-  curl -sf "${CONSUL_API}${path}" "$@" 2>/dev/null || true
+  curl -sf "${CONSUL_API}${path}" "$@"
 }
 
-# Check if the Nomad job exists.
+# Check if any Nomad jobs with our prefix exist.
+# The pack renders multiple jobs (web, worker, db, redis, rserve, ...).
 job_exists() {
-  nomad_api "/v1/job/${JOB_NAME}" -o /dev/null 2>/dev/null
+  nomad_api "/v1/jobs?prefix=${JOB_NAME}" -o /dev/null 2>/dev/null
 }
 
 # ── Prerequisites ─────────────────────────────────────────────────────────────
@@ -134,7 +138,7 @@ deploy_pack() {
 
   echo ""
 
-  # Wait for job to appear in API
+  # Wait for at least one job to appear in API
   for i in $(seq 1 15); do
     if job_exists; then
       break
@@ -142,70 +146,71 @@ deploy_pack() {
     sleep 2
   done
 
-  info "Waiting for all task groups to reach 'running' (up to 3 min)..."
+  info "Waiting for all services to reach 'running' (up to 3 min)..."
   echo ""
 
-  # Poll the Nomad job API for task group status
+  # Poll the Nomad jobs API for all rendered jobs with our prefix.
+  # The pack renders: -web, -worker, -db, -redis, -rserve (always),
+  # plus optionally -system-hooks, -batch-verify, -state-backup,
+  # -state-restore, -test, -nomad-autoscaler.  We check for at
+  # least the 5 core services.
   ALL_RUNNING=false
   for i in $(seq 1 36); do
-    local job_json
-    job_json=$(nomad_api "/v1/job/${JOB_NAME}") || true
+    local jobs_json
+    jobs_json=$(nomad_api "/v1/jobs?prefix=${JOB_NAME}") || jobs_json="[]"
 
-    if [ -z "$job_json" ] || [ "$job_json" = "null" ]; then
-      sleep 5
-      continue
-    fi
-
-    # Parse task group statuses from the API
-    # TaskGroups is an array of objects with Name and Status
-    local groups_json
-    groups_json=$(echo "$job_json" | python3 -c "
+    # Parse job statuses — each entry has ID and Status fields
+    local jobs_status
+    jobs_status=$(echo "$jobs_json" | python3 -c "
 import sys, json
 try:
-    job = json.load(sys.stdin)
-    groups = job.get('TaskGroups', [])
+    jobs = json.load(sys.stdin)
+    core = ['-web', '-worker', '-db', '-redis', '-rserve']
     results = []
-    for g in groups:
-        status = g.get('Status', '')
-        results.append(f\"{g['Name']}={status}\")
+    for j in jobs:
+        jid = j.get('ID', '')
+        status = j.get('Status', '')
+        for suffix in core:
+            if jid.endswith(suffix):
+                results.append(f'{jid}={status}')
+                break
     print('|'.join(results) if results else '')
 except Exception:
     print('')
-" 2>/dev/null) || groups_json=""
+" 2>/dev/null) || jobs_status=""
 
-    # Print progress
     local running_count=0
     local total_count=0
-    for entry in $(echo "$groups_json" | tr '|' ' '); do
+    for entry in $(echo "$jobs_status" | tr '|' ' '); do
       total_count=$((total_count + 1))
       local name="${entry%%=*}"
       local status="${entry#*=}"
       [ "$status" = "running" ] && running_count=$((running_count + 1))
     done
 
-    printf "\r  Waiting... ${running_count}/${total_count} groups running"
+    printf "\r  Waiting... ${running_count}/${total_count} core jobs running"
 
-    if [ "$running_count" -ge 6 ] 2>/dev/null; then
+    if [ "$running_count" -ge 5 ] 2>/dev/null; then
       ALL_RUNNING=true
-      printf "\r  Waiting... ${running_count}/${total_count} groups running\n"
+      printf "\r  Waiting... ${running_count}/${total_count} core jobs running\n"
       break
     fi
 
-    # Check for failed groups
+    # Check for failed jobs
     local failed
-    failed=$(echo "$job_json" | python3 -c "
+    failed=$(echo "$jobs_status" | python3 -c "
 import sys, json
 try:
-    job = json.load(sys.stdin)
-    for g in job.get('TaskGroups', []):
-        if g.get('Status') == 'failed':
-            print(g['Name'])
+    jobs = json.load(sys.stdin)
+    for j in jobs:
+        if j.get('Status') == 'failed':
+            print(j.get('ID', ''))
 except Exception:
     pass
 " 2>/dev/null) || true
     if [ -n "$failed" ]; then
       echo ""
-      warn "Task group '$failed' has failed. Check: ${NOMAD_API}/ui/jobs/${JOB_NAME}"
+      warn "Job '$failed' has failed. Check: ${NOMAD_API}/ui/jobs/${JOB_NAME}"
       break
     fi
 
@@ -214,10 +219,10 @@ except Exception:
   echo ""
 
   if [ "$ALL_RUNNING" = true ]; then
-    ok "All 6 task groups are running!"
+    ok "All 5 core services (web, worker, db, redis, rserve) are running!"
   else
-    warn "Not all groups reached 'running' within the timeout."
-    warn "Check UI: ${NOMAD_API}/ui/jobs/${JOB_NAME}"
+    warn "Not all services reached 'running' within the timeout."
+    warn "Check UI: ${NOMAD_API}/ui/jobs"
   fi
 
   echo ""
@@ -277,9 +282,28 @@ print_summary() {
 
 # ── Teardown ──────────────────────────────────────────────────────────────────
 teardown() {
-  info "Stopping OpenStudio Server job..."
-  curl -sf -X PUT "${NOMAD_API}/v1/job/${JOB_NAME}/deregister" >/dev/null 2>&1 || true
-  ok "Job stopped."
+  info "Stopping all OpenStudio Server jobs..."
+  # The pack renders multiple jobs (-web, -worker, -db, -redis, -rserve, ...).
+  # Enumerate them via the prefix API and deregister each.
+  local job_ids
+  job_ids=$(nomad_api "/v1/jobs?prefix=${JOB_NAME}" 2>/dev/null | python3 -c "
+import sys, json
+try:
+    for j in json.load(sys.stdin):
+        print(j.get('ID', ''))
+except Exception:
+    pass
+" 2>/dev/null || true)
+
+  if [ -n "$job_ids" ]; then
+    for id in $job_ids; do
+      info "  Stopping ${id}..."
+      curl -sf -X PUT "${NOMAD_API}/v1/job/${id}/deregister" >/dev/null 2>&1 || true
+    done
+    ok "All jobs stopped."
+  else
+    warn "No jobs found with prefix '${JOB_NAME}'."
+  fi
 
   info "Stopping Docker Compose infrastructure..."
   docker compose -f "$COMPOSE_FILE" down -v
@@ -289,22 +313,18 @@ teardown() {
 
 # ── Status ────────────────────────────────────────────────────────────────────
 show_status() {
-  echo "=== Nomad Job ==="
+  echo "=== Nomad Jobs (prefix: ${JOB_NAME}) ==="
   local job_json
-  job_json=$(nomad_api "/v1/job/${JOB_NAME}") || true
-  if [ -n "$job_json" ] && [ "$job_json" != "null" ]; then
+  job_json=$(nomad_api "/v1/jobs?prefix=${JOB_NAME}") || true
+  if [ -n "$job_json" ] && [ "$job_json" != "[]" ] && [ "$job_json" != "null" ]; then
     echo "$job_json" | python3 -c "
 import sys, json
-job = json.load(sys.stdin)
-tg = job.get('TaskGroups', [])
-print(f\"  Name: {job.get('Name', '?')}\")
-for g in tg:
-    s = g.get('Status', '?')
-    c = g.get('Count', '?')
-    print(f\"  Group: {g['Name']}  Status: {s}  Count: {c}\")
-" 2>/dev/null || echo "  (parse error)"
+jobs = json.load(sys.stdin)
+for j in jobs:
+    print(f\"  {j['ID']:40s} Status: {j.get('Status', '?'):10s} Type: {j.get('Type', '?'):10s} Priority: {j.get('Priority', '?')}\")
+" 2>/dev/null || echo "  (none)"
   else
-    echo "  (none)"
+    echo "  (no jobs found)"
   fi
 
   echo ""

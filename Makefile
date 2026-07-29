@@ -30,8 +30,7 @@ up: check ## Start Consul + Nomad in Docker (host networking)
 	@echo ""
 
 .PHONY: down
-down: ## Stop and remove all containers + volumes
-	-curl -sf -X PUT http://127.0.0.1:4646/v1/job/$(JOB_NAME)/deregister >/dev/null 2>&1 || true
+down: stop ## Stop all jobs + remove all containers + volumes
 	docker compose -f $(COMPOSE_FILE) down -v
 
 .PHONY: restart
@@ -47,9 +46,17 @@ deploy: check-infra ## Deploy OpenStudio Server with minimal-dev config
 	@echo "Run 'make status' to check progress."
 
 .PHONY: stop
-stop: ## Stop and purge the OpenStudio Server job via API
-	@echo "Stopping job $(JOB_NAME)..."
-	-curl -sf -X PUT "http://127.0.0.1:4646/v1/job/$(JOB_NAME)/deregister" >/dev/null 2>&1 || echo "(job not found)"
+stop: ## Stop and purge all OpenStudio Server jobs via API
+	@echo "Stopping all jobs with prefix $(JOB_NAME)..."
+	@IDS=$$(curl -sf "http://127.0.0.1:4646/v1/jobs?prefix=$(JOB_NAME)" 2>/dev/null | python3 -c "import sys,json; [print(j['ID']) for j in json.load(sys.stdin)]" 2>/dev/null); \
+	if [ -n "$$IDS" ]; then \
+		for id in $$IDS; do \
+			echo "  Stopping $$id..."; \
+			curl -sf -X PUT "http://127.0.0.1:4646/v1/job/$${id}/deregister" >/dev/null 2>&1 || true; \
+		done; \
+	else \
+		echo "(no jobs found with prefix $(JOB_NAME))"; \
+	fi
 
 .PHONY: redeploy
 redeploy: stop deploy ## Re-deploy (stop + deploy)
@@ -58,11 +65,11 @@ redeploy: stop deploy ## Re-deploy (stop + deploy)
 
 .PHONY: status
 status: ## Show deployment status (jobs + nodes + services) via API
-	@echo "=== Nomad Job: $(JOB_NAME) ==="
-	@curl -sf http://127.0.0.1:4646/v1/job/$(JOB_NAME) 2>/dev/null | python3 -c "import sys,json; j=json.load(sys.stdin); print(f\"Status: {j.get('Status','?')}\")" 2>/dev/null || echo "(none or not running)"
+	@echo "=== Nomad Jobs (prefix: $(JOB_NAME)) ==="
+	@curl -sf "http://127.0.0.1:4646/v1/jobs?prefix=$(JOB_NAME)" 2>/dev/null | python3 -c "import sys,json; [print(f\"  {j['ID']:40s} Status: {j.get('Status','?'):10s} Type: {j.get('Type','?'):10s} Priority: {j.get('Priority','?')}\") for j in json.load(sys.stdin)]" 2>/dev/null || echo "  (no jobs found)"
 	@echo ""
 	@echo "=== Nomad Nodes ==="
-	@curl -sf http://127.0.0.1:4646/v1/nodes 2>/dev/null | python3 -c "import sys,json; nodes=json.load(sys.stdin); [print(f\"  {n['ID'][:8]}  {n['Datacenter']}  {n['Name']}  Status:{n['Status']}  Eligible:{n['SchedulingEligibility']}\") for n in nodes]" 2>/dev/null || echo "(none)"
+	@curl -sf http://127.0.0.1:4646/v1/nodes 2>/dev/null | python3 -c "import sys,json; nodes=json.load(sys.stdin); [print(f\"  {n['ID'][:8]}  {n['Datacenter']}  {n['Name']}  Status:{n['Status']}  Eligible:{n.get('SchedulingEligibility','?')}\") for n in nodes]" 2>/dev/null || echo "(none)"
 	@echo ""
 	@echo "=== Consul Services ==="
 	@curl -sf http://127.0.0.1:8500/v1/catalog/services 2>/dev/null | python3 -c "import sys,json; svcs=json.load(sys.stdin); [print(f'  {s}') for s in sorted(svcs.keys()) if 'openstudio' in s]" 2>/dev/null || echo "(none or not running)"
