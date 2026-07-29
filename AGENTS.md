@@ -347,7 +347,7 @@ scripts/bump_metadata_version.sh metadata.hcl 0.3.0
 | `cicd.hcl` | CI/CD service token | Minimal: render, plan, run, stop — automated pipelines |
 | `teardown.hcl` | Teardown | Stop lifecycle access for cleanup without deploy or exec |
 
-All policies default to the `openstudio` namespace. Policy HCL must pass `nomad fmt -check policies/` — enforced by `acl-policy-validation.yml`.
+All policies default to the `default` namespace (matching the pack default `nomad_namespace`). Policy HCL must pass `nomad fmt -check policies/` — enforced by `acl-policy-validation.yml`.
 
 ### Example var-files
 

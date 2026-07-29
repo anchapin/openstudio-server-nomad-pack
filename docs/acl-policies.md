@@ -1,12 +1,10 @@
 # Nomad ACL Policy Setup
 
-This document describes the minimum ACL capabilities required to deploy and manage the OpenStudio Server Nomad Pack, provides ready-to-apply HCL policy files for three standard roles, and shows how to create policies and generate tokens.
+This document describes the minimum ACL capabilities required to deploy and manage the OpenStudio Server Nomad Pack, provides ready-to-apply HCL policy files for four standard roles, and shows how to create policies and generate tokens.
 
 ## Namespace Configuration
 
-> ⚠️ **Read this before applying any policy.**
-
-The policy files in `policies/` hardcode the namespace `"openstudio"`. The pack's `nomad_namespace` variable **defaults to `"default"`**. If you deployed to the `default` namespace (the quickstart default) and apply the policies without updating them, the tokens will grant permissions on the **wrong namespace** and will be completely ineffective for your jobs.
+The policy files in `policies/` default to namespace `"default"`, matching the pack's `nomad_namespace` default.
 
 ### Determine your deployment namespace
 
@@ -17,16 +15,13 @@ Check the namespace you used when deploying the pack:
 nomad namespace list
 ```
 
-### Update all policy files to match
+### Update all policy files for custom namespaces
 
 **Option A — sed one-liner** (fastest):
 
 ```sh
-# Replace "openstudio" with your actual namespace in all four policy files
-sed -i 's/namespace "openstudio"/namespace "YOUR_NAMESPACE"/g' policies/*.hcl
-
-# Example: deploying to the default namespace
-sed -i 's/namespace "openstudio"/namespace "default"/g' policies/*.hcl
+# Replace "default" with your actual namespace in all four policy files
+sed -i 's/namespace "default"/namespace "YOUR_NAMESPACE"/g' policies/*.hcl
 ```
 
 > **macOS note:** BSD `sed` requires an empty string after `-i`: `sed -i '' 's/.../.../g' policies/*.hcl`
@@ -45,10 +40,6 @@ bash scripts/apply-acl-policies.sh --namespace default --roles operator,cicd
 ```
 
 The helper script substitutes the namespace at apply-time and never modifies the source files.
-
-### Why policies use `"openstudio"` as the default
-
-The `"openstudio"` namespace is the recommended production namespace for this pack. The pack's `nomad_namespace` variable defaults to `"default"` for quickstart convenience, but production deployments should use a dedicated namespace. See the [Getting Started guide](getting-started-single-node.md) for namespace creation steps.
 
 ## Prerequisites
 
@@ -78,7 +69,7 @@ nomad acl bootstrap
 
 ## Minimum Required Capabilities
 
-All roles are scoped to the `openstudio` namespace by default (deny-all on `default`). **Update the namespace label to match your deployment before applying** — see [Namespace Configuration](#namespace-configuration) above. At minimum, workload-facing roles require:
+All roles are scoped to the `default` namespace by default. If you deploy to a non-default namespace, update the namespace label before applying (see [Namespace Configuration](#namespace-configuration)). At minimum, workload-facing roles require:
 
 - `read-job` / `list-jobs` — enumerate and inspect pack jobs
 - `agent: read`, `node: read` — resolve allocation placement
@@ -87,7 +78,7 @@ The `operator` role additionally requires `submit-job`, `alloc-lifecycle`, log/f
 
 ## Applying Policies
 
-> ⚠️ **Ensure the namespace in the policy files matches your deployment namespace before running these commands.** See [Namespace Configuration](#namespace-configuration) above, or use `bash scripts/apply-acl-policies.sh --namespace <your-namespace>` to handle the substitution automatically.
+> If your deployment namespace is not `default`, update the namespace labels first. See [Namespace Configuration](#namespace-configuration), or use `bash scripts/apply-acl-policies.sh --namespace <your-namespace>`.
 
 ```sh
 # Operator
@@ -168,7 +159,7 @@ export NOMAD_TOKEN="<SecretID>"
 
 ## Scoping Policies to a Specific Namespace
 
-The HCL files in `policies/` default to the `openstudio` namespace. Use the helper script or the `sed` one-liner described in [Namespace Configuration](#namespace-configuration) to update all files at once. Alternatively, change the `namespace` block label manually in a single file:
+The HCL files in `policies/` default to the `default` namespace. Use the helper script or the `sed` one-liner described in [Namespace Configuration](#namespace-configuration) to update all files at once. Alternatively, change the `namespace` block label manually in a single file:
 
 ```hcl
 # policies/operator.hcl (modified)
