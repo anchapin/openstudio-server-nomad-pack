@@ -130,6 +130,9 @@ job "[[ var "job_name" . ]]-db" {
       env {
         APP_VERSION               = "[[ var "app_version" . ]]"
         VAULT_INTEGRATION_ENABLED = "[[ var "vault_integration_enabled" . ]]"
+        [[ if not (var "vault_integration_enabled" .) ]]
+        MONGO_PASSWORD = "[[ var "mongo_password" . ]]"
+        [[ end ]]
       }
 
       [[ if var "vault_integration_enabled" . ]]

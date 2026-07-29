@@ -95,6 +95,37 @@ job "[[ var "job_name" . ]]-worker" {
       }
       [[ end ]]
 
+      [[ if var "vault_integration_enabled" . ]]
+      vault {
+        policies      = ["[[ var "vault_policy" . ]]"]
+        change_mode   = "restart"
+        change_signal = "SIGTERM"
+      }
+
+      template {
+        destination = "secrets/env"
+        env         = true
+        change_mode = "restart"
+        data        = <<-EOT
+{{ with secret "[[ var "vault_kv_mongodb_path" . ]]" }}
+MONGO_PASSWORD={{ .Data.data.password | toJSON }}
+{{ end }}
+{{ with secret "[[ var "vault_kv_redis_path" . ]]" }}
+REDIS_PASSWORD={{ .Data.data.password | toJSON }}
+{{ end }}
+{{ with secret "[[ var "vault_kv_app_path" . ]]" }}
+APP_SECRET_KEY_BASE={{ .Data.data.secret_key_base | toJSON }}
+{{ end }}
+EOT
+      }
+      [[ end ]]
+
+      [[ if var "vault_enabled" . ]]
+      vault {
+        role = "[[ var "vault_default_role" . ]]"
+      }
+      [[ end ]]
+
       config {
         image   = "[[ var "worker_image" . ]]"
         command = "[[ var "worker_command" . ]]"
@@ -113,6 +144,11 @@ job "[[ var "job_name" . ]]-worker" {
       env {
         QUEUES = "[[ var "worker_queues" . ]]"
         COUNT  = "[[ var "worker_process_count" . ]]"
+        [[ if not (var "vault_integration_enabled" .) ]]
+        MONGO_PASSWORD      = "[[ var "mongo_password" . ]]"
+        REDIS_PASSWORD      = "[[ var "redis_password" . ]]"
+        APP_SECRET_KEY_BASE = "[[ var "app_secret_key_base" . ]]"
+        [[ end ]]
       }
 
       resources {
