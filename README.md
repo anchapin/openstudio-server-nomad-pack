@@ -115,10 +115,11 @@ The `pack-validation.yml` workflow runs on **push to `develop` or `main`** and o
 
 ## Startup Dependency Checks
 
-The `web` task group includes a `prestart` init task that blocks web container startup until both backing services are registered as healthy in Consul:
+The `web` task group includes a `prestart` init task that blocks web container startup until required backing services are registered as healthy in Consul:
 
 - `openstudio-db`
 - `openstudio-redis`
+- `openstudio-rserve`
 
 ## Persistent Storage
 
