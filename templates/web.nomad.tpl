@@ -180,6 +180,30 @@ EOH
   group "web-background" {
     count = [[ var "web_background_count" . ]]
 
+    [[ if var "web_background_autoscaling_enabled" . ]]
+    scaling {
+      enabled = true
+      min     = [[ var "web_background_min_replicas" . ]]
+      max     = [[ var "web_background_max_replicas" . ]]
+
+      policy {
+        cooldown            = "[[ var "autoscaler_cooldown" . ]]"
+        evaluation_interval = "30s"
+
+        [[ if var "worker_autoscaling_cpu_enabled" . ]]
+        check "cpu-utilization" {
+          source = "nomad-apm"
+          query  = "avg_cpu"
+
+          strategy "target-value" {
+            target = [[ var "worker_cpu_target_utilization" . ]]
+          }
+        }
+        [[ end ]]
+      }
+    }
+    [[ end ]]
+
     [[ if var "nfs_shared_volume_enabled" . ]]
     [[ if eq (var "nfs_volume_type" .) "csi" ]]
     volume "nfs-shared" {

@@ -32,12 +32,20 @@ job "[[ var "job_name" . ]]-web" {
     count = [[ var "web_count" . ]]
 
     [[ if var "nfs_shared_volume_enabled" . ]]
+    [[ if eq (var "nfs_volume_type" .) "csi" ]]
     volume "nfs-shared" {
       type            = "csi"
       source          = "[[ var "nfs_volume_source" . ]]"
       access_mode     = "multi-node-multi-writer"
       attachment_mode = "file-system"
     }
+    [[ else ]]
+    volume "nfs-shared" {
+      type      = "host"
+      source    = "[[ var "nfs_volume_source" . ]]"
+      read_only = false
+    }
+    [[ end ]]
     [[ end ]]
 
     network {
@@ -172,13 +180,45 @@ EOH
   group "web-background" {
     count = [[ var "web_background_count" . ]]
 
+    [[ if var "web_background_autoscaling_enabled" . ]]
+    scaling {
+      enabled = true
+      min     = [[ var "web_background_min_replicas" . ]]
+      max     = [[ var "web_background_max_replicas" . ]]
+
+      policy {
+        cooldown            = "[[ var "autoscaler_cooldown" . ]]"
+        evaluation_interval = "30s"
+
+        [[ if var "worker_autoscaling_cpu_enabled" . ]]
+        check "cpu-utilization" {
+          source = "nomad-apm"
+          query  = "avg_cpu"
+
+          strategy "target-value" {
+            target = [[ var "worker_cpu_target_utilization" . ]]
+          }
+        }
+        [[ end ]]
+      }
+    }
+    [[ end ]]
+
     [[ if var "nfs_shared_volume_enabled" . ]]
+    [[ if eq (var "nfs_volume_type" .) "csi" ]]
     volume "nfs-shared" {
       type            = "csi"
       source          = "[[ var "nfs_volume_source" . ]]"
       access_mode     = "multi-node-multi-writer"
       attachment_mode = "file-system"
     }
+    [[ else ]]
+    volume "nfs-shared" {
+      type      = "host"
+      source    = "[[ var "nfs_volume_source" . ]]"
+      read_only = false
+    }
+    [[ end ]]
     [[ end ]]
 
     # Prestart: wait for MongoDB, Redis, and the web service to be healthy in Consul

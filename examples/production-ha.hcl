@@ -29,6 +29,12 @@ web_memory   = 2048
 
 web_background_count = 2
 
+# ---------- Web-background (autoscaling) ----------
+# Static seed count; autoscaler owns the actual count.
+web_background_autoscaling_enabled = true
+web_background_min_replicas        = 1
+web_background_max_replicas        = 5
+
 # ---------- Worker (autoscaling) ----------
 worker_priority      = 60
 worker_cpu           = 4000

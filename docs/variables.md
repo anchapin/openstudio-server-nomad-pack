@@ -71,6 +71,9 @@
 | `web_background_command` | `string` | `""` | Optional command override for the web-background task. Leave empty to use the image default entrypoint. |
 | `web_background_args` | `list(string)` | `[]` | Optional args passed to web_background_command when set. |
 | `web_background_count` | `number` | `1` | The number of web-background tasks to run. |
+| `web_background_autoscaling_enabled` | `bool` | `false` | Enable Nomad Autoscaler scaling for the web-background task group. |
+| `web_background_min_replicas` | `number` | `1` | Minimum number of web-background replicas when autoscaling is enabled. |
+| `web_background_max_replicas` | `number` | `5` | Maximum number of web-background replicas when autoscaling is enabled. |
 | `db_image` | `string` | `"mongo:6.0.7"` | The MongoDB database image name and tag. BREAKING UPGRADE NOTE: persisted data volumes created on mongo:4.2 must be migrated in sequence 4.2 -> 4.4 -> 5.0 -> 6.0.7; do not skip major versions. See docs/upgrading.md for the full procedure. |
 | `db_cpu` | `number` | `1000` | CPU shares allocated to the MongoDB task. |
 | `db_memory` | `number` | `4096` | Memory (MB) allocated to the MongoDB task. |
