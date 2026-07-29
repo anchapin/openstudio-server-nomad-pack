@@ -66,6 +66,8 @@ jobs:
       - name: Install Consul
         run: |
           curl -fsSL "https://releases.hashicorp.com/consul/${CONSUL_VERSION}/consul_${CONSUL_VERSION}_linux_amd64.zip" -o consul.zip
+          curl -fsSL "https://releases.hashicorp.com/consul/${CONSUL_VERSION}/consul_${CONSUL_VERSION}_SHA256SUMS" -o consul_SHA256SUMS
+          sha256sum --check --ignore-missing consul_SHA256SUMS || { echo "Checksum verification failed"; exit 1; }
           unzip -q consul.zip
           sudo mv consul /usr/local/bin/consul
           consul version
