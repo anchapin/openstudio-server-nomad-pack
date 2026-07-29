@@ -23,6 +23,7 @@ custom-job-state-backup
 custom-job-state-restore
 custom-job-batch-verify
 custom-job-test
+custom-job-nomad-autoscaler
 custom-job-autoscaler
 EOF
 
@@ -64,17 +65,18 @@ chmod +x "${MOCK_DIR}/nomad"
 PATH="${MOCK_DIR}:$PATH" LOG_FILE="${LOG_FILE}" JOBS_FILE="${JOBS_FILE}" NOMAD_NAMESPACE="test-ns" \
   "${SCRIPT}" custom-job >/dev/null
 
-grep -q 'job stop -namespace test-ns custom-job-worker' "${LOG_FILE}"
-grep -q 'job stop -namespace test-ns custom-job-web' "${LOG_FILE}"
-grep -q 'job stop -namespace test-ns custom-job-rserve' "${LOG_FILE}"
-grep -q 'job stop -namespace test-ns custom-job-db' "${LOG_FILE}"
-grep -q 'job stop -namespace test-ns custom-job-redis' "${LOG_FILE}"
-grep -q 'job stop -global -namespace test-ns custom-job-system-hooks' "${LOG_FILE}"
-grep -q 'job stop -namespace test-ns custom-job-state-backup' "${LOG_FILE}"
-grep -q 'job stop -namespace test-ns custom-job-state-restore' "${LOG_FILE}"
-grep -q 'job stop -namespace test-ns custom-job-batch-verify' "${LOG_FILE}"
-grep -q 'job stop -namespace test-ns custom-job-test' "${LOG_FILE}"
-grep -q 'job stop -namespace test-ns custom-job-autoscaler' "${LOG_FILE}"
+grep -q 'job stop -purge -namespace test-ns custom-job-worker' "${LOG_FILE}"
+grep -q 'job stop -purge -namespace test-ns custom-job-web' "${LOG_FILE}"
+grep -q 'job stop -purge -namespace test-ns custom-job-rserve' "${LOG_FILE}"
+grep -q 'job stop -purge -namespace test-ns custom-job-db' "${LOG_FILE}"
+grep -q 'job stop -purge -namespace test-ns custom-job-redis' "${LOG_FILE}"
+grep -q 'job stop -purge -global -namespace test-ns custom-job-system-hooks' "${LOG_FILE}"
+grep -q 'job stop -purge -namespace test-ns custom-job-state-backup' "${LOG_FILE}"
+grep -q 'job stop -purge -namespace test-ns custom-job-state-restore' "${LOG_FILE}"
+grep -q 'job stop -purge -namespace test-ns custom-job-batch-verify' "${LOG_FILE}"
+grep -q 'job stop -purge -namespace test-ns custom-job-test' "${LOG_FILE}"
+grep -q 'job stop -purge -namespace test-ns custom-job-nomad-autoscaler' "${LOG_FILE}"
+grep -q 'job stop -purge -namespace test-ns custom-job-autoscaler' "${LOG_FILE}"
 
 rm -rf "${MOCK_DIR}"
 rm -f "${LOG_FILE}" "${JOBS_FILE}"
