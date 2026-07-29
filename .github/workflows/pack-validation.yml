@@ -58,6 +58,9 @@ jobs:
           fi
           rm -f "${GENERATED_DOC}"
 
+      - name: Check backup/restore defaults in docs
+        run: ./scripts/test_backup_restore_docs_defaults.sh
+
       - name: Check README references docs/variables.md (no stale inline table)
         run: |
           if [ ! -f docs/variables.md ]; then

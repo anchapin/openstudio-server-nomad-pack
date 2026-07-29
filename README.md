@@ -35,8 +35,8 @@ The pack renders a dedicated Nomad job for each service component:
 | `<job_name>-redis` | `redis.nomad.tpl` | always (Consul: `openstudio-redis`) |
 | `<job_name>-rserve` | `rserve.nomad.tpl` | always (Consul: `openstudio-rserve`) |
 | `<job_name>-system-hooks` | `system-hooks.nomad.tpl` | `enable_image_prepull = true` (default) |
-| `<job_name>-state-backup` | `state-backup.nomad.tpl` | `backup_enabled = true` |
-| `<job_name>-state-restore` | `state-restore.nomad.tpl` | `restore_enabled = true` |
+| `<job_name>-state-backup` | `state-backup.nomad.tpl` | `backup_enabled = false` (default; set `true` when backup storage is provisioned) |
+| `<job_name>-state-restore` | `state-restore.nomad.tpl` | `restore_enabled = false` (default; set `true` when restore workflows are required) |
 | `<job_name>-test` | `openstudio_test.nomad.tpl` | always |
 | `<job_name>-autoscaler` | `nomad-autoscaler.nomad.tpl` | `nomad_autoscaler_enabled = true` |
 | `<job_name>-batch-verify` | `batch-verification.nomad.tpl` | `enable_batch_verification = true` |
@@ -245,8 +245,8 @@ redis_affinities = [
 - `templates/redis.nomad.tpl`: Redis cache service (`<job_name>-redis`, Consul: `openstudio-redis`) on port `6379`.
 - `templates/rserve.nomad.tpl`: Rserve service (`<job_name>-rserve`, Consul: `openstudio-rserve`) on port `6311`.
 - `templates/system-hooks.nomad.tpl`: System job that pre-pulls all service images on every eligible node (`enable_image_prepull = true`, default).
-- `templates/state-backup.nomad.tpl`: Periodic batch job (`<job_name>-state-backup`) that runs `mongodump` + Redis backup on `backup_cron` schedule (`backup_enabled = true`).
-- `templates/state-restore.nomad.tpl`: On-demand parameterized batch job (`<job_name>-state-restore`) for manual restore dispatch (`restore_enabled = true`).
+- `templates/state-backup.nomad.tpl`: Periodic batch job (`<job_name>-state-backup`) that runs `mongodump` + Redis backup on `backup_cron` schedule (`backup_enabled = false` by default).
+- `templates/state-restore.nomad.tpl`: On-demand parameterized batch job (`<job_name>-state-restore`) for manual restore dispatch (`restore_enabled = false` by default).
 - `templates/openstudio_test.nomad.tpl`: Parameterized batch test job (`<job_name>-test`) for post-deploy service validation (always rendered).
 - `templates/traefik.nomad.tpl`: Optional Traefik ingress job (`<job_name>-traefik`), enabled by `deploy_traefik = true`.
 - `templates/nomad-autoscaler.nomad.tpl`: Optional Nomad Autoscaler daemon job stub (`<job_name>-autoscaler`), enabled by `nomad_autoscaler_enabled = true`.
@@ -311,6 +311,8 @@ This pack now includes:
   - On-demand dispatch using backup file names from the backup directory
   - Restores MongoDB from `mongodump` archive
   - Restores Redis from serialized key dump
+
+Both jobs are disabled by default (`backup_enabled = false`, `restore_enabled = false`). Enable `backup_enabled = true` only after backup storage is provisioned and write-tested. Enable `restore_enabled = true` only when you need restore dispatch in that environment and have validated restore inputs/procedures.
 
 ### Restore Dispatch Example
 
