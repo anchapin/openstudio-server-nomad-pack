@@ -10,6 +10,10 @@ nomad-pack fmt --check .
 nomad fmt -check policies/
 for script in vagrant/provision/*.sh; do bash -n "$script"; done
 
+# Operational helpers (run manually against a live cluster — not part of CI)
+./scripts/pre-teardown.sh [--namespace <ns>] [JOB_NAME]  # stop jobs in teardown-safe order
+./scripts/run-batch-verification.sh                       # ping/TCP-check all services
+
 # Render templates to stdout and inspect output
 nomad-pack render .
 nomad-pack render -var-file examples/minimal-dev.hcl .
@@ -86,6 +90,7 @@ worker ──► mongodb
 | `constraints` | Iterates a list of constraint objects |
 | `affinities` | Iterates a list of affinity objects |
 | `spreads` | Iterates a list of spread objects |
+| `openstudio_server.node_class_constraint` | Hard constraint on `${attr.nomad.node.class}` |
 | `openstudio_server.compute_node_constraint` | Hard constraint on `compute_node_class` variable |
 | `openstudio_server.system_node_constraint` | Hard constraint on `system_node_class` variable |
 | `openstudio_server.arch_constraint` | Hard constraint: `os.name = linux`, `cpu.arch = amd64` |
@@ -197,6 +202,125 @@ When bumping OpenStudio Server version, update all four together:
 - Conventional Commits: `feat:`, `fix:`, `docs:`, `chore:`, `ci:`
 - Add changelog entry under `[Unreleased]` in `CHANGELOG.md` per PR
 - Release prep: move unreleased entries to versioned section + add row to `docs/compatibility.md`
+
+Release automation on `main`:
+1. **`release-version-bump.yml`** — auto-bumps patch in `metadata.hcl`, commits, pushes `v*` tag
+2. **`release.yml`** — triggers on the tag, publishes GitHub Release
+
+For a non-patch increment, run before opening the PR:
+```bash
+scripts/bump_metadata_version.sh metadata.hcl minor   # 0.2.0 → 0.3.0
+scripts/bump_metadata_version.sh metadata.hcl 0.3.0   # explicit version
+```
+
+If Step 1 fails, verify the workflow has write permission to push to `main` and that `scripts/bump_metadata_version.sh` exits cleanly. If Step 2 is skipped, check that the `v*` tag was actually pushed and the workflow has `contents: write` permission.
+
+### Consul service names
+
+| Consul service name | Component |
+|---|---|
+| `openstudio-db` | MongoDB |
+| `openstudio-redis` | Redis |
+| `openstudio-rserve` | Rserve |
+| `openstudio-web` | Web (HTTP on `web_port`) |
+
+Components resolve each other via `.service.consul` DNS names. Consul Connect mTLS sidecar proxies are optionally enabled via `enable_consul_connect = true`.
+
+### Worker autoscaling
+
+When `worker_autoscaling_enabled = true`, the worker job gains a `scaling` block with two built-in strategies:
+
+1. **CPU utilization** (`nomad-apm` source): enabled via `worker_autoscaling_cpu_enabled = true`. Target set by `worker_cpu_target_utilization` (default `50`). Requires no external metrics stack.
+2. **Queue depth** (`prometheus` source): uses configurable Prometheus queries (`worker_queue_requeued_query`, `worker_queue_simulations_query`). Requires Prometheus at `autoscaler_prometheus_address`.
+
+The Nomad Autoscaler daemon must be deployed before enabling autoscaling (`nomad_autoscaler_enabled = true` deploys the optional daemon stub via `nomad-autoscaler.nomad.tpl`).
+
+### Scheduler placement helpers
+
+Per-group constraints, affinities, and spreads are exposed as list-of-object variables (e.g. `db_constraints`, `worker_affinities`, `redis_spreads`). Each object has `attribute`, optional `operator`, `value`, and optional `weight` fields, passed to the `constraints`/`affinities`/`spreads` helpers in `_helpers.tpl`.
+
+### NFS shared volume
+
+Enabled via `nfs_shared_volume_enabled = true`. Recommended as an OS-level NFS mount registered as a Nomad host volume (not a CSI NFS driver). NFS alone does **not** provide distributed file locking — it does not make `web_count > 1` safe.
+
+### Kubernetes → Nomad concept mapping
+
+| Kubernetes / Helm concept | Nomad Pack equivalent |
+|---|---|
+| `values.yaml` | `variables.hcl` |
+| Deployment / Pod | Job → Task Group → Task (docker driver) |
+| Service | `service` stanza (registers in Consul) |
+| ConfigMap / Secret | `template` stanza (static, Consul KV, or Vault) |
+| HPA / KEDA ScaledObject | Nomad Autoscaler + `scaling` block in worker job |
+| PodDisruptionBudget | `update` stanza with `max_parallel`, `health_check`, `auto_revert` |
+| DaemonSet | Nomad system job (`type = "system"`) |
+| Helm hook (pre-delete, etc.) | `prestart` / `poststop` lifecycle tasks or standalone batch jobs |
+| StorageClass / PVC | `volume` stanza + CSI plugin or `host_volume` |
+| ServiceAccount / RBAC | Nomad ACL policies + Vault roles |
+| PriorityClass (high/low) | Job-level `priority` (web=80 > worker=40) |
+| Ingress | Traefik via Consul service tags |
+
+### Traefik ingress
+
+The web service registers Consul tags for Traefik's Consul Catalog provider. Set `ingress_domain` to the desired hostname; set `ingress_tls_enabled = true` to add `websecure` entrypoint tags. Traefik must be deployed separately.
+
+### `outputs.tpl`
+
+Rendered by `nomad-pack run` on successful deployment — prints Consul service UI URLs and the Traefik web URL. When adding a new service, add its Consul URL to `outputs.tpl` as well.
+
+### ACL policies (`policies/`)
+
+| File | Role | Purpose |
+|---|---|---|
+| `operator.hcl` | Operator | Full deploy/stop/read — humans running `nomad-pack run/stop` |
+| `readonly.hcl` | Read-only | Log visibility and status — monitoring dashboards |
+| `cicd.hcl` | CI/CD service token | Minimal: render, plan, run, stop — automated pipelines |
+| `teardown.hcl` | Teardown | Stop lifecycle access for cleanup without deploy or exec |
+
+All policies default to the `openstudio` namespace. Must pass `nomad fmt -check policies/` (enforced by `acl-policy-validation.yml`).
+
+### Example var-files (`examples/`)
+
+| File | Purpose |
+|---|---|
+| `minimal-dev.hcl` | Single-node, ephemeral storage, minimal resources, no Vault/autoscaling |
+| `production-ha.hcl` | Multi-datacenter, HA resources, Vault, Consul Connect, autoscaling |
+| `airgapped.hcl` | Private registry image overrides, journald logging, no Vault |
+| `e2e-test.hcl` | End-to-end test configuration |
+
+Use `minimal-dev.hcl` as the baseline for new var-files; it is also used for CI plan validation.
+
+### Vagrant local cluster
+
+`Vagrantfile` + `vagrant/provision/` spin up a 4-VM micro-cluster for local end-to-end testing:
+
+| VM | IP | Runs |
+|---|---|---|
+| `consul` | `192.168.56.10` | Consul server + UI |
+| `nomad-server` | `192.168.56.11` | Nomad server |
+| `nomad-client` | `192.168.56.12` | Nomad client with Docker |
+| `vault` | `192.168.56.13` | Vault dev mode (token: `root`) |
+
+```bash
+vagrant ssh consul -c "consul members"
+vagrant ssh nomad-server -c "nomad server members"
+vagrant ssh nomad-client -c "nomad node status"
+vagrant ssh vault -c "VAULT_ADDR=http://127.0.0.1:8200 VAULT_TOKEN=root vault status"
+```
+
+### Deep-dive docs (`docs/`)
+
+| File | Content |
+|---|---|
+| `getting-started-single-node.md` | Step-by-step single-node deploy guide |
+| `operations-guide.md` | Day-2 operations: scaling, draining, updating |
+| `storage.md` | Host volume, CSI, NFS configuration detail |
+| `upgrading.md` | Version upgrade procedures |
+| `migration-k8s-to-nomad.md` | Helm → Nomad Pack migration guide |
+| `vault-policies.md` | Vault policy templates and setup |
+| `acl-policies.md` | Nomad ACL policy reference |
+| `compatibility.md` | Pack ↔ app version compatibility matrix |
+| `variables.md` | Auto-generated variable reference (do not edit manually) |
 
 ## Related configs
 
