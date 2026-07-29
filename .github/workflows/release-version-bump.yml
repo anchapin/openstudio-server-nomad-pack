@@ -24,11 +24,14 @@ jobs:
           NEW_VERSION="$(./scripts/bump_metadata_version.sh metadata.hcl patch)"
           echo "new_version=${NEW_VERSION}" >> "${GITHUB_OUTPUT}"
 
+      - name: Sync registry metadata
+        run: cp metadata.hcl packs/openstudio-server/metadata.hcl
+
       - name: Commit and push version update
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add metadata.hcl
+          git add metadata.hcl packs/openstudio-server/metadata.hcl
           git commit -m "chore(release): bump metadata version to v${{ steps.bump.outputs.new_version }} [skip ci]"
           git push
 
@@ -48,4 +51,3 @@ jobs:
           TAG="v${{ steps.bump.outputs.new_version }}"
           git tag "${TAG}"
           git push origin "${TAG}"
-

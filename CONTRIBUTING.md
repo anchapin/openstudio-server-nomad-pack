@@ -115,7 +115,7 @@ Entries are consolidated into a versioned section by the release process.
 
 Releases are automated via a **two-step pipeline** triggered by a push to `main`:
 
-1. **`release-version-bump.yml`** (Step 1): bumps the patch version in `metadata.hcl`, commits the change, and pushes a `v<version>` git tag.
+1. **`release-version-bump.yml`** (Step 1): bumps the patch version in `metadata.hcl`, syncs `packs/openstudio-server/metadata.hcl`, commits both files, and pushes a `v<version>` git tag.
 2. **`release.yml`** (Step 2): triggered by the `v*` tag created in Step 1 — reads the version from `metadata.hcl` and publishes the GitHub Release with auto-generated release notes.
 
 To prepare a release:
@@ -125,7 +125,7 @@ To prepare a release:
 3. Update `docs/compatibility.md` with the **upcoming release version** (current `metadata.hcl` patch + 1) and its compatibility data.
 4. Open a PR from `develop` → `main`, merge when CI passes.
 5. After merging, the two-step release pipeline runs automatically:
-   - **`release-version-bump.yml`** bumps the patch version in `metadata.hcl`, commits it, and pushes a `v<version>` git tag.
+   - **`release-version-bump.yml`** bumps the patch version in `metadata.hcl`, syncs `packs/openstudio-server/metadata.hcl`, commits both files, and pushes a `v<version>` git tag.
    - **`release.yml`** picks up the new tag and publishes the GitHub Release.
    - _Triage:_ If Step 1 fails, check write permissions to `main` and that `scripts/bump_metadata_version.sh` runs cleanly. If Step 2 is missing, confirm the `v*` tag exists in the repo and that the workflow has `contents: write` permission.
 
