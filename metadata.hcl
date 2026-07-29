@@ -5,7 +5,9 @@
 #      from this file, and creates a GitHub Release + publishes to the registry.
 
 app {
-  url = "https://github.com/anchapin/openstudio-server-nomad-pack"
+  # Keep app.version aligned with variable "app_version" in variables.hcl.
+  url     = "https://github.com/anchapin/openstudio-server-nomad-pack"
+  version = "3.11.0"
 }
 
 pack {

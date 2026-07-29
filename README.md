@@ -197,6 +197,7 @@ The raw variable declarations and defaults live in [`variables.hcl`](./variables
 
 - Root pack metadata: [`metadata.hcl`](./metadata.hcl)
 - Pack-scoped metadata: [`packs/openstudio-server/metadata.hcl`](./packs/openstudio-server/metadata.hcl)
+- Keep `app.version` in both files synchronized with `app_version` in [`variables.hcl`](./variables.hcl) so the Nomad Pack Registry displays the correct OpenStudio Server version.
 
 > **Variable reference:** All configurable variables — types, defaults, and descriptions — are
 > documented in **[docs/variables.md](./docs/variables.md)** (auto-generated from `variables.hcl`
