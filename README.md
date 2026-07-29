@@ -303,7 +303,7 @@ This pack now includes:
 
 - **Periodic backup job**: `<job_name>-state-backup`
   - Runs on `backup_cron`
-  - Writes MongoDB and Redis snapshots into `backup_nfs_host_volume`
+  - Writes MongoDB and Redis snapshots into `backup_volume_source`
   - Cleans up old files based on `backup_retention_days`
 - **Parameterized restore job**: `<job_name>-state-restore`
   - On-demand dispatch using backup file names from the backup directory

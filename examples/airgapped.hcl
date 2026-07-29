@@ -51,7 +51,7 @@ enable_vector_collection = false
 
 # ---------- Backups ----------
 backup_enabled         = true
-backup_nfs_host_volume = "openstudio-backups"
+backup_volume_source   = "openstudio-backups"
 backup_retention_days  = 14
 restore_enabled        = true
 

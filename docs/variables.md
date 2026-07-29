@@ -121,8 +121,8 @@
 | `backup_cron` | `string` | `"0 2 * * * *"` | Cron expression for the periodic backup schedule. The value is used in a crons list in the periodic stanza. |
 | `backup_prohibit_overlap` | `bool` | `true` | Prevent overlapping backup runs. |
 | `backup_volume_type` | `string` | `"host_volume"` | Storage backend for the backup and restore state volume. Use \"host_volume\" (default) for a Nomad host volume or \"csi\" for a CSI-managed volume. |
-| `backup_nfs_host_volume` | `string` | `"openstudio-backups"` | Nomad volume source for state backups. For host_volume this is the host volume name; for csi this is the CSI volume ID. |
-| `backup_mount_path` | `string` | `"/backups"` | Path inside backup tasks where the NFS host volume is mounted. |
+| `backup_volume_source` | `string` | `"openstudio-backups"` | Nomad volume source for state backups. For host_volume this is the host volume name; for csi this is the CSI volume ID. |
+| `backup_mount_path` | `string` | `"/backups"` | Path inside backup tasks where the backup state volume is mounted. |
 | `backup_subdirectory` | `string` | `"openstudio-state"` | Subdirectory name under the backup mount where OpenStudio state backups are written. |
 | `backup_retention_days` | `number` | `14` | How many days of backup files to retain. |
 | `mongodb_backup_uri` | `string` | `"mongodb://openstudio-db.service.consul:27017"` | MongoDB URI used by backup and restore jobs. |

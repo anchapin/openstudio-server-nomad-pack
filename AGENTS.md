@@ -212,7 +212,7 @@ Volume ownership must be set before first deploy: MongoDB and Redis run as UID/G
 
 ### Backup and restore jobs
 
-`state-backup.nomad.tpl` renders a **periodic batch job** (`type = "batch"` with a `periodic` stanza) that runs `mongodump` and `redis-cli BGSAVE` on the schedule defined by `backup_cron` (default: `0 2 * * * *`). Backups write to an NFS host volume (`backup_nfs_host_volume`) and rotate files older than `backup_retention_days` (default `14`).
+`state-backup.nomad.tpl` renders a **periodic batch job** (`type = "batch"` with a `periodic` stanza) that runs `mongodump` and `redis-cli BGSAVE` on the schedule defined by `backup_cron` (default: `0 2 * * * *`). Backups write to a backup state volume (`backup_volume_source`) and rotate files older than `backup_retention_days` (default `14`).
 
 `state-restore.nomad.tpl` renders an **on-demand parameterized batch job** dispatched manually.
 
