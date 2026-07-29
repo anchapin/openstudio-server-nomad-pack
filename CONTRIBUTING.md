@@ -111,9 +111,12 @@ Entries are consolidated into a versioned section by the release process.
 
 ## Release process
 
-> **Branch promotion model:** all development merges into `develop`. When a release is ready, `develop` is merged into `main`. Only pushes to `main` trigger the automated version-bump and release workflow (`release-version-bump.yml`). Pushing to `develop` — including merged feature PRs — does **not** create a public release.
+> **Branch promotion model:** all development merges into `develop`. When a release is ready, `develop` is merged into `main`. Only pushes to `main` trigger the two-step automated release pipeline (`release-version-bump.yml` → `release.yml`). Pushing to `develop` — including merged feature PRs — does **not** create a public release.
 
-Releases are automated via `.github/workflows/release-version-bump.yml` and triggered by a push to `main`.
+Releases are automated via a **two-step pipeline** triggered by a push to `main`:
+
+1. **`release-version-bump.yml`** (Step 1): bumps the patch version in `metadata.hcl`, commits the change, and pushes a `v<version>` git tag.
+2. **`release.yml`** (Step 2): triggered by the `v*` tag created in Step 1 — reads the version from `metadata.hcl` and publishes the GitHub Release with auto-generated release notes.
 
 To prepare a release:
 
@@ -121,7 +124,10 @@ To prepare a release:
 2. Move all `[Unreleased]` entries in `CHANGELOG.md` to a new versioned section (e.g. `[0.3.0] - 2026-07-28`).
 3. Update `docs/compatibility.md` (see section below).
 4. Open a PR from `develop` → `main`, merge when CI passes.
-5. The `release-version-bump.yml` workflow automatically bumps the patch version in `metadata.hcl`, creates a git tag, and publishes the GitHub Release.
+5. After merging, the two-step release pipeline runs automatically:
+   - **`release-version-bump.yml`** bumps the patch version in `metadata.hcl`, commits it, and pushes a `v<version>` git tag.
+   - **`release.yml`** picks up the new tag and publishes the GitHub Release.
+   - _Triage:_ If Step 1 fails, check write permissions to `main` and that `scripts/bump_metadata_version.sh` runs cleanly. If Step 2 is missing, confirm the `v*` tag exists in the repo and that the workflow has `contents: write` permission.
 
 > **Note:** `scripts/bump_metadata_version.sh <new-version>` can still be used to manually set a specific version before opening the `develop → main` PR if a non-patch increment (minor/major) is needed.
 

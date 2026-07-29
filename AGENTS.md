@@ -320,7 +320,11 @@ CI fails if these files are out of sync (the `Check variables.md is up-to-date` 
 1. Move all `[Unreleased]` entries in `CHANGELOG.md` to a new versioned section (e.g. `[0.3.0] - YYYY-MM-DD`).
 2. Add a new row to `docs/compatibility.md` (pack version, `app_version`, min Nomad, min Consul). CI enforces this: the `Check compatibility.md is up-to-date` step fails if the current `pack.version` from `metadata.hcl` is absent from `docs/compatibility.md`.
 3. PR `develop` → `main`, merge when CI passes.
-4. `release-version-bump.yml` triggers automatically on push to `main`: it runs `scripts/bump_metadata_version.sh`, creates the git tag, and publishes the GitHub Release.
+4. Two workflows run automatically after merging to `main`:
+   - **Step 1 — `release-version-bump.yml`** (triggers on push to `main`): runs `scripts/bump_metadata_version.sh`, commits the bumped `metadata.hcl`, and pushes a `v<version>` git tag.
+   - **Step 2 — `release.yml`** (triggers on the `v*` tag push created in Step 1): reads the version from `metadata.hcl` and publishes the GitHub Release with auto-generated release notes.
+
+   If Step 1 fails, check that the workflow has write permission to push to `main` and that `scripts/bump_metadata_version.sh` exits cleanly against the current `metadata.hcl`. If Step 2 fails (or is skipped), verify that the `v*` tag was actually pushed (check the repo's Tags page) and that the workflow has `contents: write` permission to create releases.
 
 For a non-patch increment (minor/major), manually run `scripts/bump_metadata_version.sh <new-version>` before opening the `develop → main` PR to set the desired version.
 
@@ -402,5 +406,5 @@ cp templates/*.tpl templates/*.nomad.tpl packs/openstudio-server/templates/
 | `pack-validation.yml` | push to `develop`, PR to `develop` or `main` | fmt, render, validate, Vagrantfile syntax, script syntax, version-bump tests, `variables.md` diff, README links to `docs/variables.md`, `compatibility.md` version gate, Nomad dev-agent plan for all example var-files, `packs/` registry sync, integration test script |
 | `acl-policy-validation.yml` | push/PR on `policies/**` | `nomad fmt -check policies/` |
 | `integration-test.yml` | PR to `develop` (path-filtered) | template render + e2e stack test |
-| `release.yml` | push to `main` | reads version from `metadata.hcl`, creates GitHub Release |
-| `release-version-bump.yml` | push to `main` | auto-bumps patch version in `metadata.hcl`, creates git tag |
+| `release-version-bump.yml` | push to `main` | **Step 1:** auto-bumps patch version in `metadata.hcl`, commits, creates and pushes `v*` git tag — triggers `release.yml` |
+| `release.yml` | push of tag matching `v*` | **Step 2:** reads version from `metadata.hcl`, publishes GitHub Release with auto-generated notes |
