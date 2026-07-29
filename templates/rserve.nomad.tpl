@@ -110,7 +110,9 @@ job "[[ var "job_name" . ]]-rserve" {
       }
 
       [[ if var "vault_integration_enabled" . ]]
+      [[ if not (var "vault_enabled" .) ]]
       vault {}
+      [[ end ]]
       [[ end ]]
     }
 
