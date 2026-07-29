@@ -47,6 +47,10 @@ jobs:
         run: |
           ./scripts/test_pre_teardown.sh
 
+      - name: Check migration docs variable mapping
+        run: |
+          ./scripts/test_migration_doc_variable_mapping.sh
+
       - name: Check variables.md is up-to-date
         run: |
           GENERATED_DOC=docs/variables.generated.md
