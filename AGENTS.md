@@ -412,7 +412,7 @@ cp templates/*.tpl templates/*.nomad.tpl packs/openstudio-server/templates/
 | Workflow | Trigger | What it checks |
 |---|---|---|
 | `pack-validation.yml` | push to `develop` or `main`, PR to `develop` or `main`, `workflow_dispatch` | fmt, render, validate, `examples/test-batch.nomad` job spec validation, Vagrantfile syntax, script syntax, version-bump tests, `variables.md` diff, README links to `docs/variables.md`, `compatibility.md` version gate, Nomad dev-agent plan for all example var-files, `packs/` registry sync, integration test script |
-| `acl-policy-validation.yml` | push/PR to `develop` on `policies/**` or `scripts/apply-acl-policies.sh` changes | `nomad fmt -check policies/` |
+| `acl-policy-validation.yml` | push/PR to `develop` or `main` on `policies/**` or `scripts/apply-acl-policies.sh` changes | `nomad fmt -check policies/` |
 | `integration-test.yml` | PR to `develop` (path-filtered) | template render + e2e stack test |
 | `release-version-bump.yml` | push to `main` | **Step 1:** auto-bumps patch version in `metadata.hcl`, commits, creates and pushes `v*` git tag — triggers `release.yml` |
 | `release.yml` | push of tag matching `v*` | **Step 2:** reads version from `metadata.hcl`, publishes GitHub Release with auto-generated notes |

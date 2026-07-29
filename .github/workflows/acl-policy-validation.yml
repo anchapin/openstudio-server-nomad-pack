@@ -2,12 +2,12 @@ name: Nomad ACL Policy Validation
 
 on:
   push:
-    branches: [ develop ]
+    branches: [ develop, main ]
     paths:
       - 'policies/**'
       - 'scripts/apply-acl-policies.sh'
   pull_request:
-    branches: [ develop ]
+    branches: [ develop, main ]
     paths:
       - 'policies/**'
       - 'scripts/apply-acl-policies.sh'
