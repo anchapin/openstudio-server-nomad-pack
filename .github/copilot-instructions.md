@@ -29,9 +29,10 @@ bash scripts/test_nomad_pack_integration.sh
 ./scripts/test_bump_metadata_version.sh
 
 # Single test/scenario examples
+./scripts/test_bump_metadata_version.sh
 nomad-pack render . -var "enable_vector_collection=false"
 nomad-pack render . -var "web_image=nrel/openstudio-server:3.8.0"
-./scripts/test_bump_metadata_version.sh
+nomad-pack render . -var "enable_batch_verification=true"
 
 # Keep generated docs in sync after variable changes
 ./scripts/generate-vars-doc.sh
@@ -41,6 +42,7 @@ nomad-pack render . -var "web_image=nrel/openstudio-server:3.8.0"
 ## High-level architecture
 
 - This repo is a **Nomad Pack** that deploys OpenStudio Server as **separate Nomad jobs** (`web`, `worker`, `db`, `redis`, `rserve`) plus optional jobs (`system-hooks`, `nomad-autoscaler`, `batch-verification`, `state-backup`, `state-restore`, `traefik`).
+- `web-background` runs as a second task group inside the `web` job (`<job_name>-web`), not as a separate Nomad job.
 - Templates live in `templates/*.nomad.tpl` and are rendered together by `nomad-pack`. `templates/openstudio-server.nomad.tpl` is an architecture marker and intentionally renders no job.
 - Two synchronized pack layouts exist:
   - root pack (`templates/`, `variables.hcl`, `metadata.hcl`, `outputs.tpl`) for direct `nomad-pack run .`
@@ -53,9 +55,10 @@ nomad-pack render . -var "web_image=nrel/openstudio-server:3.8.0"
 
 - **Template syntax** uses Nomad Pack `[[ ... ]]` delimiters (not `{{ ... }}`) for pack templates.
 - **Do not edit `docs/variables.md` manually**; it is generated from `variables.hcl` via `./scripts/generate-vars-doc.sh`.
-- Keep `variables.hcl`, `metadata.hcl`, and `templates/*` synchronized with `packs/openstudio-server/*` mirrors.
+- Keep `variables.hcl`, `metadata.hcl`, `outputs.tpl`, and `templates/*` synchronized with `packs/openstudio-server/*` mirrors.
 - `web_count` must remain `1` unless upstream file-handling/locking behavior changes.
 - Keep `web_priority > worker_priority` to avoid evicting the web UI first under contention.
+- Keep image tags aligned across `web_image`, `web_background_image`, `worker_image`, and `rserve_image` when bumping OpenStudio Server versions.
 - Branch and release flow:
   - PRs target `develop`; `main` is release-only.
   - Use `feat/issue-<N>-*` / `fix/issue-<N>-*` branch naming and Conventional Commits.
