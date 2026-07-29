@@ -105,12 +105,13 @@ GitHub Actions validation includes:
 
 | Workflow | Trigger | What it checks |
 |---|---|---|
-| `pack-validation.yml` | push to `develop`, PR to `develop` or `main`, `workflow_dispatch` | fmt, render (default + batch-verification), validate, Vagrantfile syntax, script syntax, version-bump tests, `variables.md` diff, README → `docs/variables.md` reference, `compatibility.md` version gate, Nomad dev-agent plan for all example var-files, `packs/` registry sync, integration test script |
-| `acl-policy-validation.yml` | push/PR on `policies/**` | `nomad fmt -check policies/` |
+| `pack-validation.yml` | push to `develop` or `main`, PR to `develop` or `main`, `workflow_dispatch` | fmt, render (default + batch-verification), validate, Vagrantfile syntax, script syntax, version-bump tests, `variables.md` diff, README → `docs/variables.md` reference, `compatibility.md` version gate, Nomad dev-agent plan for all example var-files, `packs/` registry sync, integration test script |
+| `acl-policy-validation.yml` | push/PR to `develop` on `policies/**` or `scripts/apply-acl-policies.sh` changes | `nomad fmt -check policies/` |
 | `integration-test.yml` | PR to `develop` (path-filtered: `templates/**`, `variables.hcl`, `packs/**`, `scripts/**`, `examples/**`, `metadata.hcl`) | template render + e2e stack test against live Consul/Nomad dev agents |
-| `release-version-bump.yml` | push to `main` | auto-bumps patch version in `metadata.hcl`, creates git tag and GitHub Release |
+| `release-version-bump.yml` | push to `main` | **Step 1:** auto-bumps patch version in `metadata.hcl`, commits, and pushes a `v*` git tag — triggers `release.yml` |
+| `release.yml` | push of tag matching `v*` | **Step 2:** reads version from `metadata.hcl`, publishes GitHub Release with auto-generated notes |
 
-The `pack-validation.yml` workflow runs on **push to `develop`** and on **pull requests targeting `develop` or `main`**. The `integration-test.yml` workflow runs on **pull requests targeting `develop`** only when template or variable files change.
+The `pack-validation.yml` workflow runs on **push to `develop` or `main`** and on **pull requests targeting `develop` or `main`**. The `integration-test.yml` workflow runs on **pull requests targeting `develop`** only when template or variable files change.
 
 ## Startup Dependency Checks
 

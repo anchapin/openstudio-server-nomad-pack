@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Reconciled CI workflow trigger documentation in AGENTS.md and README.md with actual `.github/workflows/` configurations: `pack-validation.yml` runs on push to `develop` **and** `main`; `acl-policy-validation.yml` is scoped to the `develop` branch and also covers `scripts/apply-acl-policies.sh` changes; added missing `release.yml` row to README CI table (#279)
+
 ## [0.2.67] - 2026-07-29
 
 ### Added
