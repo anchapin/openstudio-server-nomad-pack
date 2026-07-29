@@ -471,7 +471,7 @@ nomad alloc logs <alloc-id> redis-tcp-check
 | `test_rserve_port` | `6311` | RServe TCP check port |
 | `test_timeout_seconds` | `10` | Per-check timeout (seconds) |
 | `test_retry_count` | `3` | curl retry count for web check |
-| `test_curl_image_tag` | `latest` | Tag for `curlimages/curl` image |
+| `test_curl_image_tag` | `8.9.1` | Tag for `curlimages/curl` image |
 | `test_busybox_image_tag` | `stable` | Tag for `busybox` image |
 
 ```bash
