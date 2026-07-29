@@ -37,7 +37,7 @@ jobs:
 
   e2e-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -67,8 +67,37 @@ jobs:
 
       - name: Start Consul and Nomad dev agents
         run: |
-          # Start Consul dev agent (required for service registration and wait-for-deps prestart tasks)
-          consul agent -dev -bind=127.0.0.1 -client=127.0.0.1 -log-level=WARN &
+          # Determine Docker bridge IP for DNS configuration.
+          DOCKER_BRIDGE_IP=$(docker network inspect bridge \
+            --format '{{(index .IPAM.Config 0).Gateway}}' 2>/dev/null || echo "172.17.0.1")
+          echo "Docker bridge IP: ${DOCKER_BRIDGE_IP}"
+
+          # Install dnsmasq to forward .consul DNS queries from Docker containers to Consul.
+          sudo apt-get install -q -y dnsmasq
+          # Stop existing dnsmasq (if running) to avoid port conflicts.
+          sudo systemctl stop dnsmasq 2>/dev/null || true
+          # Start dnsmasq on the Docker bridge gateway: forwards .consul to Consul DNS
+          # (port 8600) and all other queries to 8.8.8.8. This lets Docker containers
+          # resolve consul.service.consul, which the wait-for-deps prestart tasks use.
+          sudo dnsmasq \
+            --listen-address="${DOCKER_BRIDGE_IP}" \
+            --bind-interfaces \
+            --port=53 \
+            --server="/consul/127.0.0.1#8600" \
+            --server=8.8.8.8 &
+
+          # Reconfigure Docker daemon to use bridge-hosted dnsmasq as DNS resolver
+          # so containers can resolve .consul domains.
+          echo "{\"dns\": [\"${DOCKER_BRIDGE_IP}\", \"8.8.8.8\"]}" | \
+            sudo tee /etc/docker/daemon.json > /dev/null
+          sudo systemctl restart docker
+          docker info > /dev/null
+
+          # Start Consul dev agent (required for service registration and wait-for-deps prestart tasks).
+          # Bind client to 0.0.0.0 so Docker containers can reach the HTTP API
+          # (e.g. http://consul.service.consul:8500 from within the busybox prestart task).
+          consul agent -dev -bind=127.0.0.1 -client=0.0.0.0 \
+            -recursor=8.8.8.8 -log-level=WARN &
           for i in $(seq 1 30); do
             if consul members >/dev/null 2>&1; then
               break
@@ -79,7 +108,12 @@ jobs:
 
           # Start Nomad with Consul integration so service registrations and
           # wait-for-deps prestart tasks (which poll Consul health API) are exercised.
-          sudo env PATH="$PATH" nomad agent -dev -bind=127.0.0.1 -log-level=WARN \
+          # Pass DOCKER_HOST explicitly so the Docker driver can always find the socket.
+          DOCKER_SOCK=$(docker context inspect \
+            --format '{{.Endpoints.docker.Host}}' 2>/dev/null \
+            || echo "unix:///var/run/docker.sock")
+          sudo env PATH="$PATH" DOCKER_HOST="${DOCKER_SOCK}" \
+            nomad agent -dev -bind=127.0.0.1 -log-level=WARN \
             -consul-address=127.0.0.1:8500 &
           for i in $(seq 1 45); do
             if NOMAD_ADDR=http://127.0.0.1:4646 nomad status >/dev/null 2>&1; then
@@ -89,6 +123,22 @@ jobs:
           done
           NOMAD_ADDR=http://127.0.0.1:4646 nomad status >/dev/null 2>&1
 
+          # Wait for the Nomad Docker driver to be fingerprinted before returning.
+          # Submitting jobs before fingerprinting completes leaves them un-schedulable.
+          echo "Waiting for Nomad Docker driver fingerprint..."
+          for i in $(seq 1 60); do
+            if NOMAD_ADDR=http://127.0.0.1:4646 nomad node status -verbose 2>/dev/null \
+                | grep -q "docker.*true"; then
+              echo "Nomad Docker driver fingerprinted successfully"
+              break
+            fi
+            if [ "${i}" -eq 60 ]; then
+              echo "WARNING: Docker driver not fingerprinted after 120s; dumping node status"
+              NOMAD_ADDR=http://127.0.0.1:4646 nomad node status -verbose || true
+            fi
+            sleep 2
+          done
+
       - name: Deploy with lightweight e2e stubs
         env:
           NOMAD_ADDR: http://127.0.0.1:4646
@@ -97,7 +147,26 @@ jobs:
       - name: Wait for Nomad web allocations
         env:
           NOMAD_ADDR: http://127.0.0.1:4646
-        run: sleep 40
+        run: sleep 60
+
+      - name: Dump Nomad and Docker diagnostics
+        if: always()
+        env:
+          NOMAD_ADDR: http://127.0.0.1:4646
+        continue-on-error: true
+        run: |
+          echo "=== Nomad Node Status (drivers) ==="
+          nomad node status -verbose || true
+          echo "=== Nomad Job Status ==="
+          nomad status || true
+          echo "=== DB Job Allocations ==="
+          nomad job allocs openstudio-server-e2e-db 2>/dev/null || true
+          echo "=== Redis Job Allocations ==="
+          nomad job allocs openstudio-server-e2e-redis 2>/dev/null || true
+          echo "=== Docker containers ==="
+          docker ps -a || true
+          echo "=== Consul catalog services ==="
+          consul catalog services || true
 
       - name: Assert Consul service registrations
         run: |

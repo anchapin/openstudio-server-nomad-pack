@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that all expected Consul service registrations (`openstudio-db`, `openstudio-redis`,
   `openstudio-web`, `openstudio-rserve`) are present after pack deployment, satisfying PRD
   Acceptance Criterion 5 (Consul DNS service resolution). (#227)
+- Fixed e2e CI: install dnsmasq on Docker bridge gateway so containers resolve
+  `consul.service.consul` via Consul DNS; pass `DOCKER_HOST` explicitly to Nomad dev agent;
+  wait for Docker driver fingerprint before submitting jobs; add `Dump Nomad and Docker
+  diagnostics` step for future debugging. (#227)
 
 ### Changed
 
