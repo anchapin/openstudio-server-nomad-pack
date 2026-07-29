@@ -291,7 +291,18 @@ nomad-pack run \
 Monitor allocation status:
 
 ```bash
-nomad job status openstudio-server
+JOB_NAME="openstudio-server" # Set to your -var "job_name=..." override when customized
+
+# Required jobs rendered by this pack
+for suffix in worker web rserve db redis system-hooks; do
+  nomad job status "${JOB_NAME}-${suffix}"
+done
+
+# Optional jobs (rendered only when their feature flags are enabled)
+for suffix in state-backup state-restore batch-verify test nomad-autoscaler autoscaler traefik; do
+  nomad job status "${JOB_NAME}-${suffix}" >/dev/null 2>&1 && nomad job status "${JOB_NAME}-${suffix}"
+done
+
 nomad alloc logs <alloc-id>
 ```
 
@@ -303,7 +314,10 @@ Verify all six services are healthy after deployment.
 
 ```bash
 # 1. Check all Nomad allocations are running
-nomad job status openstudio-server | grep -E "Running|Complete|Failed"
+JOB_NAME="openstudio-server"
+for suffix in worker web rserve db redis system-hooks; do
+  nomad job status "${JOB_NAME}-${suffix}"
+done
 
 # 2. Verify Consul service registrations
 consul catalog services | sort
@@ -355,9 +369,14 @@ kubectl scale statefulset -n openstudio --all --replicas=0
 If post-migration smoke tests fail, immediately stop the Nomad jobs:
 
 ```bash
-nomad-pack destroy .
-# or individually:
-nomad job stop -purge openstudio-server
+JOB_NAME="openstudio-server"
+NOMAD_NAMESPACE="default" # Set to your target namespace
+
+# Uses teardown-safe ordering (worker -> web -> rserve -> db -> redis -> system-hooks, then optional jobs)
+./scripts/pre-teardown.sh --namespace "${NOMAD_NAMESPACE}" "${JOB_NAME}"
+
+# After jobs are confirmed stopped, destroy remaining pack state.
+nomad-pack destroy -var-file=override.hcl .
 ```
 
 ### 7.3 Restore the Kubernetes Deployment
