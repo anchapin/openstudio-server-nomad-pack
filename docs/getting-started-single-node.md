@@ -1,6 +1,85 @@
 # Getting Started: Single-Node Dev Cluster Walkthrough
 
-This guide walks you from zero to a running OpenStudio Server stack on a **single developer machine** running macOS or Linux with Nomad installed via the HashiCorp package.
+This guide walks you from zero to a running OpenStudio Server stack on a **single developer machine** running macOS or Linux.
+
+---
+
+## Quick Start (5 minutes)
+
+If you have **Docker Desktop** and **nomad-pack** installed, this is the fastest path:
+
+```bash
+# 1. Clone the repo
+git clone https://github.com/anchapin/openstudio-server-nomad-pack.git
+cd openstudio-server-nomad-pack
+
+# 2. Start Consul + Nomad in Docker (one command)
+make up
+
+# 3. Deploy OpenStudio Server (one command)
+make deploy
+
+# 4. Open the web UI
+make open            # opens http://localhost:8080
+```
+
+**That's it.** The `make up` target runs Consul and Nomad in Docker containers using host networking, so Nomad can launch task containers on your local Docker daemon. See [`docker/docker-compose.yaml`](../docker/docker-compose.yaml) for details.
+
+### What you get
+
+| Address | Service |
+|---|---|
+| `http://localhost:8080` | OpenStudio Server Web UI |
+| `http://localhost:4646` | Nomad UI |
+| `http://localhost:8500` | Consul UI |
+
+### Teardown
+
+```bash
+make down   # Stops the job, removes containers + volumes
+```
+
+### Prerequisites for Quick Start
+
+| Tool | Minimum Version | Install |
+|---|---|---|
+| [Docker Desktop](https://docs.docker.com/get-docker/) | **24.0** (with Compose v2) | Docker Desktop for macOS or Docker Engine for Linux |
+| [nomad-pack](https://developer.hashicorp.com/nomad/tools/nomad-pack) | **0.1.2** | `brew install hashicorp/tap/nomad-pack` |
+| `curl` + `python3` | system | Pre-installed on macOS/Linux (used by `make status`) |
+
+> **macOS note**: Requires Docker Desktop **4.29+** for host-networking support. On older versions, use the detailed walkthrough below.  
+> **Linux note**: The Nomad Docker driver connects to the host's Docker socket (`/var/run/docker.sock`) — ensure your Docker daemon is listening on the default socket path. No CNI plugins or `sudo` needed.
+
+### Troubleshooting Quick Start
+
+| Symptom | Fix |
+|---|---|
+| `make: nomad-pack: Command not found` | Install: `brew install hashicorp/tap/nomad-pack` |
+| `make: docker: command not found` | Install Docker Desktop from https://docs.docker.com/get-docker/ |
+| `make up` hangs | Run `docker compose -f docker/docker-compose.yaml logs` to check for errors |
+| Port 4646 or 8500 already in use | Stop any existing Nomad/Consul processes first |
+| `network_mode: host` warning on macOS | Upgrade Docker Desktop to 4.29+, or use the detailed walkthrough |
+
+### Quick reference
+
+```bash
+make up       # Start Consul + Nomad in Docker
+make deploy   # Deploy OpenStudio Server (nomad-pack run)
+make open     # Open web UI in browser
+make status   # Show job/node/service status
+make web      # Tail web allocation logs
+make logs     # Tail Nomad agent logs
+make down     # Stop everything + clean volumes
+make redeploy # Re-deploy after config changes
+```
+
+> For a full description of every variable and override option, see [docs/variables.md](./variables.md).
+
+---
+
+## Detailed Walkthrough (manual setup)
+
+For environments where Docker Compose is not suitable (older Docker, air-gapped, multi-node, or you want native Nomad/Consul), use the full manual setup below.
 
 ## Service Topology
 

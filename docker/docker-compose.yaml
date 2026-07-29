@@ -1,0 +1,86 @@
+# Docker Compose for Nomad + Consul dev infrastructure
+#
+# Why this exists:
+#   The Nomad Pack deploys OpenStudio Server tasks to Nomad, which uses
+#   Consul for service discovery.  Running both in Docker eliminates the
+#   need to install Nomad and Consul natively — only Docker + nomad-pack
+#   are required.
+#
+# Networking:
+#   Both containers use "host" networking so that:
+#   1. Consul is at 127.0.0.1:8500 (HTTP) and 127.0.0.1:8600 (DNS) —
+#      the wait-for-deps prestart tasks use host networking and
+#      hardcode 127.0.0.1:8500.
+#   2. Nomad's Docker driver launches sibling containers on the host
+#      Docker daemon (via /var/run/docker.sock).
+#   3. nomad CLI / nomad-pack on the host reach the API at 127.0.0.1:4646.
+#   4. Nomad auto-translates Consul DNS (127.0.0.1:8600) to the Docker
+#      bridge gateway for bridge-networked task containers, so .consul
+#      service names resolve.
+#
+# macOS note:
+#   Requires Docker Desktop 4.29+ for host-networking support.
+#   On older versions, fall back to the manual setup in
+#   docs/getting-started-single-node.md.
+#
+# Usage:
+#   docker compose -f docker/docker-compose.yaml up -d
+#   docker compose -f docker/docker-compose.yaml down -v
+#
+# Or use the Makefile:
+#   make up
+#   make down
+
+services:
+  consul:
+    image: hashicorp/consul:1.17.2
+    network_mode: host
+    command:
+      - agent
+      - -dev
+      - -client=0.0.0.0
+    healthcheck:
+      test: ["CMD-SHELL", "consul members | grep -q alive"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  nomad:
+    image: hashicorp/nomad:1.7.6
+    network_mode: host
+    depends_on:
+      consul:
+        condition: service_healthy
+    command:
+      - agent
+      - -dev
+      - -config=/etc/nomad/nomad.hcl
+    volumes:
+      # Docker socket — required for Nomad's Docker driver to launch task
+      # containers as siblings on the host Docker daemon.
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Nomad config — host volumes map to Docker named volumes below.
+      - ./nomad.hcl:/etc/nomad/nomad.hcl:ro
+      # Persistent storage for MongoDB and Redis data.
+      - openstudio-mongodb:/opt/nomad/volumes/mongodb
+      - openstudio-redis:/opt/nomad/volumes/redis
+      # Nomad server state.
+      - nomad-data:/opt/nomad/data
+    environment:
+      NOMAD_ADDR: http://127.0.0.1:4646
+    # healthcheck using the Nomad HTTP API
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4646/v1/agent/self | grep -q server"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+      start_period: 10s
+
+volumes:
+  openstudio-mongodb:
+    driver: local
+  openstudio-redis:
+    driver: local
+  nomad-data:
+    driver: local
