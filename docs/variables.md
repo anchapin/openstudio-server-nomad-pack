@@ -17,6 +17,7 @@
 | `traefik_http_port` | `number` | `80` | Traefik HTTP entrypoint port. |
 | `traefik_https_port` | `number` | `443` | Traefik HTTPS entrypoint port. |
 | `traefik_dashboard_port` | `number` | `8080` | Traefik dashboard port. |
+| `traefik_api_insecure` | `bool` | `false` | Enable the Traefik insecure API/dashboard (--api.insecure=true). Set to true only for local development. In production, keep this false and protect the dashboard with authentication and TLS. |
 | `nomad_namespace` | `string` | `"default"` | The Nomad namespace in which all pack jobs are registered. Use 'default' for the built-in namespace. |
 | `region` | `string` | `"global"` | The Nomad region where the job will be deployed. |
 | `datacenters` | `list(string)` | `["dc1"]` | A list of datacenters in the region which are eligible for task placement. |
