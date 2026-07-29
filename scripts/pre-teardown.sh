@@ -5,7 +5,7 @@
 #
 # PURPOSE
 # -------
-# Stop Nomad jobs in teardown-safe order before running
+# Stop and purge Nomad jobs in teardown-safe order before running
 # `nomad-pack destroy .` to ensure all allocations are fully dead before
 # any downstream cleanup (e.g., NFS unmount, volume deletion).
 #
@@ -112,7 +112,7 @@ stop_required_job() {
   local stop_args=("$@")
 
   echo "--> Stopping ${job_name} ..."
-  if ! nomad job stop "${stop_args[@]}" -namespace "${NAMESPACE}" "${job_name}"; then
+  if ! nomad job stop -purge "${stop_args[@]}" -namespace "${NAMESPACE}" "${job_name}"; then
     echo "ERROR: Failed to stop job '${job_name}'. Aborting." >&2
     exit 1
   fi
@@ -130,7 +130,7 @@ stop_optional_job() {
   fi
 
   echo "--> Stopping optional job ${job_name} ..."
-  if ! nomad job stop "${stop_args[@]}" -namespace "${NAMESPACE}" "${job_name}"; then
+  if ! nomad job stop -purge "${stop_args[@]}" -namespace "${NAMESPACE}" "${job_name}"; then
     echo "ERROR: Failed to stop optional job '${job_name}'." >&2
     exit 1
   fi
@@ -139,7 +139,7 @@ stop_optional_job() {
 
 echo "--> Stopping ${JOB_NAME}-worker ..."
 echo "    Note: this may take up to worker_kill_timeout seconds for in-flight simulations to drain."
-if ! nomad job stop -namespace "${NAMESPACE}" "${JOB_NAME}-worker"; then
+if ! nomad job stop -purge -namespace "${NAMESPACE}" "${JOB_NAME}-worker"; then
   echo "ERROR: Failed to stop job '${JOB_NAME}-worker'. Aborting." >&2
   exit 1
 fi
