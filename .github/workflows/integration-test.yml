@@ -11,6 +11,7 @@ on:
 
 env:
   NOMAD_VERSION: "1.7.7"
+  CONSUL_VERSION: "1.17.1"
 
 jobs:
   integration-test:
@@ -36,7 +37,7 @@ jobs:
 
   e2e-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -50,6 +51,13 @@ jobs:
       - name: Setup Nomad Pack
         uses: hashicorp/setup-nomad-pack@7828b76610ea4c670afa01a1c84fbd9175b186b1  # main
 
+      - name: Install Consul
+        run: |
+          curl -fsSL "https://releases.hashicorp.com/consul/${CONSUL_VERSION}/consul_${CONSUL_VERSION}_linux_amd64.zip" -o consul.zip
+          unzip -q consul.zip
+          sudo mv consul /usr/local/bin/consul
+          consul version
+
       - name: Ensure Docker is available
         run: |
           if command -v systemctl >/dev/null 2>&1; then
@@ -57,9 +65,22 @@ jobs:
           fi
           docker info >/dev/null
 
-      - name: Start Nomad dev agent
+      - name: Start Consul and Nomad dev agents
         run: |
-          sudo env PATH="$PATH" nomad agent -dev -bind=127.0.0.1 -log-level=WARN &
+          # Start Consul dev agent (required for service registration and wait-for-deps prestart tasks)
+          consul agent -dev -bind=127.0.0.1 -client=127.0.0.1 -log-level=WARN &
+          for i in $(seq 1 30); do
+            if consul members >/dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+          done
+          consul members >/dev/null 2>&1
+
+          # Start Nomad with Consul integration so service registrations and
+          # wait-for-deps prestart tasks (which poll Consul health API) are exercised.
+          sudo env PATH="$PATH" nomad agent -dev -bind=127.0.0.1 -log-level=WARN \
+            -consul-address=127.0.0.1:8500 &
           for i in $(seq 1 45); do
             if NOMAD_ADDR=http://127.0.0.1:4646 nomad status >/dev/null 2>&1; then
               break
@@ -76,7 +97,39 @@ jobs:
       - name: Wait for Nomad web allocations
         env:
           NOMAD_ADDR: http://127.0.0.1:4646
-        run: sleep 20
+        run: sleep 40
+
+      - name: Assert Consul service registrations
+        run: |
+          # Verify that all expected services are registered in Consul.
+          # MongoDB (openstudio-db) and Redis (openstudio-redis) use real images in e2e-test.hcl
+          # and register after their containers start.  The wait-for-deps prestart task in web
+          # and worker polls Consul health API and blocks until openstudio-db and
+          # openstudio-redis report healthy — exercising the prestart lifecycle gate.
+          # Web/rserve/worker use alpine stub images; they register once their tasks are placed.
+          echo "Asserting Consul service registrations (PRD AC-5)..."
+          all_passed=true
+          for svc in openstudio-db openstudio-redis openstudio-web openstudio-rserve; do
+            deadline=$((SECONDS + 90))
+            registered=false
+            while [ $SECONDS -lt $deadline ]; do
+              if consul catalog services | grep -qx "${svc}"; then
+                registered=true
+                break
+              fi
+              sleep 3
+            done
+            if [ "${registered}" = "true" ]; then
+              echo "PASS: ${svc} is registered in Consul"
+            else
+              echo "FAIL: ${svc} is NOT registered in Consul after 90s"
+              all_passed=false
+            fi
+          done
+          echo "--- Consul catalog services ---"
+          consul catalog services
+          [ "${all_passed}" = "true" ] || exit 1
+          echo "All expected Consul services are registered."
 
       - name: Dispatch smoke-test batch job
         env:

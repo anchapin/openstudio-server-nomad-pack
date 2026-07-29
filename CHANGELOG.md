@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a dedicated MongoDB upgrade migration guide with step-by-step instructions for persisted
   data upgrades from `mongo:4.2` to `mongo:6.0.7`, including backup, rollback, and verification
   procedures. (#217)
+- Extended `integration-test.yml` e2e job to start a Consul dev agent alongside Nomad and assert
+  that all expected Consul service registrations (`openstudio-db`, `openstudio-redis`,
+  `openstudio-web`, `openstudio-rserve`) are present after pack deployment, satisfying PRD
+  Acceptance Criterion 5 (Consul DNS service resolution). (#227)
 
 ### Changed
 
