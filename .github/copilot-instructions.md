@@ -30,7 +30,12 @@ nomad-pack plan . --name openstudio-server-airgapped -var-file examples/airgappe
 # Run the integration test script (render + plan across key scenarios)
 bash scripts/test_nomad_pack_integration.sh
 
+# Render a specific scenario inline (e.g., verify a single template change)
+nomad-pack render . -var "enable_vector_collection=false"
+nomad-pack render . -var "web_image=nrel/openstudio-server:3.8.0"
+
 # Test the version-bump helper in isolation
+# Uses tests/fixtures/metadata.sample.hcl as an isolated test fixture
 ./scripts/test_bump_metadata_version.sh
 
 # Check that docs/variables.md is up-to-date with variables.hcl
@@ -39,6 +44,12 @@ diff docs/variables.md docs/variables.generated.md
 
 # Regenerate docs/variables.md after editing variables.hcl (required before committing)
 ./scripts/generate-vars-doc.sh
+
+# Operational helpers (not part of CI — run manually against a live cluster)
+# Stop all jobs in teardown-safe order before destroying volumes/NFS
+./scripts/pre-teardown.sh [--namespace <ns>] [JOB_NAME]
+# Run the batch verification job to ping/TCP-check all services
+./scripts/run-batch-verification.sh
 
 # Validate ACL policy HCL formatting
 nomad fmt -check policies/
@@ -225,6 +236,58 @@ Vault KV v2 secret paths follow the convention `secret/data/openstudio/<service>
 ### Traefik ingress
 
 The web service registers Consul tags for Traefik's Consul Catalog provider. Set `ingress_domain` to the desired hostname. Enable `ingress_tls_enabled = true` to add `websecure` entrypoint tags. Traefik must be deployed separately and configured to watch the Consul catalog.
+
+### Kubernetes→Nomad concept mapping
+
+This pack is the Nomad equivalent of the `openstudio-server-helm` chart. When implementing features or debugging, use this mapping to find the Nomad analog of a Kubernetes concept:
+
+| Kubernetes / Helm concept | Nomad Pack equivalent |
+|---|---|
+| `values.yaml` | `variables.hcl` |
+| Deployment / Pod | Job → Task Group → Task (docker driver) |
+| Service | `service` stanza (registers in Consul) |
+| ConfigMap / Secret | `template` stanza (static, Consul KV, or Vault) |
+| HPA / KEDA ScaledObject | Nomad Autoscaler + `scaling` block in worker job |
+| PodDisruptionBudget | `update` stanza with `max_parallel`, `health_check`, `auto_revert` |
+| DaemonSet | Nomad system job (`type = "system"`) |
+| Helm hook (pre-delete, etc.) | `prestart` / `poststop` lifecycle tasks or standalone batch jobs |
+| StorageClass / PVC | `volume` stanza + CSI plugin or `host_volume` |
+| ServiceAccount / RBAC | Nomad ACL policies + Vault roles |
+| PriorityClass (high/low) | Job-level `priority` (web=80 > worker=40) |
+| Ingress | Traefik via Consul service tags |
+
+**Worker rolling update (PDB equivalent):** The worker job uses an `update` stanza instead of a K8s PodDisruptionBudget:
+```hcl
+update {
+  max_parallel     = 1
+  health_check     = "checks"
+  min_healthy_time = "10s"
+  healthy_deadline = "5m"
+  auto_revert      = true
+}
+```
+
+**Queue-based autoscaling (KEDA equivalent):** KEDA on Kubernetes queries message brokers directly. On Nomad, the autoscaler reads from Prometheus (which scrapes the broker metrics). Prometheus must be running and scraping queue metrics before `worker_autoscaling_enabled = true` and the Prometheus check strategy can be used.
+
+### Post-deploy output template
+
+`outputs.tpl` is rendered by `nomad-pack run` on successful deployment. It prints Consul service UI URLs and the Traefik web URL. It uses `[[ ]]` delimiters like all other templates. If you add a new service, add its Consul URL here too.
+
+### Deep-dive docs
+
+`docs/` contains operator-facing reference material:
+
+| File | Content |
+|---|---|
+| `getting-started-single-node.md` | Step-by-step single-node deploy guide |
+| `operations-guide.md` | Day-2 operations: scaling, draining, updating |
+| `storage.md` | Host volume, CSI, NFS configuration detail |
+| `upgrading.md` | Version upgrade procedures |
+| `migration-k8s-to-nomad.md` | Helm → Nomad Pack migration guide |
+| `vault-policies.md` | Vault policy templates and setup |
+| `acl-policies.md` | Nomad ACL policy reference |
+| `compatibility.md` | Pack ↔ app version compatibility matrix |
+| `variables.md` | Auto-generated variable reference (do not edit manually) |
 
 ---
 
