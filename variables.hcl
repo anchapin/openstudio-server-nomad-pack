@@ -396,6 +396,24 @@ variable "web_background_count" {
   description = "The number of web-background tasks to run."
   default     = 1
 }
+
+variable "web_background_autoscaling_enabled" {
+  type        = bool
+  description = "Enable Nomad Autoscaler scaling for the web-background task group."
+  default     = false
+}
+
+variable "web_background_min_replicas" {
+  type        = number
+  description = "Minimum number of web-background replicas when autoscaling is enabled."
+  default     = 1
+}
+
+variable "web_background_max_replicas" {
+  type        = number
+  description = "Maximum number of web-background replicas when autoscaling is enabled."
+  default     = 5
+}
 variable "db_image" {
   type        = string
   description = "The MongoDB database image name and tag. BREAKING UPGRADE NOTE: persisted data volumes created on mongo:4.2 must be migrated in sequence 4.2 -> 4.4 -> 5.0 -> 6.0.7; do not skip major versions. See docs/upgrading.md for the full procedure."
