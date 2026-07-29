@@ -18,7 +18,7 @@ job "[[ var "job_name" . ]]-autoscaler" {
       driver = "docker"
 
       config {
-        image   = "hashicorp/nomad-autoscaler:0.4.7"
+        image   = "[[ var "nomad_autoscaler_image" . ]]"
         command = "nomad-autoscaler"
         args    = ["agent", "-config", "local/autoscaler.hcl"]
       }
@@ -45,6 +45,33 @@ apm "nomad-apm" {
 strategy "target-value" {
   driver = "target-value"
 }
+
+# Uncomment the target block matching your cloud provider to enable node-pool autoscaling
+# (Helm cluster-autoscaler-autodiscover.yaml parity)
+# See: https://developer.hashicorp.com/nomad/tools/autoscaling/plugins/target/aws-asg
+#
+# target "aws-asg" {
+#   driver = "aws-asg"
+#   config = {
+#     aws_region             = "us-east-1"         # AWS region containing the Auto Scaling Group
+#     asg_name               = "nomad-clients"      # Name of the ASG backing Nomad client nodes
+#     # access_key_id        = "<AWS_ACCESS_KEY>"   # Omit when using IAM instance roles or IRSA
+#     # secret_access_key    = "<AWS_SECRET_KEY>"   # Omit when using IAM instance roles or IRSA
+#     # session_token        = "<AWS_SESSION_TOKEN>"
+#   }
+# }
+
+# See: https://developer.hashicorp.com/nomad/tools/autoscaling/plugins/target/gce-mig
+#
+# target "gce-mig" {
+#   driver = "gce-mig"
+#   config = {
+#     project          = "my-gcp-project"          # GCP project ID containing the MIG
+#     zone             = "us-central1-a"            # Zone of the Managed Instance Group
+#     mig_name         = "nomad-clients"            # Name of the MIG backing Nomad client nodes
+#     # credentials_path = "/secrets/gcp-sa.json"  # Omit when using Workload Identity
+#   }
+# }
 EOH
       }
 
