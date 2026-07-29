@@ -40,7 +40,7 @@ job "[[ var "job_name" . ]]-redis" {
 
     task "redis" {
       driver = "docker"
-      user   = "[[ var "docker_user" . ]]"
+      user   = "[[ var "redis_docker_user" . ]]"
 
       [[ if var "vault_enabled" . ]]
       [[ if var "vault_redis_role" . ]]

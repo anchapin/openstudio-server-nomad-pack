@@ -755,8 +755,20 @@ variable "restore_enabled" {
 # Docker runtime hardening variables
 variable "docker_user" {
   type        = string
-  description = "UID:GID to run containers as (non-root)."
+  description = "UID:GID to run containers as (non-root). Applies to web, worker, and rserve tasks."
   default     = "1000:1000"
+}
+
+variable "db_docker_user" {
+  type        = string
+  description = "User to run the MongoDB container as. MongoDB official images expect UID/GID 999."
+  default     = "999:999"
+}
+
+variable "redis_docker_user" {
+  type        = string
+  description = "User to run the Redis container as. Redis official images expect UID/GID 999."
+  default     = "999:999"
 }
 
 variable "docker_readonly_rootfs" {
