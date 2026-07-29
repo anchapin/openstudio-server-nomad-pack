@@ -66,11 +66,6 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if ! command -v nomad &>/dev/null; then
-  echo "ERROR: 'nomad' CLI not found in PATH. Install it from https://developer.hashicorp.com/nomad/downloads" >&2
-  exit 1
-fi
-
 ROLE_DESCRIPTIONS=(
   "operator:OpenStudio Server operator role"
   "readonly:OpenStudio Server read-only role"
@@ -112,6 +107,11 @@ for role in "${ROLE_LIST[@]}"; do
     echo "$substituted"
     echo ""
     continue
+  fi
+
+  if ! command -v nomad &>/dev/null; then
+    echo "ERROR: 'nomad' CLI not found in PATH. Install it from https://developer.hashicorp.com/nomad/downloads" >&2
+    exit 1
   fi
 
   description="$(description_for "$role")"
