@@ -43,3 +43,6 @@ enable_vault_mongo_secrets  = false
 # Disable backups for ephemeral dev deployments.
 backup_enabled  = false
 restore_enabled = false
+
+# Uncomment to deploy Traefik ingress alongside the stack.
+# deploy_traefik = true

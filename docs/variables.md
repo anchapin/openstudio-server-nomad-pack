@@ -12,6 +12,11 @@
 | `vault_integration_enabled` | `bool` | `false` | Enable Nomad Vault integration stanzas for tasks. |
 | `ingress_domain` | `string` | `"localhost"` | Ingress domain used when constructing service hostnames and Traefik router rules. |
 | `ingress_tls_enabled` | `bool` | `false` | When true, adds Traefik TLS router tags for the websecure entrypoint on the web service. |
+| `deploy_traefik` | `bool` | `false` | When true, deploy a Traefik ingress job alongside the OpenStudio Server stack. |
+| `traefik_image` | `string` | `"traefik:v3"` | Traefik Docker image to use. |
+| `traefik_http_port` | `number` | `80` | Traefik HTTP entrypoint port. |
+| `traefik_https_port` | `number` | `443` | Traefik HTTPS entrypoint port. |
+| `traefik_dashboard_port` | `number` | `8080` | Traefik dashboard port. |
 | `nomad_namespace` | `string` | `"default"` | The Nomad namespace in which all pack jobs are registered. Use 'default' for the built-in namespace. |
 | `region` | `string` | `"global"` | The Nomad region where the job will be deployed. |
 | `datacenters` | `list(string)` | `["dc1"]` | A list of datacenters in the region which are eligible for task placement. |

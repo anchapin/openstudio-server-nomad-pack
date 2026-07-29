@@ -519,3 +519,29 @@ sudo rm -rf /opt/nomad/volumes/mongodb /opt/nomad/volumes/redis
 - **Variable reference**: see [docs/variables.md](./variables.md) for all configurable options.
 - **Vault integration**: see [docs/vault-policies.md](./vault-policies.md) for secret management setup.
 - **Kubernetes migration**: see [docs/migration-k8s-to-nomad.md](./migration-k8s-to-nomad.md) if you are moving from Helm.
+
+---
+
+## Optional: Deploy Traefik Ingress
+
+The pack can optionally deploy a [Traefik](https://traefik.io/) ingress controller alongside the OpenStudio Server stack. Traefik uses the Consul catalog provider to automatically pick up the `openstudio-web` service and route HTTP traffic to it.
+
+To enable it, set `deploy_traefik = true`:
+
+```bash
+nomad-pack run -var "deploy_traefik=true" .
+# or with a var-file:
+nomad-pack run -var-file examples/minimal-dev.hcl -var "deploy_traefik=true" .
+```
+
+This renders and deploys an additional `<job_name>-traefik` job with:
+
+| Port | Purpose |
+|------|---------|
+| `traefik_http_port` (default `80`) | HTTP entrypoint |
+| `traefik_https_port` (default `443`) | HTTPS entrypoint |
+| `traefik_dashboard_port` (default `8080`) | Traefik dashboard (insecure, dev only) |
+
+The Traefik dashboard is accessible at `http://<node-ip>:8080/dashboard/` after deployment.
+
+> **Note**: `deploy_traefik = false` is the default. No Traefik job is rendered or submitted when the variable is omitted.

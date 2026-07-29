@@ -42,6 +42,36 @@ variable "ingress_tls_enabled" {
   default     = false
 }
 
+variable "deploy_traefik" {
+  type        = bool
+  description = "When true, deploy a Traefik ingress job alongside the OpenStudio Server stack."
+  default     = false
+}
+
+variable "traefik_image" {
+  type        = string
+  description = "Traefik Docker image to use."
+  default     = "traefik:v3"
+}
+
+variable "traefik_http_port" {
+  type        = number
+  description = "Traefik HTTP entrypoint port."
+  default     = 80
+}
+
+variable "traefik_https_port" {
+  type        = number
+  description = "Traefik HTTPS entrypoint port."
+  default     = 443
+}
+
+variable "traefik_dashboard_port" {
+  type        = number
+  description = "Traefik dashboard port."
+  default     = 8080
+}
+
 variable "nomad_namespace" {
   type        = string
   description = "The Nomad namespace in which all pack jobs are registered. Use 'default' for the built-in namespace."
