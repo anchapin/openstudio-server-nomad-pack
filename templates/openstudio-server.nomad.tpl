@@ -352,11 +352,11 @@ EOH
 
     task "mongodb" {
       driver = "docker"
+      user   = "[[ var "docker_user" . ]]"
 
       config {
         image           = "[[ var "db_image" . ]]"
         ports           = ["db"]
-        user            = "[[ var "docker_user" . ]]"
         readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
         cap_drop        = [[ var "docker_cap_drop" . | toJson ]]
         logging {
@@ -467,7 +467,6 @@ EOT
       config {
         image           = "[[ var "vector_image" . ]]"
         args            = ["--config", "local/vector.toml"]
-        user            = "[[ var "docker_user" . ]]"
         readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
         cap_drop        = [[ var "docker_cap_drop" . | toJson ]]
       }
@@ -508,6 +507,7 @@ EOH
 
     task "redis" {
       driver = "docker"
+      user   = "[[ var "docker_user" . ]]"
 
       [[ if var "vault_enabled" . ]]
       [[ if var "vault_redis_role" . ]]
@@ -546,7 +546,6 @@ EOH
       config {
         image           = "[[ var "redis_image" . ]]"
         ports           = ["redis"]
-        user            = "[[ var "docker_user" . ]]"
         readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
         cap_drop        = [[ var "docker_cap_drop" . | toJson ]]
         logging {
@@ -678,7 +677,6 @@ EOT
       config {
         image           = "[[ var "vector_image" . ]]"
         args            = ["--config", "local/vector.toml"]
-        user            = "[[ var "docker_user" . ]]"
         readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
         cap_drop        = [[ var "docker_cap_drop" . | toJson ]]
       }

@@ -91,26 +91,31 @@ jobs:
 
           # Start dnsmasq AFTER docker0 is stable so --bind-interfaces can attach.
           # Forwards .consul queries to Consul DNS (port 8600); all other queries to 8.8.8.8.
+          # --address="/consul.service.consul/..." overrides the DNS response for the special
+          # name "consul.service.consul" (the Consul agent's own node address) to return the
+          # Docker bridge IP directly.  Without this, Consul DNS would return 127.0.0.1 (the
+          # Consul bind address), which is unreachable from inside Docker containers.
+          # Consul HTTP/DNS is still bound to 0.0.0.0 (-client=0.0.0.0), so the bridge IP
+          # works for container→host communication.  Consul Serf/RPC stay on 127.0.0.1
+          # (no -advertise change needed, which would break Serf connectivity).
           sudo dnsmasq \
             --listen-address="${DOCKER_BRIDGE_IP}" \
             --bind-interfaces \
             --port=53 \
+            --address="/consul.service.consul/${DOCKER_BRIDGE_IP}" \
             --server="/consul/127.0.0.1#8600" \
             --server=8.8.8.8 &
           sleep 1
           echo "dnsmasq started on ${DOCKER_BRIDGE_IP}:53"
 
           # Start Consul dev agent (required for service registration and wait-for-deps prestart tasks).
-          # -bind=127.0.0.1    : Consul cluster/RPC traffic stays on loopback.
+          # -bind=127.0.0.1    : Consul cluster/RPC (Serf) traffic stays on loopback.
           # -client=0.0.0.0    : HTTP API and DNS are reachable on all interfaces
           #                      (including the Docker bridge at ${DOCKER_BRIDGE_IP}).
-          # -advertise=${DOCKER_BRIDGE_IP}: Consul advertises the Docker bridge IP so that
-          #                      "consul.service.consul" DNS lookups return ${DOCKER_BRIDGE_IP}
-          #                      rather than 127.0.0.1 (which is unreachable inside containers).
-          #                      The wait-for-deps busybox prestart tasks use this DNS name to
-          #                      reach the Consul health API.
+          # No -advertise flag: Consul's own node address stays as 127.0.0.1, which is fine
+          #                     because dnsmasq intercepts "consul.service.consul" queries
+          #                     with a static override before they reach Consul DNS.
           consul agent -dev -bind=127.0.0.1 -client=0.0.0.0 \
-            -advertise="${DOCKER_BRIDGE_IP}" \
             -recursor=8.8.8.8 -log-level=WARN &
           for i in $(seq 1 30); do
             if consul members >/dev/null 2>&1; then

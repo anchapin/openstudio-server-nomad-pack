@@ -20,11 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `consul.service.consul` via Consul DNS; pass `DOCKER_HOST` explicitly to Nomad dev agent;
   wait for Docker driver fingerprint before submitting jobs; add `Dump Nomad and Docker
   diagnostics` step for future debugging. (#227)
-- Fixed e2e CI: add `-advertise=${DOCKER_BRIDGE_IP}` to Consul dev agent so that
-  `consul.service.consul` DNS resolves to the Docker-accessible bridge IP instead of
-  `127.0.0.1` (loopback is unreachable from inside containers); fix Docker fingerprint
-  check to use per-node detail view; increase `db_memory` to 768 MB and `redis_memory`
-  to 256 MB in `e2e-test.hcl` to prevent OOM kills of MongoDB 7 and Redis containers. (#227)
+- Fixed e2e CI: replace broken `-advertise=${DOCKER_BRIDGE_IP}` Consul flag (which caused
+  Serf/RPC connectivity failures) with a dnsmasq `--address` static override for
+  `consul.service.consul` → Docker bridge IP; moved `docker_user` variable from inside
+  `config {}` to task level in `db.nomad.tpl`, `redis.nomad.tpl`, `rserve.nomad.tpl`, and
+  `openstudio-server.nomad.tpl` to fix Nomad Docker driver "Invalid label: user" validation
+  error that prevented MongoDB, Redis, and Rserve allocations from starting. (#227)
 - Fixed e2e CI: restart Docker BEFORE starting dnsmasq so `docker0` is stable when
   dnsmasq binds to it; hardcode `unix:///var/run/docker.sock` for Nomad `DOCKER_HOST`
   to avoid TCP-context mismatches; add `nomad alloc status -verbose` for failed db/redis
