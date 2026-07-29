@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Removed all duplicated task groups from `openstudio-server.nomad.tpl` to enforce split-job architecture; eliminates duplicate Consul service registrations (`openstudio-web`, `openstudio-db`, `openstudio-redis`) and double resource consumption when deployed alongside dedicated per-component templates. (#223)
 - Fixed `redis.nomad.tpl`: the main Redis task `config` block was missing the
   `image = "[[ var "redis_image" . ]]"` field, causing every Redis allocation to fail
   immediately with "image is empty" at runtime. (#227)
