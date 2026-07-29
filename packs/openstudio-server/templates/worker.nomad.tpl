@@ -84,6 +84,31 @@ job "[[ var "job_name" . ]]-worker" {
     [[ end ]]
     [[ template "openstudio_server.arch_constraint" . ]]
 
+    # Prestart: wait for MongoDB and Redis to be registered and healthy in Consul
+    task "wait-for-deps" {
+      lifecycle {
+        hook    = "prestart"
+        sidecar = false
+      }
+
+      driver = "docker"
+
+      config {
+        image   = "busybox:1.36"
+        network_mode = "host"
+        command = "sh"
+        args = [
+          "-ec",
+          "until wget -qO- \"http://127.0.0.1:8500/v1/health/service/openstudio-db?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-db\"'; do sleep 2; done; until wget -qO- \"http://127.0.0.1:8500/v1/health/service/openstudio-redis?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-redis\"'; do sleep 2; done",
+        ]
+      }
+
+      resources {
+        cpu    = 50
+        memory = 32
+      }
+    }
+
     task "worker" {
       driver = "docker"
       user   = "[[ var "docker_user" . ]]"
