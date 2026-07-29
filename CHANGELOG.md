@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Docker Compose-based quick-start infrastructure (`docker/docker-compose.yaml`, `docker/nomad.hcl`, `Makefile`, `scripts/quickstart.sh`) that runs Consul and Nomad in containers with host networking — reducing local dev prerequisites from 5 (Docker, nomad-pack, native Nomad, native Consul, CNI plugins) to 2 (Docker + nomad-pack). Both the Makefile and quickstart script use `curl` API calls exclusively — no native `nomad` or `consul` CLI required. Updated `docs/getting-started-single-node.md` with a "Quick Start (5 minutes)" section at the top. (#XXX)
+
 ### Fixed
 
 - Pinned `test_curl_image_tag` default from `latest` to `8.9.1` to remove the only floating container image tag and restore reproducible test job image resolution. (#301)
