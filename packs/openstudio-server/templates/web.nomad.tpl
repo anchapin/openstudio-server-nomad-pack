@@ -347,6 +347,7 @@ EOT
         MONGO_PASSWORD      = "[[ var "mongo_password" . ]]"
         REDIS_PASSWORD      = "[[ var "redis_password" . ]]"
         APP_SECRET_KEY_BASE = "[[ var "app_secret_key_base" . ]]"
+        QUEUES              = "[[ var "web_background_queues" . ]]"
         [[ if var "web_redis_url" . ]]
         REDIS_URL           = "[[ var "web_redis_url" . ]]"
         [[ end ]]

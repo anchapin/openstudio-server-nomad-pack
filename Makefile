@@ -135,7 +135,17 @@ restart: down up ## Full restart (clean infra)
 
 .PHONY: deploy
 deploy: check-infra ## Deploy OpenStudio Server with minimal-dev config
-	nomad-pack run -var-file $(VAR_FILE) .
+	@echo "Rendering and deploying jobs..."
+	@rm -rf /tmp/nomad-pack-render && mkdir /tmp/nomad-pack-render
+	@NOMAD_ADDR=http://127.0.0.1:4646 nomad-pack render --var-file $(VAR_FILE) \
+		--to-dir /tmp/nomad-pack-render --auto-approve . >/dev/null 2>&1
+	@for f in /tmp/nomad-pack-render/openstudio-server/*.nomad; do \
+		job=$$(basename "$$f" .hcl); \
+		echo "  Submitting $$job..."; \
+		NOMAD_ADDR=http://127.0.0.1:4646 nomad job run -detach "$$f" >/dev/null 2>&1 || \
+		echo "    (warning: submit returned non-zero, may already be running)"; \
+	done
+	@rm -rf /tmp/nomad-pack-render
 	@echo ""
 	@echo "Deploying... waiting for services (up to 2 min)..."
 	@echo "Run 'make status' to check progress."

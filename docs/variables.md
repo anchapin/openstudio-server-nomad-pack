@@ -73,7 +73,8 @@
 | `worker_queue_simulations_query` | `string` | `"sum(openstudio_worker_queue_depth{queue=\"simulations\"})"` | Prometheus query for simulations backlog depth. |
 | `worker_queue_simulations_target` | `number` | `5` | Target queue depth for simulation jobs per worker allocation. |
 | `web_background_image` | `string` | `"nrel/openstudio-server:3.10.0"` | The image name and tag for the OpenStudio Server web-background container. |
-| `web_background_command` | `string` | `""` | Optional command override for the web-background task. Leave empty to use the image default entrypoint. |
+| `web_background_command` | `string` | `"/usr/local/bin/start-web-background"` | Command run by the web-background task. Defaults to the image's start-web-background script, which launches Resque workers for the analysis_wrappers queue. Override only if the image uses a different entry point. |
+| `web_background_queues` | `string` | `"analysis_wrappers"` | Resque QUEUES env var for the web-background task. Controls which queue(s) the start-web-background Resque workers process. The analysis_wrappers queue handles analysis lifecycle jobs (initialize/finalize). Separate multiple queues with commas. NOTE: Use QUEUES (not QUEUE) — the application's resque:setup task explicitly resets QUEUE to prevent environment leaks. |
 | `web_background_args` | `list(string)` | `[]` | Optional args passed to web_background_command when set. |
 | `web_background_count` | `number` | `1` | The number of web-background tasks to run. |
 | `web_background_autoscaling_enabled` | `bool` | `false` | Enable Nomad Autoscaler scaling for the web-background task group. |

@@ -411,8 +411,14 @@ variable "web_background_image" {
 
 variable "web_background_command" {
   type        = string
-  description = "Optional command override for the web-background task. Leave empty to use the image default entrypoint."
-  default     = ""
+  description = "Command run by the web-background task. Defaults to the image's start-web-background script, which launches Resque workers for the analysis_wrappers queue. Override only if the image uses a different entry point."
+  default     = "/usr/local/bin/start-web-background"
+}
+
+variable "web_background_queues" {
+  type        = string
+  description = "Resque QUEUES env var for the web-background task. Controls which queue(s) the start-web-background Resque workers process. The analysis_wrappers queue handles analysis lifecycle jobs (initialize/finalize). Separate multiple queues with commas. NOTE: Use QUEUES (not QUEUE) — the application's resque:setup task explicitly resets QUEUE to prevent environment leaks."
+  default     = "analysis_wrappers"
 }
 
 variable "web_background_args" {

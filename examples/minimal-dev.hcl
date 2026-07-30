@@ -14,14 +14,15 @@ db_storage_type = "ephemeral"
 redis_storage_type   = "ephemeral"
 
 # Reduce resource usage for a single-node developer environment.
-web_cpu     = 300
-web_memory  = 512
-db_cpu      = 300
-db_memory   = 512
-redis_cpu   = 128
-redis_memory = 256
-worker_cpu  = 1000
-worker_memory = 2048
+web_cpu            = 300
+web_memory         = 512
+web_background_memory = 2048
+db_cpu             = 300
+db_memory          = 512
+redis_cpu          = 128
+redis_memory       = 256
+worker_cpu         = 1000
+worker_memory      = 2048
 
 # One worker, no autoscaling.
 # Override production defaults (min:2, max:20 per Helm HPA) for resource-constrained dev.
