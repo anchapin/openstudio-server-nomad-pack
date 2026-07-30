@@ -14,7 +14,7 @@ VAR_FILE       = examples/minimal-dev.hcl
 JOB_NAME       = openstudio-server-dev
 
 # Derive web port from var file (falls back to the variable default of 80).
-WEB_PORT := $(shell grep -E '^\s*web_port\s*=' $(VAR_FILE) 2>/dev/null | grep -o '[0-9]*' | head -1 || echo 80)
+WEB_PORT := $(or $(shell grep -E '^\s*web_port\s*=' $(VAR_FILE) 2>/dev/null | grep -o '[0-9]*' | head -1),80)
 
 OS := $(shell uname -s)
 
