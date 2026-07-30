@@ -36,13 +36,29 @@ ifeq ($(OS),Darwin)
 	@if lsof -i :27017 -sTCP:LISTEN >/dev/null 2>&1; then \
 		echo "Stopping process(es) on port 27017 (MongoDB)..."; \
 		brew services stop mongodb-community 2>/dev/null || brew services stop mongodb 2>/dev/null || true; \
-		lsof -ti :27017 -sTCP:LISTEN 2>/dev/null | xargs kill 2>/dev/null || true; \
+		sleep 1; \
+		lsof -ti :27017 -sTCP:LISTEN 2>/dev/null | while read pid; do \
+			pname=$$(ps -p $$pid -o comm= 2>/dev/null || echo ""); \
+			if echo "$$pname" | grep -qiE 'mongod'; then \
+				echo "  Killing mongod (pid $$pid)..."; kill $$pid 2>/dev/null || true; \
+			else \
+				echo "  Skipping pid $$pid ($$pname) — not a MongoDB process"; \
+			fi; \
+		done; \
 		echo "BREW_MONGODB_WAS_RUNNING=1" >> /tmp/openstudio-dev-state; \
 	fi
 	@if lsof -i :6379 -sTCP:LISTEN >/dev/null 2>&1; then \
 		echo "Stopping process(es) on port 6379 (Redis)..."; \
 		brew services stop redis 2>/dev/null || true; \
-		lsof -ti :6379 -sTCP:LISTEN 2>/dev/null | xargs kill 2>/dev/null || true; \
+		sleep 1; \
+		lsof -ti :6379 -sTCP:LISTEN 2>/dev/null | while read pid; do \
+			pname=$$(ps -p $$pid -o comm= 2>/dev/null || echo ""); \
+			if echo "$$pname" | grep -qiE 'redis'; then \
+				echo "  Killing redis-server (pid $$pid)..."; kill $$pid 2>/dev/null || true; \
+			else \
+				echo "  Skipping pid $$pid ($$pname) — not a Redis process"; \
+			fi; \
+		done; \
 		echo "BREW_REDIS_WAS_RUNNING=1" >> /tmp/openstudio-dev-state; \
 	fi
 	@if ! curl -sf http://127.0.0.1:8500/v1/status/leader >/dev/null 2>&1; then \
