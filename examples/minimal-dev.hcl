@@ -47,6 +47,12 @@ consul_address = "host.docker.internal:8500"
 db_static_port    = 27017
 redis_static_port = 6379
 web_extra_hosts   = ["db:host-gateway", "queue:host-gateway"]
+worker_extra_hosts = ["db:host-gateway", "queue:host-gateway"]
+
+# REDIS_URL must use redis:// scheme prefix so Rails' URI.parse() correctly
+# extracts host/port. The default 'queue:6379' (without //) is parsed as a
+# URI scheme rather than host:port, causing Redis to fall back to 127.0.0.1.
+web_redis_url     = "redis://queue:6379"
 
 # Disable security hardening options that prevent the app from writing to
 # required paths (/opt/openstudio/server/log, /tmp, /opt/nginx/conf, etc.).

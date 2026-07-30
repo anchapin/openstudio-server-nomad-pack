@@ -157,6 +157,18 @@ variable "web_container_port" {
   default     = 80
 }
 
+variable "web_redis_url" {
+  type        = string
+  description = "Override REDIS_URL env var in the web and worker containers. Required when the default URI scheme parsing ('queue:6379' without '//') resolves incorrectly — e.g. on macOS dev where Redis is reached via host.docker.internal. Set to 'redis://queue:6379' in minimal-dev deployments. Leave empty in production when Vault injects REDIS_URL directly."
+  default     = ""
+}
+
+variable "worker_extra_hosts" {
+  type        = list(string)
+  description = "Additional /etc/hosts entries for the worker container, in 'hostname:ip' format. Use 'host-gateway' as the IP value to map to the Docker host machine. Required on macOS dev when the worker's start-workers script uses hostnames (db, queue) that must resolve to the host running MongoDB/Redis."
+  default     = []
+}
+
 variable "web_health_check_interval" {
   type        = string
   description = "Interval between Consul health checks for the web service."

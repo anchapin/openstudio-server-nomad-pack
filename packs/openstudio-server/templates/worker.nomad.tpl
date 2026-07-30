@@ -161,6 +161,9 @@ EOT
         command         = "[[ var "worker_command" . ]]"
         readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
         cap_drop        = [[ var "docker_cap_drop" . | toJson ]]
+        [[ if var "worker_extra_hosts" . ]]
+        extra_hosts     = [[ var "worker_extra_hosts" . | toJson ]]
+        [[ end ]]
         [[ if var "worker_args" . ]]
         args = [[ var "worker_args" . | toJson ]]
         [[ end ]]
@@ -180,6 +183,9 @@ EOT
         MONGO_PASSWORD      = "[[ var "mongo_password" . ]]"
         REDIS_PASSWORD      = "[[ var "redis_password" . ]]"
         APP_SECRET_KEY_BASE = "[[ var "app_secret_key_base" . ]]"
+        [[ if var "web_redis_url" . ]]
+        REDIS_URL           = "[[ var "web_redis_url" . ]]"
+        [[ end ]]
         [[ end ]]
       }
 
