@@ -70,6 +70,14 @@ job "[[ var "job_name" . ]]-rserve" {
         [[ end ]]
         readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
         cap_drop        = [[ var "docker_cap_drop" . | toJson ]]
+        # Rserve (R) needs /tmp to create its temp directory even with a read-only rootfs.
+        mounts = [
+          {
+            type          = "tmpfs"
+            target        = "/tmp"
+            tmpfs_options = { size = 67108864 }
+          }
+        ]
       }
 
       service {

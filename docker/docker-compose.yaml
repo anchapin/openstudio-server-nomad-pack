@@ -7,27 +7,35 @@
 #   are required.
 #
 # Networking:
-#   Both containers use "host" networking so that:
+#   Both containers use host networking so that:
 #   1. Consul is at 127.0.0.1:8500 (HTTP) and 127.0.0.1:8600 (DNS) —
-#      the wait-for-deps prestart tasks use host networking and
-#      hardcode 127.0.0.1:8500.
+#      the wait-for-deps prestart tasks and Consul health checks all use
+#      host networking and resolve services via 127.0.0.1.
 #   2. Nomad's Docker driver launches sibling containers on the host
 #      Docker daemon (via /var/run/docker.sock).
 #   3. nomad CLI / nomad-pack on the host reach the API at 127.0.0.1:4646.
-#   4. Nomad auto-translates Consul DNS (127.0.0.1:8600) to the Docker
-#      bridge gateway for bridge-networked task containers, so .consul
-#      service names resolve.
 #
 # macOS note:
-#   Requires Docker Desktop 4.29+ for host-networking support.
-#   On older versions, fall back to the manual setup in
-#   docs/getting-started-single-node.md.
+#   Docker Desktop host networking requires "Enable host networking" to be
+#   turned on in Docker Desktop → Settings → Features in Development, AND
+#   Consul's TCP health checks cannot reach the Mac's loopback from inside
+#   the Docker VM regardless.
+#
+#   On macOS, the Makefile bypasses this file for Consul and Nomad:
+#   - Consul is run natively via `consul agent -dev` (brew install consul).
+#   - Nomad is run natively (brew install hashicorp/tap/nomad).
+#   This file is used on macOS ONLY if you uncomment and customise the
+#   nomad service below for specific volume needs.
+#
+# Linux note:
+#   host networking works natively on Linux — no extra Docker Desktop
+#   configuration needed.
 #
 # Usage:
 #   docker compose -f docker/docker-compose.yaml up -d
 #   docker compose -f docker/docker-compose.yaml down -v
 #
-# Or use the Makefile:
+# Or use the Makefile (handles macOS vs Linux automatically):
 #   make up
 #   make down
 
@@ -49,6 +57,7 @@ services:
   nomad:
     image: hashicorp/nomad:1.7.6
     network_mode: host
+    privileged: true
     depends_on:
       consul:
         condition: service_healthy
@@ -69,7 +78,6 @@ services:
       - nomad-data:/opt/nomad/data
     environment:
       NOMAD_ADDR: http://127.0.0.1:4646
-    # healthcheck using the Nomad HTTP API
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4646/v1/agent/self | grep -q server"]
       interval: 5s

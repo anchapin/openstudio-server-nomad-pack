@@ -51,7 +51,7 @@ job "[[ var "job_name" . ]]-web" {
     network {
       port "http" {
         static = [[ var "web_port" . ]]
-        to     = 8080
+        to     = [[ var "web_container_port" . ]]
       }
     }
 
@@ -70,7 +70,7 @@ job "[[ var "job_name" . ]]-web" {
         command = "sh"
         args = [
           "-ec",
-          "until wget -qO- \"http://127.0.0.1:8500/v1/health/service/openstudio-db?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-db\"'; do sleep 2; done; until wget -qO- \"http://127.0.0.1:8500/v1/health/service/openstudio-redis?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-redis\"'; do sleep 2; done; until wget -qO- \"http://127.0.0.1:8500/v1/health/service/openstudio-rserve?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-rserve\"'; do sleep 2; done",
+          "until wget -qO- \"http://[[ var "consul_address" . ]]/v1/health/service/openstudio-db?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-db\"'; do sleep 2; done; until wget -qO- \"http://[[ var "consul_address" . ]]/v1/health/service/openstudio-redis?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-redis\"'; do sleep 2; done; until wget -qO- \"http://[[ var "consul_address" . ]]/v1/health/service/openstudio-rserve?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-rserve\"'; do sleep 2; done",
         ]
       }
 
@@ -138,6 +138,9 @@ EOT
         ports           = ["http"]
         readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
         cap_drop        = [[ var "docker_cap_drop" . | toJson ]]
+        [[ if var "web_extra_hosts" . ]]
+        extra_hosts     = [[ var "web_extra_hosts" . | toJson ]]
+        [[ end ]]
         [[ if ne (var "web_command" .) "" ]]
         command = "[[ var "web_command" . ]]"
         [[ end ]]
@@ -281,7 +284,7 @@ EOH
         command = "sh"
         args = [
           "-ec",
-          "until wget -qO- \"http://127.0.0.1:8500/v1/health/service/openstudio-db?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-db\"'; do sleep 2; done; until wget -qO- \"http://127.0.0.1:8500/v1/health/service/openstudio-redis?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-redis\"'; do sleep 2; done; until wget -qO- \"http://127.0.0.1:8500/v1/health/service/openstudio-web?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-web\"'; do sleep 2; done",
+          "until wget -qO- \"http://[[ var "consul_address" . ]]/v1/health/service/openstudio-db?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-db\"'; do sleep 2; done; until wget -qO- \"http://[[ var "consul_address" . ]]/v1/health/service/openstudio-redis?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-redis\"'; do sleep 2; done; until wget -qO- \"http://[[ var "consul_address" . ]]/v1/health/service/openstudio-web?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-web\"'; do sleep 2; done",
         ]
       }
 
@@ -348,6 +351,9 @@ EOT
         image           = "[[ var "web_background_image" . ]]"
         readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
         cap_drop        = [[ var "docker_cap_drop" . | toJson ]]
+        [[ if var "web_extra_hosts" . ]]
+        extra_hosts     = [[ var "web_extra_hosts" . | toJson ]]
+        [[ end ]]
         [[ if ne (var "web_background_command" .) "" ]]
         command = "[[ var "web_background_command" . ]]"
         [[ end ]]

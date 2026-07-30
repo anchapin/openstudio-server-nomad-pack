@@ -4,7 +4,7 @@ This matrix documents known-good version combinations for this Nomad pack.
 
 | Pack Version | OpenStudio Server (`app_version`) | Nomad ≥ | Consul ≥ | Notes |
 |---|---|---|---|---|
-| `0.2.67` | `3.11.0` | `1.4.0` | `1.12.0` | Current release; `web_image` pinned to `nrel/openstudio-server:3.11.0`. CI uses Nomad `1.7.7`. |
+| `0.2.67` | `3.11.0` | `1.4.0` | `1.12.0` | Current release; `web_image` pinned to `nrel/openstudio-server:3.10.0`. CI uses Nomad `1.7.7`. |
 | `0.2.66` | `3.11.0` | `1.4.0` | `1.12.0` | |
 | `0.2.65` | `3.11.0` | `1.4.0` | `1.12.0` | |
 | `0.2.64` | `3.11.0` | `1.4.0` | `1.12.0` | |
@@ -14,7 +14,7 @@ This matrix documents known-good version combinations for this Nomad pack.
 | `0.2.60` | `3.11.0` | `1.4.0` | `1.12.0` | |
 | `0.2.59` | `3.11.0` | `1.4.0` | `1.12.0` | |
 | `0.2.58` | `3.11.0` | `1.4.0` | `1.12.0` | |
-| `0.2.57` | `3.11.0` | `1.4.0` | `1.12.0` | `web_image` pinned to `nrel/openstudio-server:3.11.0` starting this release. |
+| `0.2.57` | `3.11.0` | `1.4.0` | `1.12.0` | `web_image` pinned to `nrel/openstudio-server:3.10.0` starting this release. |
 | `0.2.56` | `latest` | `1.4.0` | `1.12.0` | `web_image` default was `nrel/openstudio-server:latest`. |
 | `0.2.55` | `latest` | `1.4.0` | `1.12.0` | |
 | `0.2.54` | `latest` | `1.4.0` | `1.12.0` | |

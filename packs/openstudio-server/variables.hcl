@@ -100,7 +100,7 @@ variable "datacenters" {
 variable "web_image" {
   type        = string
   description = "The image name and tag for the OpenStudio Server web container."
-  default     = "nrel/openstudio-server:3.11.0"
+  default     = "nrel/openstudio-server:3.10.0"
 }
 
 variable "web_command" {
@@ -148,6 +148,12 @@ variable "web_count" {
 variable "web_port" {
   type        = number
   description = "Host-side static port mapped to the web container HTTP port."
+  default     = 80
+}
+
+variable "web_container_port" {
+  type        = number
+  description = "Port that the web container's nginx listens on internally. The OpenStudio Server image listens on port 80 by default. Must match the nginx listen directive in the image."
   default     = 80
 }
 
@@ -214,7 +220,7 @@ variable "web_background_memory" {
 variable "worker_image" {
   type        = string
   description = "The image name and tag for the OpenStudio Server worker container."
-  default     = "nrel/openstudio-server:3.11.0"
+  default     = "nrel/openstudio-server:3.10.0"
 }
 
 variable "worker_command" {
@@ -388,7 +394,7 @@ variable "worker_queue_simulations_target" {
 variable "web_background_image" {
   type        = string
   description = "The image name and tag for the OpenStudio Server web-background container."
-  default     = "nrel/openstudio-server:3.11.0"
+  default     = "nrel/openstudio-server:3.10.0"
 }
 
 variable "web_background_command" {
@@ -559,7 +565,7 @@ variable "nfs_volume_mount_path" {
 variable "rserve_image" {
   type        = string
   description = "The Rserve image name and tag."
-  default     = "nrel/openstudio-rserve:3.11.0"
+  default     = "nrel/openstudio-rserve:3.10.0"
 }
 
 variable "rserve_command" {
@@ -771,6 +777,39 @@ variable "docker_user" {
   default     = "1000:1000"
 }
 
+variable "db_static_port" {
+  type        = number
+  description = <<-EOT
+    Host-side static port for the MongoDB container. Default 0 means Nomad allocates a dynamic port.
+    Set to 27017 for local dev when containers need to reach MongoDB via a fixed port
+    (e.g. when using web_extra_hosts to map the 'db' hostname on macOS Docker Desktop).
+  EOT
+  default     = 0
+}
+
+variable "redis_static_port" {
+  type        = number
+  description = <<-EOT
+    Host-side static port for the Redis container. Default 0 means Nomad allocates a dynamic port.
+    Set to 6379 for local dev when containers need to reach Redis via a fixed port
+    (e.g. when using web_extra_hosts to map the 'queue' hostname on macOS Docker Desktop).
+  EOT
+  default     = 0
+}
+
+variable "web_extra_hosts" {
+  type        = list(string)
+  description = <<-EOT
+    Extra host-to-IP mappings to inject into the web and web-background containers
+    (Docker --add-host / extra_hosts). Useful on macOS Docker Desktop to map legacy
+    Docker Compose service hostnames ('db', 'queue') to host.docker.internal so the
+    OpenStudio Server app can reach MongoDB and Redis. Example:
+      web_extra_hosts = ["db:host-gateway", "queue:host-gateway"]
+    'host-gateway' is a Docker special value resolving to the host machine's IP.
+  EOT
+  default     = []
+}
+
 variable "db_docker_user" {
   type        = string
   description = "User to run the MongoDB container as. MongoDB official images expect UID/GID 999."
@@ -787,6 +826,25 @@ variable "docker_readonly_rootfs" {
   type        = bool
   description = "Enable Docker read-only root filesystem."
   default     = true
+}
+
+variable "enable_arch_constraint" {
+  type        = bool
+  description = "When true, the worker job enforces hard constraints requiring os.name=linux and cpu.arch=amd64. Set false for macOS or ARM64 local dev nodes."
+  default     = true
+}
+
+variable "consul_address" {
+  type        = string
+  description = <<-EOT
+    HTTP address of the Consul agent used by wait-for-deps prestart tasks.
+    Default (127.0.0.1:8500) works when Consul runs natively on the same host
+    as the Nomad client, or on Linux with Docker host-networking.
+    On macOS Docker Desktop (where Docker containers cannot reach the host
+    loopback), set this to "host.docker.internal:8500" so that containers
+    with network_mode=host can reach a natively-running Consul agent.
+  EOT
+  default     = "127.0.0.1:8500"
 }
 
 variable "docker_cap_drop" {

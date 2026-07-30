@@ -21,7 +21,7 @@
 | `nomad_namespace` | `string` | `"default"` | The Nomad namespace in which all pack jobs are registered. Use 'default' for the built-in namespace. |
 | `region` | `string` | `"global"` | The Nomad region where the job will be deployed. |
 | `datacenters` | `list(string)` | `["dc1"]` | A list of datacenters in the region which are eligible for task placement. |
-| `web_image` | `string` | `"nrel/openstudio-server:3.11.0"` | The image name and tag for the OpenStudio Server web container. |
+| `web_image` | `string` | `"nrel/openstudio-server:3.10.0"` | The image name and tag for the OpenStudio Server web container. |
 | `web_command` | `string` | `""` | Optional command override for the web task. Leave empty to use the image default entrypoint. |
 | `web_args` | `list(string)` | `[]` | Optional args passed to web_command when set. |
 | `web_priority` | `number` | `80` | Nomad job priority for the OpenStudio Web UI job (Nomad scale 1–100). Must always exceed worker_priority so the scheduler favours the web UI over workers during resource contention. Mirrors the Kubernetes high-priority PriorityClass (value 1000000) used by the Helm chart. WARNING: do not set this lower than or equal to worker_priority. |
@@ -30,6 +30,7 @@
 | `web_memory_max` | `number` | `4096` | Memory hard limit (MB) for the OpenStudio Web task (Nomad memory_max). Must be greater than web_memory for burst capacity. |
 | `web_count` | `number` | `1` | The number of web task group allocations. MUST remain 1 (the default). The OpenStudio Server web process writes uploaded analysis artefacts to local container filesystem without a distributed file-locking scheme. When nfs_shared_volume_enabled = true, NFS provides a shared filesystem but does NOT guarantee POSIX file-locking across multiple simultaneous web writers — each allocation still has its own isolated view of open file handles. Setting web_count > 1 therefore causes split-brain: requests routed to replica B cannot find files written by replica A. This mirrors the Kubernetes Helm chart constraint (web-hpa.yaml maxReplicas: 1). To safely run web_count > 1 you must first implement either: (a) a distributed lock manager such as Redlock via Redis wrapping every filesystem operation, or (b) stateless file handling by moving all persistent artefacts to object storage (e.g. S3/MinIO). See docs/storage.md §'Web Replica Constraint' for details. |
 | `web_port` | `number` | `80` | Host-side static port mapped to the web container HTTP port. |
+| `web_container_port` | `number` | `80` | Port that the web container's nginx listens on internally. The OpenStudio Server image listens on port 80 by default. Must match the nginx listen directive in the image. |
 | `web_health_check_interval` | `string` | `"10s"` | Interval between Consul health checks for the web service. |
 | `web_health_check_timeout` | `string` | `"2s"` | Timeout for Consul health checks for the web service. |
 | `web_update_max_parallel` | `number` | `1` | Maximum number of web allocations updated in parallel. |
@@ -40,7 +41,7 @@
 | `web_update_auto_revert` | `bool` | `true` | Automatically revert a web deployment if the update fails. |
 | `web_background_cpu` | `number` | `250` | CPU shares allocated to the OpenStudio web-background task. |
 | `web_background_memory` | `number` | `512` | Memory (MB) allocated to the OpenStudio web-background task. |
-| `worker_image` | `string` | `"nrel/openstudio-server:3.11.0"` | The image name and tag for the OpenStudio Server worker container. |
+| `worker_image` | `string` | `"nrel/openstudio-server:3.10.0"` | The image name and tag for the OpenStudio Server worker container. |
 | `worker_command` | `string` | `"/usr/local/bin/start-workers"` | Command used to start the worker task. |
 | `worker_args` | `list(string)` | `[]` | Optional args passed to worker_command. |
 | `worker_health_check_command` | `string` | `"pgrep -f resque > /dev/null"` | Shell command used by the worker service health check. |
@@ -69,7 +70,7 @@
 | `worker_queue_requeued_target` | `number` | `1` | Target queue depth for requeued jobs per worker allocation. |
 | `worker_queue_simulations_query` | `string` | `"sum(openstudio_worker_queue_depth{queue=\"simulations\"})"` | Prometheus query for simulations backlog depth. |
 | `worker_queue_simulations_target` | `number` | `5` | Target queue depth for simulation jobs per worker allocation. |
-| `web_background_image` | `string` | `"nrel/openstudio-server:3.11.0"` | The image name and tag for the OpenStudio Server web-background container. |
+| `web_background_image` | `string` | `"nrel/openstudio-server:3.10.0"` | The image name and tag for the OpenStudio Server web-background container. |
 | `web_background_command` | `string` | `""` | Optional command override for the web-background task. Leave empty to use the image default entrypoint. |
 | `web_background_args` | `list(string)` | `[]` | Optional args passed to web_background_command when set. |
 | `web_background_count` | `number` | `1` | The number of web-background tasks to run. |
@@ -97,7 +98,7 @@
 | `nfs_volume_type` | `string` | `"host_volume"` | Storage backend for the NFS shared volume. Use \"host_volume\" (default, recommended) for an OS-level NFS mount registered as a Nomad host volume, or \"csi\" for a CSI-managed NFS volume. Mirrors the db_storage_type / redis_storage_type pattern. |
 | `nfs_volume_source` | `string` | `"openstudio-nfs"` | Nomad volume ID for the NFS shared volume used by web and worker task groups. For host_volume this is the host_volume name; for csi this is the CSI volume ID. |
 | `nfs_volume_mount_path` | `string` | `"/mnt/openstudio"` | Mount path inside web and worker tasks where the NFS shared volume is attached. |
-| `rserve_image` | `string` | `"nrel/openstudio-rserve:3.11.0"` | The Rserve image name and tag. |
+| `rserve_image` | `string` | `"nrel/openstudio-rserve:3.10.0"` | The Rserve image name and tag. |
 | `rserve_command` | `string` | `""` | Optional command override for the Rserve task. Leave empty to use the image default entrypoint. |
 | `rserve_args` | `list(string)` | `[]` | Optional args passed to rserve_command when set. |
 | `rserve_cpu` | `number` | `1000` | CPU shares allocated to the Rserve task. |
@@ -132,9 +133,14 @@
 | `redis_backup_port` | `number` | `6379` | Redis port used by backup and restore jobs. |
 | `restore_enabled` | `bool` | `false` | Enable the on-demand restore batch job definition. |
 | `docker_user` | `string` | `"1000:1000"` | UID:GID to run containers as (non-root). Applies to web, worker, and rserve tasks. |
+| `db_static_port` | `number` | `0` |  |
+| `redis_static_port` | `number` | `0` |  |
+| `web_extra_hosts` | `list(string)` | `[]` |  |
 | `db_docker_user` | `string` | `"999:999"` | User to run the MongoDB container as. MongoDB official images expect UID/GID 999. |
 | `redis_docker_user` | `string` | `"999:999"` | User to run the Redis container as. Redis official images expect UID/GID 999. |
 | `docker_readonly_rootfs` | `bool` | `true` | Enable Docker read-only root filesystem. |
+| `enable_arch_constraint` | `bool` | `true` | When true, the worker job enforces hard constraints requiring os.name=linux and cpu.arch=amd64. Set false for macOS or ARM64 local dev nodes. |
+| `consul_address` | `string` | `"127.0.0.1:8500"` |  |
 | `docker_cap_drop` | `list(string)` | `["ALL"]` | Linux capabilities to drop from Docker containers. |
 | `enable_image_prepull` | `bool` | `true` | When true, renders the system-hooks job that pre-pulls all heavy images on every eligible node before scheduling. |
 | `prepull_kill_timeout` | `string` | `"600s"` | kill_timeout applied to every task in the image pre-pull system job. Must be >= 10 minutes to allow large image layers to be pulled. |

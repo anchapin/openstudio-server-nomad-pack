@@ -76,10 +76,10 @@ registered by this Nomad Pack.
 
 ```bash
 # On each Nomad client, verify Docker can pull the exact images this pack deploys by default
-docker pull nrel/openstudio-server:3.11.0
+docker pull nrel/openstudio-server:3.10.0
 docker pull mongo:6.0.7
 docker pull redis:6.2-alpine
-docker pull nrel/openstudio-rserve:3.11.0
+docker pull nrel/openstudio-rserve:3.10.0
 ```
 
 If you deploy with an override file (recommended), verify pulls against the **rendered** image set

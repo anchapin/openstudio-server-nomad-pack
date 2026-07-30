@@ -82,7 +82,9 @@ job "[[ var "job_name" . ]]-worker" {
     }
     [[ end ]]
     [[ end ]]
+    [[ if var "enable_arch_constraint" . ]]
     [[ template "openstudio_server.arch_constraint" . ]]
+    [[ end ]]
 
     # Prestart: wait for MongoDB and Redis to be registered and healthy in Consul
     task "wait-for-deps" {
@@ -99,7 +101,7 @@ job "[[ var "job_name" . ]]-worker" {
         command = "sh"
         args = [
           "-ec",
-          "until wget -qO- \"http://127.0.0.1:8500/v1/health/service/openstudio-db?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-db\"'; do sleep 2; done; until wget -qO- \"http://127.0.0.1:8500/v1/health/service/openstudio-redis?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-redis\"'; do sleep 2; done",
+          "until wget -qO- \"http://[[ var "consul_address" . ]]/v1/health/service/openstudio-db?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-db\"'; do sleep 2; done; until wget -qO- \"http://[[ var "consul_address" . ]]/v1/health/service/openstudio-redis?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-redis\"'; do sleep 2; done",
         ]
       }
 
