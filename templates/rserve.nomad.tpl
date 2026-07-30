@@ -17,7 +17,8 @@ job "[[ var "job_name" . ]]-rserve" {
 
     network {
       port "rserve" {
-        to = 6311
+        to     = 6311
+        static = [[ var "rserve_static_port" . ]]
       }
     }
 

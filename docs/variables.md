@@ -21,7 +21,7 @@
 | `nomad_namespace` | `string` | `"default"` | The Nomad namespace in which all pack jobs are registered. Use 'default' for the built-in namespace. |
 | `region` | `string` | `"global"` | The Nomad region where the job will be deployed. |
 | `datacenters` | `list(string)` | `["dc1"]` | A list of datacenters in the region which are eligible for task placement. |
-| `web_image` | `string` | `"nrel/openstudio-server:3.10.0"` | The image name and tag for the OpenStudio Server web container. |
+| `web_image` | `string` | `"nrel/openstudio-server:179-flock"` | The image name and tag for the OpenStudio Server web container. |
 | `web_command` | `string` | `""` | Optional command override for the web task. Leave empty to use the image default entrypoint. |
 | `web_args` | `list(string)` | `[]` | Optional args passed to web_command when set. |
 | `web_priority` | `number` | `80` | Nomad job priority for the OpenStudio Web UI job (Nomad scale 1–100). Must always exceed worker_priority so the scheduler favours the web UI over workers during resource contention. Mirrors the Kubernetes high-priority PriorityClass (value 1000000) used by the Helm chart. WARNING: do not set this lower than or equal to worker_priority. |
@@ -32,6 +32,7 @@
 | `web_port` | `number` | `80` | Host-side static port mapped to the web container HTTP port. |
 | `web_container_port` | `number` | `80` | Port that the web container's nginx listens on internally. The OpenStudio Server image listens on port 80 by default. Must match the nginx listen directive in the image. |
 | `web_redis_url` | `string` | `""` | Override REDIS_URL env var in the web and worker containers. Required when the default URI scheme parsing ('queue:6379' without '//') resolves incorrectly — e.g. on macOS dev where Redis is reached via host.docker.internal. Set to 'redis://queue:6379' in minimal-dev deployments. Leave empty in production when Vault injects REDIS_URL directly. |
+| `os_server_sampling_backend` | `string` | `""` | Optional override for OS_SERVER_SAMPLING_BACKEND in web and web-background tasks. Valid values: 'rserve' (default app behavior) or 'ruby' (Rserve-independent LHS sampling fallback). Leave empty to use the image default. |
 | `worker_extra_hosts` | `list(string)` | `[]` | Additional /etc/hosts entries for the worker container, in 'hostname:ip' format. Use 'host-gateway' as the IP value to map to the Docker host machine. Required on macOS dev when the worker's start-workers script uses hostnames (db, queue) that must resolve to the host running MongoDB/Redis. |
 | `web_health_check_interval` | `string` | `"10s"` | Interval between Consul health checks for the web service. |
 | `web_health_check_timeout` | `string` | `"2s"` | Timeout for Consul health checks for the web service. |
@@ -43,7 +44,7 @@
 | `web_update_auto_revert` | `bool` | `true` | Automatically revert a web deployment if the update fails. |
 | `web_background_cpu` | `number` | `250` | CPU shares allocated to the OpenStudio web-background task. |
 | `web_background_memory` | `number` | `512` | Memory (MB) allocated to the OpenStudio web-background task. |
-| `worker_image` | `string` | `"nrel/openstudio-server:3.10.0"` | The image name and tag for the OpenStudio Server worker container. |
+| `worker_image` | `string` | `"nrel/openstudio-server:179-flock"` | The image name and tag for the OpenStudio Server worker container. |
 | `worker_command` | `string` | `"/usr/local/bin/start-workers"` | Command used to start the worker task. |
 | `worker_args` | `list(string)` | `[]` | Optional args passed to worker_command. |
 | `worker_health_check_command` | `string` | `"pgrep -f resque > /dev/null"` | Shell command used by the worker service health check. |
@@ -56,7 +57,7 @@
 | `worker_update_auto_revert` | `bool` | `true` | Automatically revert a worker deployment if the update fails. |
 | `worker_priority` | `number` | `40` | Nomad job priority for calculation workers (Nomad scale 1–100). Must always be less than web_priority so the web UI is scheduled preferentially during resource contention. Mirrors the Kubernetes low-priority PriorityClass (value 10000) used by the Helm chart. WARNING: do not set this higher than or equal to web_priority. |
 | `worker_queues` | `string` | `"requeued,simulations"` | Comma-separated queue list processed by worker tasks. |
-| `worker_process_count` | `string` | `"1"` | COUNT environment variable passed to worker containers. |
+| `worker_process_count` | `string` | `"1"` | COUNT environment variable passed to worker containers. Also injected into web and web-background as OS_SERVER_NUMBER_OF_WORKERS so analyses can enqueue simulation datapoints. |
 | `worker_cpu` | `number` | `2000` | CPU shares allocated to the OpenStudio worker task. These defaults are intentionally higher than Helm to support higher simulation concurrency per Nomad allocation. |
 | `worker_memory` | `number` | `4096` | Memory (MB) allocated to the OpenStudio worker task. These defaults are intentionally higher than Helm to support higher simulation concurrency per Nomad allocation. |
 | `worker_memory_max` | `number` | `6144` | Memory hard limit (MB) for the OpenStudio worker task (Nomad memory_max). |
@@ -72,11 +73,12 @@
 | `worker_queue_requeued_target` | `number` | `1` | Target queue depth for requeued jobs per worker allocation. |
 | `worker_queue_simulations_query` | `string` | `"sum(openstudio_worker_queue_depth{queue=\"simulations\"})"` | Prometheus query for simulations backlog depth. |
 | `worker_queue_simulations_target` | `number` | `5` | Target queue depth for simulation jobs per worker allocation. |
-| `web_background_image` | `string` | `"nrel/openstudio-server:3.10.0"` | The image name and tag for the OpenStudio Server web-background container. |
-| `web_background_command` | `string` | `"/usr/local/bin/start-web-background"` | Command run by the web-background task. Defaults to the image's start-web-background script, which launches Resque workers for the analysis_wrappers queue. Override only if the image uses a different entry point. |
-| `web_background_queues` | `string` | `"analysis_wrappers"` | Resque QUEUES env var for the web-background task. Controls which queue(s) the start-web-background Resque workers process. The analysis_wrappers queue handles analysis lifecycle jobs (initialize/finalize). Separate multiple queues with commas. NOTE: Use QUEUES (not QUEUE) — the application's resque:setup task explicitly resets QUEUE to prevent environment leaks. |
+| `web_background_image` | `string` | `"nrel/openstudio-server:179-flock"` | The image name and tag for the OpenStudio Server web-background container. |
+| `web_background_command` | `string` | `"/usr/local/bin/start-web-background"` | Command run by the web-background task. Defaults to the image's start-web-background script, which launches Resque workers for background analysis lifecycle queues. |
+| `web_background_queues` | `string` | `"background,analyses"` | Resque QUEUES env var for the web-background task. Controls which queue(s) the start-web-background Resque workers process. Keep both 'background' and 'analyses': the 'analyses' queue handles analysis initialization/cleanup (including directory setup before zip extraction), and 'background' handles general async tasks. The 'analysis_wrappers' queue is consumed by the web task. Omitting 'analyses' causes the 'Destination already exists' error on re-initialization. Separate multiple queues with commas. NOTE: Use QUEUES (not QUEUE) — the application's resque:setup task explicitly resets QUEUE to prevent environment leaks. |
 | `web_background_args` | `list(string)` | `[]` | Optional args passed to web_background_command when set. |
 | `web_background_count` | `number` | `1` | The number of web-background tasks to run. |
+| `web_background_worker_count` | `number` | `6` | COUNT env var for the web-background task: number of Resque child worker processes per allocation. Increase to drain the background/analyses/analysis_wrappers queues faster. Tune in proportion to web_background_memory. |
 | `web_background_autoscaling_enabled` | `bool` | `false` | Enable Nomad Autoscaler scaling for the web-background task group. |
 | `web_background_min_replicas` | `number` | `1` | Minimum number of web-background replicas when autoscaling is enabled. |
 | `web_background_max_replicas` | `number` | `5` | Maximum number of web-background replicas when autoscaling is enabled. |
@@ -101,8 +103,9 @@
 | `nfs_volume_type` | `string` | `"host_volume"` | Storage backend for the NFS shared volume. Use \"host_volume\" (default, recommended) for an OS-level NFS mount registered as a Nomad host volume, or \"csi\" for a CSI-managed NFS volume. Mirrors the db_storage_type / redis_storage_type pattern. |
 | `nfs_volume_source` | `string` | `"openstudio-nfs"` | Nomad volume ID for the NFS shared volume used by web and worker task groups. For host_volume this is the host_volume name; for csi this is the CSI volume ID. |
 | `nfs_volume_mount_path` | `string` | `"/mnt/openstudio"` | Mount path inside web and worker tasks where the NFS shared volume is attached. |
-| `dev_shared_data_path` | `string` | `""` | Host path to bind-mount as the shared data volume at nfs_volume_mount_path (e.g. /mnt/openstudio) in the web, web-background, and worker tasks. Intended for single-node development where a full NFS setup is impractical. When set, a Docker bind mount is added to each task so all three containers share the same host directory, replicating the Docker Compose osdata named volume behaviour. Leave empty (default) in production; use nfs_shared_volume_enabled instead. |
-| `rserve_image` | `string` | `"nrel/openstudio-rserve:3.10.0"` | The Rserve image name and tag. |
+| `dev_shared_data_path` | `string` | `""` | Host path to bind-mount as the shared data volume at nfs_volume_mount_path (e.g. /mnt/openstudio) in the web, web-background, and worker tasks. Intended for single-node development where a full NFS setup is impractical. When set, a Docker bind mount is added to each task so all three containers share the same host directory, replicating the Docker Compose osdata named volume behaviour. Leave empty (default) in production; use nfs_shared_volume_enabled instead. NOTE: On macOS with Docker Desktop, use dev_shared_volume_name instead to avoid VirtioFS write-consistency issues. |
+| `dev_shared_volume_name` | `string` | `""` | Docker named volume to mount at nfs_volume_mount_path in the web, web-background, and worker tasks. Preferred over dev_shared_data_path on macOS/Docker Desktop: named volumes live in the Docker VM filesystem and bypass VirtioFS, avoiding write-consistency issues (CRC corruption) that occur with macOS host bind mounts. Pre-create with 'docker volume create <name>' before deploying. Leave empty (default) when using dev_shared_data_path or nfs_shared_volume_enabled. |
+| `rserve_image` | `string` | `"nrel/openstudio-rserve:179-flock"` | The Rserve image name and tag. |
 | `rserve_command` | `string` | `""` | Optional command override for the Rserve task. Leave empty to use the image default entrypoint. |
 | `rserve_args` | `list(string)` | `[]` | Optional args passed to rserve_command when set. |
 | `rserve_cpu` | `number` | `1000` | CPU shares allocated to the Rserve task. |
@@ -139,6 +142,7 @@
 | `docker_user` | `string` | `"1000:1000"` | UID:GID to run containers as (non-root). Applies to web, worker, and rserve tasks. |
 | `db_static_port` | `number` | `0` |  |
 | `redis_static_port` | `number` | `0` |  |
+| `rserve_static_port` | `number` | `0` |  |
 | `web_extra_hosts` | `list(string)` | `[]` |  |
 | `db_docker_user` | `string` | `"999:999"` | User to run the MongoDB container as. MongoDB official images expect UID/GID 999. |
 | `redis_docker_user` | `string` | `"999:999"` | User to run the Redis container as. Redis official images expect UID/GID 999. |
@@ -158,6 +162,7 @@
 | `vault_kv_redis_path` | `string` | `"secret/data/openstudio/redis"` | Vault KV v2 path for Redis credentials (must contain a 'password' key). |
 | `vault_kv_app_path` | `string` | `"secret/data/openstudio/app"` | Vault KV v2 path for application secrets (must contain a 'secret_key_base' key). |
 | `mongo_password` | `string` | `""` | Plaintext MongoDB password used when vault_integration_enabled is false. |
+| `mongo_user` | `string` | `""` | MongoDB username injected as MONGO_USER into web, web-background, and worker containers. Must match the user configured in db.nomad.tpl. |
 | `redis_password` | `string` | `""` | Plaintext Redis password used when vault_integration_enabled is false. |
 | `app_secret_key_base` | `string` | `""` | Plaintext application secret key base used when vault_integration_enabled is false. |
 | `vault_enabled` | `bool` | `false` | Enable explicit Nomad `vault { role = ... }` blocks for task token issuance. Usually set with vault_integration_enabled for full role-based + KV secret injection. |

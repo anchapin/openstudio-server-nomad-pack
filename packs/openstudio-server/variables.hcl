@@ -100,7 +100,7 @@ variable "datacenters" {
 variable "web_image" {
   type        = string
   description = "The image name and tag for the OpenStudio Server web container."
-  default     = "nrel/openstudio-server:3.10.0"
+  default     = "nrel/openstudio-server:179-flock"
 }
 
 variable "web_command" {
@@ -160,6 +160,12 @@ variable "web_container_port" {
 variable "web_redis_url" {
   type        = string
   description = "Override REDIS_URL env var in the web and worker containers. Required when the default URI scheme parsing ('queue:6379' without '//') resolves incorrectly — e.g. on macOS dev where Redis is reached via host.docker.internal. Set to 'redis://queue:6379' in minimal-dev deployments. Leave empty in production when Vault injects REDIS_URL directly."
+  default     = ""
+}
+
+variable "os_server_sampling_backend" {
+  type        = string
+  description = "Optional override for OS_SERVER_SAMPLING_BACKEND in web and web-background tasks. Valid values: 'rserve' (default app behavior) or 'ruby' (Rserve-independent LHS sampling fallback). Leave empty to use the image default."
   default     = ""
 }
 
@@ -232,7 +238,7 @@ variable "web_background_memory" {
 variable "worker_image" {
   type        = string
   description = "The image name and tag for the OpenStudio Server worker container."
-  default     = "nrel/openstudio-server:3.10.0"
+  default     = "nrel/openstudio-server:179-flock"
 }
 
 variable "worker_command" {
@@ -309,7 +315,7 @@ variable "worker_queues" {
 
 variable "worker_process_count" {
   type        = string
-  description = "COUNT environment variable passed to worker containers."
+  description = "COUNT environment variable passed to worker containers. Also injected into web and web-background as OS_SERVER_NUMBER_OF_WORKERS so analyses can enqueue simulation datapoints."
   default     = "1"
 }
 
@@ -406,19 +412,19 @@ variable "worker_queue_simulations_target" {
 variable "web_background_image" {
   type        = string
   description = "The image name and tag for the OpenStudio Server web-background container."
-  default     = "nrel/openstudio-server:3.10.0"
+  default     = "nrel/openstudio-server:179-flock"
 }
 
 variable "web_background_command" {
   type        = string
-  description = "Command run by the web-background task. Defaults to the image's start-web-background script, which launches Resque workers for the analysis_wrappers queue. Override only if the image uses a different entry point."
+  description = "Command run by the web-background task. Defaults to the image's start-web-background script, which launches Resque workers for background analysis lifecycle queues."
   default     = "/usr/local/bin/start-web-background"
 }
 
 variable "web_background_queues" {
   type        = string
-  description = "Resque QUEUES env var for the web-background task. Controls which queue(s) the start-web-background Resque workers process. The analysis_wrappers queue handles analysis lifecycle jobs (initialize/finalize). Separate multiple queues with commas. NOTE: Use QUEUES (not QUEUE) — the application's resque:setup task explicitly resets QUEUE to prevent environment leaks."
-  default     = "analysis_wrappers"
+  description = "Resque QUEUES env var for the web-background task. Controls which queue(s) the start-web-background Resque workers process. Keep both 'background' and 'analyses': the 'analyses' queue handles analysis initialization/cleanup (including directory setup before zip extraction), and 'background' handles general async tasks. The 'analysis_wrappers' queue is consumed by the web task. Omitting 'analyses' causes the 'Destination already exists' error on re-initialization. Separate multiple queues with commas. NOTE: Use QUEUES (not QUEUE) — the application's resque:setup task explicitly resets QUEUE to prevent environment leaks."
+  default     = "background,analyses"
 }
 
 variable "web_background_args" {
@@ -431,6 +437,12 @@ variable "web_background_count" {
   type        = number
   description = "The number of web-background tasks to run."
   default     = 1
+}
+
+variable "web_background_worker_count" {
+  type        = number
+  description = "COUNT env var for the web-background task: number of Resque child worker processes per allocation. Increase to drain the background/analyses/analysis_wrappers queues faster. Tune in proportion to web_background_memory."
+  default     = 6
 }
 
 variable "web_background_autoscaling_enabled" {
@@ -582,14 +594,20 @@ variable "nfs_volume_mount_path" {
 
 variable "dev_shared_data_path" {
   type        = string
-  description = "Host path to bind-mount as the shared data volume at nfs_volume_mount_path (e.g. /mnt/openstudio) in the web, web-background, and worker tasks. Intended for single-node development where a full NFS setup is impractical. When set, a Docker bind mount is added to each task so all three containers share the same host directory, replicating the Docker Compose osdata named volume behaviour. Leave empty (default) in production; use nfs_shared_volume_enabled instead."
+  description = "Host path to bind-mount as the shared data volume at nfs_volume_mount_path (e.g. /mnt/openstudio) in the web, web-background, and worker tasks. Intended for single-node development where a full NFS setup is impractical. When set, a Docker bind mount is added to each task so all three containers share the same host directory, replicating the Docker Compose osdata named volume behaviour. Leave empty (default) in production; use nfs_shared_volume_enabled instead. NOTE: On macOS with Docker Desktop, use dev_shared_volume_name instead to avoid VirtioFS write-consistency issues."
+  default     = ""
+}
+
+variable "dev_shared_volume_name" {
+  type        = string
+  description = "Docker named volume to mount at nfs_volume_mount_path in the web, web-background, and worker tasks. Preferred over dev_shared_data_path on macOS/Docker Desktop: named volumes live in the Docker VM filesystem and bypass VirtioFS, avoiding write-consistency issues (CRC corruption) that occur with macOS host bind mounts. Pre-create with 'docker volume create <name>' before deploying. Leave empty (default) when using dev_shared_data_path or nfs_shared_volume_enabled."
   default     = ""
 }
 
 variable "rserve_image" {
   type        = string
   description = "The Rserve image name and tag."
-  default     = "nrel/openstudio-rserve:3.10.0"
+  default     = "nrel/openstudio-rserve:179-flock"
 }
 
 variable "rserve_command" {
@@ -821,14 +839,24 @@ variable "redis_static_port" {
   default     = 0
 }
 
+variable "rserve_static_port" {
+  type        = number
+  description = <<-EOT
+    Host-side static port for the Rserve container. Default 0 means Nomad allocates a dynamic port.
+    Set to 6311 for local dev when containers need to reach Rserve via a fixed port
+    (e.g. when using web_extra_hosts to map the 'rserve' hostname on macOS Docker Desktop).
+  EOT
+  default     = 0
+}
+
 variable "web_extra_hosts" {
   type        = list(string)
   description = <<-EOT
     Extra host-to-IP mappings to inject into the web and web-background containers
     (Docker --add-host / extra_hosts). Useful on macOS Docker Desktop to map legacy
-    Docker Compose service hostnames ('db', 'queue') to host.docker.internal so the
-    OpenStudio Server app can reach MongoDB and Redis. Example:
-      web_extra_hosts = ["db:host-gateway", "queue:host-gateway"]
+    Docker Compose service hostnames ('db', 'queue', 'rserve') to host.docker.internal
+    so the OpenStudio Server app can reach MongoDB, Redis, and Rserve. Example:
+      web_extra_hosts = ["db:host-gateway", "queue:host-gateway", "rserve:host-gateway"]
     'host-gateway' is a Docker special value resolving to the host machine's IP.
   EOT
   default     = []
@@ -955,6 +983,12 @@ variable "vault_kv_app_path" {
 variable "mongo_password" {
   type        = string
   description = "Plaintext MongoDB password used when vault_integration_enabled is false."
+  default     = ""
+}
+
+variable "mongo_user" {
+  type        = string
+  description = "MongoDB username injected as MONGO_USER into web, web-background, and worker containers. Must match the user configured in db.nomad.tpl."
   default     = ""
 }
 

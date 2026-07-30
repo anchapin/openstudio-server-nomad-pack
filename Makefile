@@ -120,8 +120,8 @@ endif
 		fi; \
 		sleep 2; \
 	done
-	@echo "Creating shared data directory /tmp/openstudio-osdata..."
-	@mkdir -p /tmp/openstudio-osdata && chmod 777 /tmp/openstudio-osdata
+	@echo "Creating Docker named volume openstudio-osdata-dev (avoids VirtioFS corruption on macOS)..."
+	@docker volume create openstudio-osdata-dev 2>/dev/null || true
 	@echo ""
 	@echo "  Nomad:  http://localhost:4646"
 	@echo "  Consul: http://localhost:8500"

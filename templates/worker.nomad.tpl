@@ -144,7 +144,7 @@ MONGO_PASSWORD={{ .Data.data.password | toJSON }}
 REDIS_PASSWORD={{ .Data.data.password | toJSON }}
 {{ end }}
 {{ with secret "[[ var "vault_kv_app_path" . ]]" }}
-APP_SECRET_KEY_BASE={{ .Data.data.secret_key_base | toJSON }}
+SECRET_KEY_BASE={{ .Data.data.secret_key_base | toJSON }}
 {{ end }}
 EOT
       }
@@ -167,7 +167,15 @@ EOT
         [[ if var "worker_args" . ]]
         args = [[ var "worker_args" . | toJson ]]
         [[ end ]]
-        [[ if var "dev_shared_data_path" . ]]
+        [[ if var "dev_shared_volume_name" . ]]
+        mounts = [
+          {
+            type   = "volume"
+            source = "[[ var "dev_shared_volume_name" . ]]"
+            target = "[[ var "nfs_volume_mount_path" . ]]"
+          }
+        ]
+        [[ else if var "dev_shared_data_path" . ]]
         mounts = [
           {
             type   = "bind"
@@ -186,15 +194,16 @@ EOT
       }
 
       env {
+        MONGO_USER = "[[ var "mongo_user" . ]]"
         QUEUES = "[[ var "worker_queues" . ]]"
         COUNT  = "[[ var "worker_process_count" . ]]"
-        [[ if not (var "vault_integration_enabled" .) ]]
-        MONGO_PASSWORD      = "[[ var "mongo_password" . ]]"
-        REDIS_PASSWORD      = "[[ var "redis_password" . ]]"
-        APP_SECRET_KEY_BASE = "[[ var "app_secret_key_base" . ]]"
         [[ if var "web_redis_url" . ]]
-        REDIS_URL           = "[[ var "web_redis_url" . ]]"
+        REDIS_URL = "[[ var "web_redis_url" . ]]"
         [[ end ]]
+        [[ if not (var "vault_integration_enabled" .) ]]
+        MONGO_PASSWORD  = "[[ var "mongo_password" . ]]"
+        REDIS_PASSWORD  = "[[ var "redis_password" . ]]"
+        SECRET_KEY_BASE = "[[ var "app_secret_key_base" . ]]"
         [[ end ]]
       }
 
