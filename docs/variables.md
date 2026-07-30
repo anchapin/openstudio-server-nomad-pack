@@ -101,6 +101,7 @@
 | `nfs_volume_type` | `string` | `"host_volume"` | Storage backend for the NFS shared volume. Use \"host_volume\" (default, recommended) for an OS-level NFS mount registered as a Nomad host volume, or \"csi\" for a CSI-managed NFS volume. Mirrors the db_storage_type / redis_storage_type pattern. |
 | `nfs_volume_source` | `string` | `"openstudio-nfs"` | Nomad volume ID for the NFS shared volume used by web and worker task groups. For host_volume this is the host_volume name; for csi this is the CSI volume ID. |
 | `nfs_volume_mount_path` | `string` | `"/mnt/openstudio"` | Mount path inside web and worker tasks where the NFS shared volume is attached. |
+| `dev_shared_data_path` | `string` | `""` | Host path to bind-mount as the shared data volume at nfs_volume_mount_path (e.g. /mnt/openstudio) in the web, web-background, and worker tasks. Intended for single-node development where a full NFS setup is impractical. When set, a Docker bind mount is added to each task so all three containers share the same host directory, replicating the Docker Compose osdata named volume behaviour. Leave empty (default) in production; use nfs_shared_volume_enabled instead. |
 | `rserve_image` | `string` | `"nrel/openstudio-rserve:3.10.0"` | The Rserve image name and tag. |
 | `rserve_command` | `string` | `""` | Optional command override for the Rserve task. Leave empty to use the image default entrypoint. |
 | `rserve_args` | `list(string)` | `[]` | Optional args passed to rserve_command when set. |

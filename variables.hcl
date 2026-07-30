@@ -580,6 +580,12 @@ variable "nfs_volume_mount_path" {
   default     = "/mnt/openstudio"
 }
 
+variable "dev_shared_data_path" {
+  type        = string
+  description = "Host path to bind-mount as the shared data volume at nfs_volume_mount_path (e.g. /mnt/openstudio) in the web, web-background, and worker tasks. Intended for single-node development where a full NFS setup is impractical. When set, a Docker bind mount is added to each task so all three containers share the same host directory, replicating the Docker Compose osdata named volume behaviour. Leave empty (default) in production; use nfs_shared_volume_enabled instead."
+  default     = ""
+}
+
 variable "rserve_image" {
   type        = string
   description = "The Rserve image name and tag."

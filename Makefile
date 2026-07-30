@@ -80,8 +80,29 @@ ifeq ($(OS),Darwin)
 	else \
 		echo "Consul already running."; \
 	fi
-	# Nomad is expected to be running natively (e.g. brew install hashicorp/tap/nomad).
-	# Skip the Docker Nomad container on macOS to avoid port 4646 conflicts.
+	# Start Nomad natively with the macOS config (enables Docker bind mounts).
+	# If already running, check whether volumes are enabled; restart if not.
+	@NOMAD_VOLUMES_OK=0; \
+	if curl -sf http://127.0.0.1:4646/v1/agent/self >/dev/null 2>&1; then \
+		CONF=$$(cat /tmp/nomad-macos-dev.pid 2>/dev/null || echo ""); \
+		if curl -sf http://127.0.0.1:4646/v1/node/self 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); v=d.get('Attributes',{}).get('driver.docker.volumes.enabled','false'); print('ok' if v=='1' or v=='true' else 'no')" 2>/dev/null | grep -q ok; then \
+			echo "Nomad already running with volumes enabled."; NOMAD_VOLUMES_OK=1; \
+		else \
+			echo "Nomad running but volumes NOT enabled — restarting with macOS config..."; \
+			NPID=$$(cat /tmp/nomad-macos-dev.pid 2>/dev/null); \
+			[ -n "$$NPID" ] && kill $$NPID 2>/dev/null && echo "  Stopped Nomad (pid $$NPID)" || \
+				(kill $$(pgrep -f 'nomad agent' | head -1) 2>/dev/null && echo "  Stopped existing Nomad"); \
+			sleep 3; \
+		fi; \
+	fi; \
+	if [ "$$NOMAD_VOLUMES_OK" = "0" ]; then \
+		mkdir -p /tmp/nomad-macos-dev/data; \
+		NOMAD_CONF=$$(realpath docker/nomad-macos.hcl 2>/dev/null || echo "$$(pwd)/docker/nomad-macos.hcl"); \
+		nomad agent -dev -config=$$NOMAD_CONF -log-level=WARN \
+			>/tmp/nomad-macos-dev.log 2>&1 & \
+		echo "$$!" > /tmp/nomad-macos-dev.pid; \
+		echo "Started native Nomad (pid $$(cat /tmp/nomad-macos-dev.pid)) with volumes enabled"; \
+	fi
 else
 	docker compose -f $(COMPOSE_FILE) up -d
 endif
@@ -99,6 +120,8 @@ endif
 		fi; \
 		sleep 2; \
 	done
+	@echo "Creating shared data directory /tmp/openstudio-osdata..."
+	@mkdir -p /tmp/openstudio-osdata && chmod 777 /tmp/openstudio-osdata
 	@echo ""
 	@echo "  Nomad:  http://localhost:4646"
 	@echo "  Consul: http://localhost:8500"
@@ -107,6 +130,11 @@ endif
 .PHONY: down
 down: stop ## Stop all jobs + remove all containers + volumes
 ifeq ($(OS),Darwin)
+	@if [ -f /tmp/nomad-macos-dev.pid ]; then \
+		PID=$$(cat /tmp/nomad-macos-dev.pid); \
+		kill $$PID 2>/dev/null && echo "Stopped native Nomad (pid $$PID)" || true; \
+		rm -f /tmp/nomad-macos-dev.pid; \
+	fi
 	@if [ -f /tmp/consul-dev.pid ]; then \
 		PID=$$(cat /tmp/consul-dev.pid); \
 		kill $$PID 2>/dev/null && echo "Stopped native Consul (pid $$PID)" || true; \

@@ -55,6 +55,12 @@ worker_extra_hosts = ["db:host-gateway", "queue:host-gateway"]
 # URI scheme rather than host:port, causing Redis to fall back to 127.0.0.1.
 web_redis_url     = "redis://queue:6379"
 
+# Shared data volume: both web and web-background need access to the same
+# /mnt/openstudio directory (replicating the Docker Compose 'osdata' named volume).
+# The web container writes uploaded ZIPs there; web-background workers read them
+# during InitializeAnalysis, and the worker container reads/writes simulation data.
+dev_shared_data_path = "/tmp/openstudio-osdata"
+
 # Disable security hardening options that prevent the app from writing to
 # required paths (/opt/openstudio/server/log, /tmp, /opt/nginx/conf, etc.).
 # These are appropriate for local dev only — do not carry over to production.

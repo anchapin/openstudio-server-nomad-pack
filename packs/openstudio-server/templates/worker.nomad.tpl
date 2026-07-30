@@ -167,6 +167,15 @@ EOT
         [[ if var "worker_args" . ]]
         args = [[ var "worker_args" . | toJson ]]
         [[ end ]]
+        [[ if var "dev_shared_data_path" . ]]
+        mounts = [
+          {
+            type   = "bind"
+            source = "[[ var "dev_shared_data_path" . ]]"
+            target = "[[ var "nfs_volume_mount_path" . ]]"
+          }
+        ]
+        [[ end ]]
         logging {
           type = "[[ var "log_driver_type" . ]]"
           config {
