@@ -21,7 +21,18 @@ OS := $(shell uname -s)
 # ── Infrastructure Lifecycle ──────────────────────────────────────────────────
 
 .PHONY: up
-up: check ## Start Consul + Nomad
+up: check ## Start Consul + Nomad (stops any existing pack jobs first)
+	@EXISTING=$$(curl -sf "http://127.0.0.1:4646/v1/jobs?prefix=$(JOB_NAME)" 2>/dev/null | \
+		python3 -c "import sys,json; [print(j['ID']) for j in json.load(sys.stdin)]" 2>/dev/null); \
+	if [ -n "$$EXISTING" ]; then \
+		echo "Pre-flight: stopping existing OpenStudio Server jobs..."; \
+		for id in $$EXISTING; do \
+			echo "  Deregistering $$id..."; \
+			curl -sf -X DELETE "http://127.0.0.1:4646/v1/job/$${id}?purge=true" >/dev/null 2>&1 || true; \
+		done; \
+		echo "  Waiting for containers to be released..."; \
+		sleep 5; \
+	fi
 ifeq ($(OS),Darwin)
 	# macOS: Docker Desktop host networking does not expose container ports to the
 	# Mac host without enabling a non-default feature flag, and even then Consul
