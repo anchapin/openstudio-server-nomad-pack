@@ -34,7 +34,8 @@ job "[[ var "job_name" . ]]-db" {
 
     network {
       port "db" {
-        to = 27017
+        to     = 27017
+        static = [[ var "db_static_port" . ]]
       }
     }
 
@@ -89,6 +90,14 @@ job "[[ var "job_name" . ]]-db" {
         ports           = ["db"]
         readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
         cap_drop        = [[ var "docker_cap_drop" . | toJson ]]
+        # MongoDB needs /tmp for its UNIX socket even with a read-only rootfs.
+        mounts = [
+          {
+            type          = "tmpfs"
+            target        = "/tmp"
+            tmpfs_options = { size = 67108864 }
+          }
+        ]
         logging {
           type = "[[ var "log_driver_type" . ]]"
           config {

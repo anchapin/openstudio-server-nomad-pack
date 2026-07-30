@@ -34,7 +34,8 @@ job "[[ var "job_name" . ]]-redis" {
 
     network {
       port "redis" {
-        to = 6379
+        to     = 6379
+        static = [[ var "redis_static_port" . ]]
       }
     }
 

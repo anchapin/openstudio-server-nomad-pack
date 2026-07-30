@@ -82,7 +82,9 @@ job "[[ var "job_name" . ]]-worker" {
     }
     [[ end ]]
     [[ end ]]
+    [[ if var "enable_arch_constraint" . ]]
     [[ template "openstudio_server.arch_constraint" . ]]
+    [[ end ]]
 
     # Prestart: wait for MongoDB and Redis to be registered and healthy in Consul
     task "wait-for-deps" {
@@ -99,7 +101,7 @@ job "[[ var "job_name" . ]]-worker" {
         command = "sh"
         args = [
           "-ec",
-          "until wget -qO- \"http://127.0.0.1:8500/v1/health/service/openstudio-db?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-db\"'; do sleep 2; done; until wget -qO- \"http://127.0.0.1:8500/v1/health/service/openstudio-redis?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-redis\"'; do sleep 2; done",
+          "until wget -qO- \"http://[[ var "consul_address" . ]]/v1/health/service/openstudio-db?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-db\"'; do sleep 2; done; until wget -qO- \"http://[[ var "consul_address" . ]]/v1/health/service/openstudio-redis?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-redis\"'; do sleep 2; done",
         ]
       }
 
@@ -142,7 +144,7 @@ MONGO_PASSWORD={{ .Data.data.password | toJSON }}
 REDIS_PASSWORD={{ .Data.data.password | toJSON }}
 {{ end }}
 {{ with secret "[[ var "vault_kv_app_path" . ]]" }}
-APP_SECRET_KEY_BASE={{ .Data.data.secret_key_base | toJSON }}
+SECRET_KEY_BASE={{ .Data.data.secret_key_base | toJSON }}
 {{ end }}
 EOT
       }
@@ -159,8 +161,28 @@ EOT
         command         = "[[ var "worker_command" . ]]"
         readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
         cap_drop        = [[ var "docker_cap_drop" . | toJson ]]
+        [[ if var "worker_extra_hosts" . ]]
+        extra_hosts     = [[ var "worker_extra_hosts" . | toJson ]]
+        [[ end ]]
         [[ if var "worker_args" . ]]
         args = [[ var "worker_args" . | toJson ]]
+        [[ end ]]
+        [[ if var "dev_shared_volume_name" . ]]
+        mounts = [
+          {
+            type   = "volume"
+            source = "[[ var "dev_shared_volume_name" . ]]"
+            target = "[[ var "nfs_volume_mount_path" . ]]"
+          }
+        ]
+        [[ else if var "dev_shared_data_path" . ]]
+        mounts = [
+          {
+            type   = "bind"
+            source = "[[ var "dev_shared_data_path" . ]]"
+            target = "[[ var "nfs_volume_mount_path" . ]]"
+          }
+        ]
         [[ end ]]
         logging {
           type = "[[ var "log_driver_type" . ]]"
@@ -172,12 +194,16 @@ EOT
       }
 
       env {
+        MONGO_USER = "[[ var "mongo_user" . ]]"
         QUEUES = "[[ var "worker_queues" . ]]"
         COUNT  = "[[ var "worker_process_count" . ]]"
+        [[ if var "web_redis_url" . ]]
+        REDIS_URL = "[[ var "web_redis_url" . ]]"
+        [[ end ]]
         [[ if not (var "vault_integration_enabled" .) ]]
-        MONGO_PASSWORD      = "[[ var "mongo_password" . ]]"
-        REDIS_PASSWORD      = "[[ var "redis_password" . ]]"
-        APP_SECRET_KEY_BASE = "[[ var "app_secret_key_base" . ]]"
+        MONGO_PASSWORD  = "[[ var "mongo_password" . ]]"
+        REDIS_PASSWORD  = "[[ var "redis_password" . ]]"
+        SECRET_KEY_BASE = "[[ var "app_secret_key_base" . ]]"
         [[ end ]]
       }
 

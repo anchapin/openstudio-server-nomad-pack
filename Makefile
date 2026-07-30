@@ -1,9 +1,10 @@
 # OpenStudio Server Nomad Pack — Quick Dev Environment
 #
 # Prerequisites: Docker, nomad-pack
+# macOS also needs: consul (auto-installed via brew if missing)
 #
 # Usage:
-#   make up       Start Consul + Nomad in Docker
+#   make up       Start Consul + Nomad
 #   make deploy   Deploy OpenStudio Server via nomad-pack
 #   make open     Open web UI in browser
 #   make down     Stop everything and clean up
@@ -12,11 +13,99 @@ COMPOSE_FILE   = docker/docker-compose.yaml
 VAR_FILE       = examples/minimal-dev.hcl
 JOB_NAME       = openstudio-server-dev
 
+# Derive web port from var file (falls back to the variable default of 80).
+WEB_PORT := $(or $(shell grep -E '^\s*web_port\s*=' $(VAR_FILE) 2>/dev/null | grep -o '[0-9]*' | head -1),80)
+
+OS := $(shell uname -s)
+
 # ── Infrastructure Lifecycle ──────────────────────────────────────────────────
 
 .PHONY: up
-up: check ## Start Consul + Nomad in Docker (host networking)
+up: check ## Start Consul + Nomad (stops any existing pack jobs first)
+	@EXISTING=$$(curl -sf "http://127.0.0.1:4646/v1/jobs?prefix=$(JOB_NAME)" 2>/dev/null | \
+		python3 -c "import sys,json; [print(j['ID']) for j in json.load(sys.stdin)]" 2>/dev/null); \
+	if [ -n "$$EXISTING" ]; then \
+		echo "Pre-flight: stopping existing OpenStudio Server jobs..."; \
+		for id in $$EXISTING; do \
+			echo "  Deregistering $$id..."; \
+			curl -sf -X DELETE "http://127.0.0.1:4646/v1/job/$${id}?purge=true" >/dev/null 2>&1 || true; \
+		done; \
+		echo "  Waiting for containers to be released..."; \
+		sleep 5; \
+	fi
+ifeq ($(OS),Darwin)
+	# macOS: Docker Desktop host networking does not expose container ports to the
+	# Mac host without enabling a non-default feature flag, and even then Consul
+	# health checks can't reach services on the Mac's loopback from inside Docker.
+	# Run Consul natively so it shares the Mac's network with Nomad's task containers.
+	@if ! command -v consul >/dev/null 2>&1; then \
+		echo "Installing Consul via Homebrew..."; \
+		brew install consul; \
+	fi
+	# Stop any Homebrew-managed MongoDB and Redis that would conflict with the
+	# static ports (27017, 6379) used by the Nomad-managed containers.
+	@if lsof -i :27017 -sTCP:LISTEN >/dev/null 2>&1; then \
+		echo "Stopping process(es) on port 27017 (MongoDB)..."; \
+		brew services stop mongodb-community 2>/dev/null || brew services stop mongodb 2>/dev/null || true; \
+		sleep 1; \
+		lsof -ti :27017 -sTCP:LISTEN 2>/dev/null | while read pid; do \
+			pname=$$(ps -p $$pid -o comm= 2>/dev/null || echo ""); \
+			if echo "$$pname" | grep -qiE 'mongod'; then \
+				echo "  Killing mongod (pid $$pid)..."; kill $$pid 2>/dev/null || true; \
+			else \
+				echo "  Skipping pid $$pid ($$pname) — not a MongoDB process"; \
+			fi; \
+		done; \
+		echo "BREW_MONGODB_WAS_RUNNING=1" >> /tmp/openstudio-dev-state; \
+	fi
+	@if lsof -i :6379 -sTCP:LISTEN >/dev/null 2>&1; then \
+		echo "Stopping process(es) on port 6379 (Redis)..."; \
+		brew services stop redis 2>/dev/null || true; \
+		sleep 1; \
+		lsof -ti :6379 -sTCP:LISTEN 2>/dev/null | while read pid; do \
+			pname=$$(ps -p $$pid -o comm= 2>/dev/null || echo ""); \
+			if echo "$$pname" | grep -qiE 'redis'; then \
+				echo "  Killing redis-server (pid $$pid)..."; kill $$pid 2>/dev/null || true; \
+			else \
+				echo "  Skipping pid $$pid ($$pname) — not a Redis process"; \
+			fi; \
+		done; \
+		echo "BREW_REDIS_WAS_RUNNING=1" >> /tmp/openstudio-dev-state; \
+	fi
+	@if ! curl -sf http://127.0.0.1:8500/v1/status/leader >/dev/null 2>&1; then \
+		consul agent -dev -client=0.0.0.0 -bind=127.0.0.1 \
+			>/tmp/consul-dev.log 2>&1 & \
+		echo "$$!" > /tmp/consul-dev.pid; \
+		echo "Started native Consul (pid $$(cat /tmp/consul-dev.pid))"; \
+	else \
+		echo "Consul already running."; \
+	fi
+	# Start Nomad natively with the macOS config (enables Docker bind mounts).
+	# If already running, check whether volumes are enabled; restart if not.
+	@NOMAD_VOLUMES_OK=0; \
+	if curl -sf http://127.0.0.1:4646/v1/agent/self >/dev/null 2>&1; then \
+		CONF=$$(cat /tmp/nomad-macos-dev.pid 2>/dev/null || echo ""); \
+		if curl -sf http://127.0.0.1:4646/v1/node/self 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); v=d.get('Attributes',{}).get('driver.docker.volumes.enabled','false'); print('ok' if v=='1' or v=='true' else 'no')" 2>/dev/null | grep -q ok; then \
+			echo "Nomad already running with volumes enabled."; NOMAD_VOLUMES_OK=1; \
+		else \
+			echo "Nomad running but volumes NOT enabled — restarting with macOS config..."; \
+			NPID=$$(cat /tmp/nomad-macos-dev.pid 2>/dev/null); \
+			[ -n "$$NPID" ] && kill $$NPID 2>/dev/null && echo "  Stopped Nomad (pid $$NPID)" || \
+				(kill $$(pgrep -f 'nomad agent' | head -1) 2>/dev/null && echo "  Stopped existing Nomad"); \
+			sleep 3; \
+		fi; \
+	fi; \
+	if [ "$$NOMAD_VOLUMES_OK" = "0" ]; then \
+		mkdir -p /tmp/nomad-macos-dev/data; \
+		NOMAD_CONF=$$(realpath docker/nomad-macos.hcl 2>/dev/null || echo "$$(pwd)/docker/nomad-macos.hcl"); \
+		nomad agent -dev -config=$$NOMAD_CONF -log-level=WARN \
+			>/tmp/nomad-macos-dev.log 2>&1 & \
+		echo "$$!" > /tmp/nomad-macos-dev.pid; \
+		echo "Started native Nomad (pid $$(cat /tmp/nomad-macos-dev.pid)) with volumes enabled"; \
+	fi
+else
 	docker compose -f $(COMPOSE_FILE) up -d
+endif
 	@echo "Waiting for Nomad to be ready..."
 	@for i in $$(seq 1 30); do \
 		if curl -sf http://127.0.0.1:4646/v1/agent/self >/dev/null 2>&1; then \
@@ -24,6 +113,15 @@ up: check ## Start Consul + Nomad in Docker (host networking)
 		fi; \
 		sleep 2; \
 	done
+	@echo "Waiting for Consul to be ready..."
+	@for i in $$(seq 1 15); do \
+		if curl -sf http://127.0.0.1:8500/v1/status/leader >/dev/null 2>&1; then \
+			echo "Consul ready."; break; \
+		fi; \
+		sleep 2; \
+	done
+	@echo "Creating Docker named volume openstudio-osdata-dev (avoids VirtioFS corruption on macOS)..."
+	@docker volume create openstudio-osdata-dev 2>/dev/null || true
 	@echo ""
 	@echo "  Nomad:  http://localhost:4646"
 	@echo "  Consul: http://localhost:8500"
@@ -31,7 +129,32 @@ up: check ## Start Consul + Nomad in Docker (host networking)
 
 .PHONY: down
 down: stop ## Stop all jobs + remove all containers + volumes
+ifeq ($(OS),Darwin)
+	@if [ -f /tmp/nomad-macos-dev.pid ]; then \
+		PID=$$(cat /tmp/nomad-macos-dev.pid); \
+		kill $$PID 2>/dev/null && echo "Stopped native Nomad (pid $$PID)" || true; \
+		rm -f /tmp/nomad-macos-dev.pid; \
+	fi
+	@if [ -f /tmp/consul-dev.pid ]; then \
+		PID=$$(cat /tmp/consul-dev.pid); \
+		kill $$PID 2>/dev/null && echo "Stopped native Consul (pid $$PID)" || true; \
+		rm -f /tmp/consul-dev.pid; \
+	fi
+	# Restore any Homebrew services that were stopped by 'make up'.
+	@if [ -f /tmp/openstudio-dev-state ]; then \
+		if grep -q "BREW_MONGODB_WAS_RUNNING=1" /tmp/openstudio-dev-state 2>/dev/null; then \
+			echo "Restarting Homebrew MongoDB..."; \
+			brew services start mongodb-community 2>/dev/null || brew services start mongodb 2>/dev/null || true; \
+		fi; \
+		if grep -q "BREW_REDIS_WAS_RUNNING=1" /tmp/openstudio-dev-state 2>/dev/null; then \
+			echo "Restarting Homebrew Redis..."; \
+			brew services start redis 2>/dev/null || true; \
+		fi; \
+		rm -f /tmp/openstudio-dev-state; \
+	fi
+else
 	docker compose -f $(COMPOSE_FILE) down -v
+endif
 
 .PHONY: restart
 restart: down up ## Full restart (clean infra)
@@ -40,7 +163,17 @@ restart: down up ## Full restart (clean infra)
 
 .PHONY: deploy
 deploy: check-infra ## Deploy OpenStudio Server with minimal-dev config
-	nomad-pack run -var-file $(VAR_FILE) .
+	@echo "Rendering and deploying jobs..."
+	@rm -rf /tmp/nomad-pack-render && mkdir /tmp/nomad-pack-render
+	@NOMAD_ADDR=http://127.0.0.1:4646 nomad-pack render --var-file $(VAR_FILE) \
+		--to-dir /tmp/nomad-pack-render --auto-approve . >/dev/null 2>&1
+	@for f in /tmp/nomad-pack-render/openstudio-server/*.nomad; do \
+		job=$$(basename "$$f" .hcl); \
+		echo "  Submitting $$job..."; \
+		NOMAD_ADDR=http://127.0.0.1:4646 nomad job run -detach "$$f" >/dev/null 2>&1 || \
+		echo "    (warning: submit returned non-zero, may already be running)"; \
+	done
+	@rm -rf /tmp/nomad-pack-render
 	@echo ""
 	@echo "Deploying... waiting for services (up to 2 min)..."
 	@echo "Run 'make status' to check progress."
@@ -75,32 +208,36 @@ status: ## Show deployment status (jobs + nodes + services) via API
 	@curl -sf http://127.0.0.1:8500/v1/catalog/services 2>/dev/null | python3 -c "import sys,json; svcs=json.load(sys.stdin); [print(f'  {s}') for s in sorted(svcs.keys()) if 'openstudio' in s]" 2>/dev/null || echo "(none or not running)"
 
 .PHONY: logs
-logs: ## Tail Nomad agent logs
+logs: ## Tail Nomad agent logs (Docker only; native Nomad logs to stderr)
 	docker compose -f $(COMPOSE_FILE) logs -f nomad
 
 .PHONY: logs-consul
-logs-consul: ## Tail Consul agent logs
+logs-consul: ## Tail Consul agent logs (Docker) or /tmp/consul-dev.log (macOS native)
+ifeq ($(OS),Darwin)
+	tail -f /tmp/consul-dev.log
+else
 	docker compose -f $(COMPOSE_FILE) logs -f consul
+endif
 
 .PHONY: web
-web: ## Show web allocation logs (via Nomad container)
-	@docker compose -f $(COMPOSE_FILE) exec -T nomad nomad alloc logs -job $(JOB_NAME)-web web 2>/dev/null || echo "Job not yet deployed or alloc logs unavailable"
+web: ## Show web allocation logs
+	@nomad alloc logs -job $(JOB_NAME)-web web 2>/dev/null || echo "Job not yet deployed or alloc logs unavailable"
 
 .PHONY: open
 open: ## Open the web UI in browser
-	@echo "Opening http://localhost:8080 ..."
-	@open http://localhost:8080 2>/dev/null || \
-		xdg-open http://localhost:8080 2>/dev/null || \
-		echo "Open http://localhost:8080 in your browser."
+	@echo "Opening http://localhost:$(WEB_PORT) ..."
+	@open http://localhost:$(WEB_PORT) 2>/dev/null || \
+		xdg-open http://localhost:$(WEB_PORT) 2>/dev/null || \
+		echo "Open http://localhost:$(WEB_PORT) in your browser."
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
 
 .PHONY: shell-nomad
-shell-nomad: ## Open a shell in the Nomad container
+shell-nomad: ## Open a shell in the Nomad container (Linux/Docker only)
 	docker compose -f $(COMPOSE_FILE) exec nomad sh
 
 .PHONY: shell-consul
-shell-consul: ## Open a shell in the Consul container
+shell-consul: ## Open a shell in the Consul container (Linux/Docker only)
 	docker compose -f $(COMPOSE_FILE) exec consul sh
 
 .PHONY: ps
@@ -116,6 +253,10 @@ check: ## Verify prerequisites are installed
 	@echo "  nomad-pack: $$(nomad-pack --version 2>&1 | head -1)"
 	@echo "  docker compose: $$(docker compose version 2>&1 || echo '(Docker Compose v2 required)')"
 	@docker info >/dev/null 2>&1 || { echo "ERROR: Docker daemon not running."; exit 1; }
+ifeq ($(OS),Darwin)
+	@command -v nomad >/dev/null 2>&1 || { echo "ERROR: nomad not found. Install: brew install hashicorp/tap/nomad"; exit 1; }
+	@echo "  nomad:      $$(nomad version 2>&1 | head -1)"
+endif
 	@echo ""
 
 .PHONY: check-infra

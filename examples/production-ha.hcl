@@ -17,10 +17,10 @@ region      = "us-east-1"
 datacenters = ["dc1", "dc2", "dc3"]
 
 # ---------- Images ----------
-web_image            = "nrel/openstudio-server:3.11.0"
-web_background_image = "nrel/openstudio-server:3.11.0"
-worker_image         = "nrel/openstudio-server:3.11.0"
-rserve_image         = "nrel/openstudio-rserve:3.11.0"
+web_image            = "nrel/openstudio-server:179-flock"
+web_background_image = "nrel/openstudio-server:179-flock"
+worker_image         = "nrel/openstudio-server:179-flock"
+rserve_image         = "nrel/openstudio-rserve:179-flock"
 
 # ---------- Web ----------
 web_priority = 90

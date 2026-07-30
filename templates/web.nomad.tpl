@@ -51,7 +51,7 @@ job "[[ var "job_name" . ]]-web" {
     network {
       port "http" {
         static = [[ var "web_port" . ]]
-        to     = 8080
+        to     = [[ var "web_container_port" . ]]
       }
     }
 
@@ -70,7 +70,7 @@ job "[[ var "job_name" . ]]-web" {
         command = "sh"
         args = [
           "-ec",
-          "until wget -qO- \"http://127.0.0.1:8500/v1/health/service/openstudio-db?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-db\"'; do sleep 2; done; until wget -qO- \"http://127.0.0.1:8500/v1/health/service/openstudio-redis?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-redis\"'; do sleep 2; done; until wget -qO- \"http://127.0.0.1:8500/v1/health/service/openstudio-rserve?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-rserve\"'; do sleep 2; done",
+          "until wget -qO- \"http://[[ var "consul_address" . ]]/v1/health/service/openstudio-db?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-db\"'; do sleep 2; done; until wget -qO- \"http://[[ var "consul_address" . ]]/v1/health/service/openstudio-redis?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-redis\"'; do sleep 2; done; until wget -qO- \"http://[[ var "consul_address" . ]]/v1/health/service/openstudio-rserve?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-rserve\"'; do sleep 2; done",
         ]
       }
 
@@ -113,7 +113,7 @@ MONGO_PASSWORD={{ .Data.data.password | toJSON }}
 REDIS_PASSWORD={{ .Data.data.password | toJSON }}
 {{ end }}
 {{ with secret "[[ var "vault_kv_app_path" . ]]" }}
-APP_SECRET_KEY_BASE={{ .Data.data.secret_key_base | toJSON }}
+SECRET_KEY_BASE={{ .Data.data.secret_key_base | toJSON }}
 {{ end }}
 EOT
       }
@@ -125,24 +125,53 @@ EOT
       }
       [[ end ]]
 
-      [[ if not (var "vault_integration_enabled" .) ]]
       env {
-        MONGO_PASSWORD      = "[[ var "mongo_password" . ]]"
-        REDIS_PASSWORD      = "[[ var "redis_password" . ]]"
-        APP_SECRET_KEY_BASE = "[[ var "app_secret_key_base" . ]]"
+        MONGO_USER      = "[[ var "mongo_user" . ]]"
+        QUEUES          = "analysis_wrappers"
+        OS_SERVER_NUMBER_OF_WORKERS = "[[ var "worker_process_count" . ]]"
+        [[ if var "os_server_sampling_backend" . ]]
+        OS_SERVER_SAMPLING_BACKEND = "[[ var "os_server_sampling_backend" . ]]"
+        [[ end ]]
+        [[ if var "web_redis_url" . ]]
+        REDIS_URL       = "[[ var "web_redis_url" . ]]"
+        [[ end ]]
+        [[ if not (var "vault_integration_enabled" .) ]]
+        MONGO_PASSWORD  = "[[ var "mongo_password" . ]]"
+        REDIS_PASSWORD  = "[[ var "redis_password" . ]]"
+        SECRET_KEY_BASE = "[[ var "app_secret_key_base" . ]]"
+        [[ end ]]
       }
-      [[ end ]]
 
       config {
         image           = "[[ var "web_image" . ]]"
         ports           = ["http"]
         readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
         cap_drop        = [[ var "docker_cap_drop" . | toJson ]]
+        [[ if var "web_extra_hosts" . ]]
+        extra_hosts     = [[ var "web_extra_hosts" . | toJson ]]
+        [[ end ]]
         [[ if ne (var "web_command" .) "" ]]
         command = "[[ var "web_command" . ]]"
         [[ end ]]
         [[ if var "web_args" . ]]
         args = [[ var "web_args" . | toJson ]]
+        [[ end ]]
+        [[ if var "dev_shared_volume_name" . ]]
+        mounts = [
+          {
+            type   = "volume"
+            source = "[[ var "dev_shared_volume_name" . ]]"
+            target = "[[ var "nfs_volume_mount_path" . ]]"
+          }
+        ]
+        [[ else if var "dev_shared_data_path" . ]]
+        mounts = [
+          {
+            type   = "bind"
+            source = "[[ var "dev_shared_data_path" . ]]"
+            target = "[[ var "nfs_volume_mount_path" . ]]"
+          }
+        ]
         [[ end ]]
         logging {
           type = "[[ var "log_driver_type" . ]]"
@@ -266,6 +295,53 @@ EOH
     [[ end ]]
     [[ end ]]
 
+    # Prestart: create and chmod the shared analysis directory on NFS before workers start.
+    # Mirrors the helm chart's init-fix-shared-storage-perms init container.
+    # Without this, a fresh NFS volume may lack the analyses directory; partial
+    # extraction failures then leave stale files that cause "Destination already exists"
+    # on the next initialization attempt.
+    task "init-shared-storage-perms" {
+      lifecycle {
+        hook    = "prestart"
+        sidecar = false
+      }
+
+      driver = "docker"
+      user   = "0:0"
+
+      [[ if var "nfs_shared_volume_enabled" . ]]
+      volume_mount {
+        volume      = "nfs-shared"
+        destination = "[[ var "nfs_volume_mount_path" . ]]"
+        read_only   = false
+      }
+      [[ end ]]
+
+      config {
+        image   = "alpine:3.20"
+        # Run as root so we can mkdir and chmod on the NFS mount.
+        # CHOWN + FOWNER are re-added after the global cap_drop = ["ALL"].
+        cap_drop = ["ALL"]
+        cap_add  = ["CHOWN", "FOWNER"]
+        command = "sh"
+        args = [
+          "-c",
+          <<-EOF
+set -eu
+mkdir -p [[ var "nfs_volume_mount_path" . ]]/server/assets/analyses
+chmod 2775 [[ var "nfs_volume_mount_path" . ]]/server
+chmod 2777 [[ var "nfs_volume_mount_path" . ]]/server/assets [[ var "nfs_volume_mount_path" . ]]/server/assets/analyses
+echo "init-shared-storage-perms: ensured writable permissions on [[ var "nfs_volume_mount_path" . ]]/server/assets/analyses"
+EOF
+        ]
+      }
+
+      resources {
+        cpu    = 50
+        memory = 32
+      }
+    }
+
     # Prestart: wait for MongoDB, Redis, and the web service to be healthy in Consul
     task "wait-for-deps" {
       lifecycle {
@@ -281,7 +357,7 @@ EOH
         command = "sh"
         args = [
           "-ec",
-          "until wget -qO- \"http://127.0.0.1:8500/v1/health/service/openstudio-db?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-db\"'; do sleep 2; done; until wget -qO- \"http://127.0.0.1:8500/v1/health/service/openstudio-redis?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-redis\"'; do sleep 2; done; until wget -qO- \"http://127.0.0.1:8500/v1/health/service/openstudio-web?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-web\"'; do sleep 2; done",
+          "until wget -qO- \"http://[[ var "consul_address" . ]]/v1/health/service/openstudio-db?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-db\"'; do sleep 2; done; until wget -qO- \"http://[[ var "consul_address" . ]]/v1/health/service/openstudio-redis?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-redis\"'; do sleep 2; done; until wget -qO- \"http://[[ var "consul_address" . ]]/v1/health/service/openstudio-web?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-web\"'; do sleep 2; done",
         ]
       }
 
@@ -324,7 +400,7 @@ MONGO_PASSWORD={{ .Data.data.password | toJSON }}
 REDIS_PASSWORD={{ .Data.data.password | toJSON }}
 {{ end }}
 {{ with secret "[[ var "vault_kv_app_path" . ]]" }}
-APP_SECRET_KEY_BASE={{ .Data.data.secret_key_base | toJSON }}
+SECRET_KEY_BASE={{ .Data.data.secret_key_base | toJSON }}
 {{ end }}
 EOT
       }
@@ -336,23 +412,53 @@ EOT
       }
       [[ end ]]
 
-      [[ if not (var "vault_integration_enabled" .) ]]
       env {
-        MONGO_PASSWORD      = "[[ var "mongo_password" . ]]"
-        REDIS_PASSWORD      = "[[ var "redis_password" . ]]"
-        APP_SECRET_KEY_BASE = "[[ var "app_secret_key_base" . ]]"
+        MONGO_USER      = "[[ var "mongo_user" . ]]"
+        QUEUES          = "[[ var "web_background_queues" . ]]"
+        COUNT           = "[[ var "web_background_worker_count" . ]]"
+        OS_SERVER_NUMBER_OF_WORKERS = "[[ var "worker_process_count" . ]]"
+        [[ if var "os_server_sampling_backend" . ]]
+        OS_SERVER_SAMPLING_BACKEND = "[[ var "os_server_sampling_backend" . ]]"
+        [[ end ]]
+        [[ if var "web_redis_url" . ]]
+        REDIS_URL       = "[[ var "web_redis_url" . ]]"
+        [[ end ]]
+        [[ if not (var "vault_integration_enabled" .) ]]
+        MONGO_PASSWORD  = "[[ var "mongo_password" . ]]"
+        REDIS_PASSWORD  = "[[ var "redis_password" . ]]"
+        SECRET_KEY_BASE = "[[ var "app_secret_key_base" . ]]"
+        [[ end ]]
       }
-      [[ end ]]
 
       config {
         image           = "[[ var "web_background_image" . ]]"
         readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
         cap_drop        = [[ var "docker_cap_drop" . | toJson ]]
+        [[ if var "web_extra_hosts" . ]]
+        extra_hosts     = [[ var "web_extra_hosts" . | toJson ]]
+        [[ end ]]
         [[ if ne (var "web_background_command" .) "" ]]
         command = "[[ var "web_background_command" . ]]"
         [[ end ]]
         [[ if var "web_background_args" . ]]
         args = [[ var "web_background_args" . | toJson ]]
+        [[ end ]]
+        [[ if var "dev_shared_volume_name" . ]]
+        mounts = [
+          {
+            type   = "volume"
+            source = "[[ var "dev_shared_volume_name" . ]]"
+            target = "[[ var "nfs_volume_mount_path" . ]]"
+          }
+        ]
+        [[ else if var "dev_shared_data_path" . ]]
+        mounts = [
+          {
+            type   = "bind"
+            source = "[[ var "dev_shared_data_path" . ]]"
+            target = "[[ var "nfs_volume_mount_path" . ]]"
+          }
+        ]
         [[ end ]]
         logging {
           type = "[[ var "log_driver_type" . ]]"

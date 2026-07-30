@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added `mongo_user` variable (`MONGO_USER` env var) injected into web, web-background, and worker containers to align with the Helm chart, which sets `MONGO_USER` on all workloads for MongoDB authenticated connections.
+- Added `web_background_worker_count` variable (default `6`) injected as the `COUNT` env var into the web-background task to control the number of Resque child worker processes per allocation, matching the Helm chart's configurable worker count.
+- Added `init-shared-storage-perms` prestart lifecycle task to the `web-background` group: runs `alpine:3.20` as root (with `CHOWN`+`FOWNER` capabilities) to `mkdir -p` and `chmod 2777` the analysis directory tree on the shared NFS volume before any workers start, mirroring the Helm chart's `init-fix-shared-storage-perms` init container.
+
+### Fixed
+
+- Fixed "Analysis initialization failed: Seed zip ... Destination already exists" error by changing the `web_background_queues` default from `analysis_wrappers` to `background,analyses`. The `analyses` queue contains cleanup/pre-initialization jobs that must run before zip extraction; without those workers running, stale files from a prior failed initialization were never removed, causing the "already exists" error on retry.
+- Renamed `APP_SECRET_KEY_BASE` environment variable to `SECRET_KEY_BASE` across web, web-background, and worker tasks to match the Rails standard and the Helm chart; the HCL variable name `app_secret_key_base` is unchanged.
+- Fixed web task missing `QUEUES = "analysis_wrappers"` env var, now aligned with the Helm chart's web deployment.
+
 - Docker Compose-based quick-start infrastructure (`docker/docker-compose.yaml`, `docker/nomad.hcl`, `Makefile`, `scripts/quickstart.sh`) that runs Consul and Nomad in containers with host networking — reducing local dev prerequisites from 5 (Docker, nomad-pack, native Nomad, native Consul, CNI plugins) to 2 (Docker + nomad-pack). Both the Makefile and quickstart script use `curl` API calls exclusively — no native `nomad` or `consul` CLI required. Updated `docs/getting-started-single-node.md` with a "Quick Start (5 minutes)" section at the top. (#349)
 
 ### Fixed
