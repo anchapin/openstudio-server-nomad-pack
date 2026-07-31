@@ -1,51 +1,43 @@
 # Next Session Prompt
 
-All core services are now **fully healthy** in Consul. The scale-out
-infrastructure work from prior sessions is complete. See commit history for
-detailed change log.
+Run a clean stabilization pass for the OpenStack Nomad deployment so I can
+submit analyses reliably.
 
-## Current Baseline
+## Current focus
 
-- 60 Nomad nodes ready (21 × azimuth.compute2-179d, ~39 × CM.Medium/CM.Tiny)
-- All 6 OpenStudio services healthy in Consul:
-  - `openstudio-db` (MongoDB on nomad-client-114, static port 27017)
-  - `openstudio-redis` (Redis on nomad-client-114, static port 6379)
-  - `openstudio-rserve` (pinned to nomad-client-59)
-  - `openstudio-web` (nomad-client-120)
-  - `openstudio-web-background` (nomad-client-61)
-  - `openstudio-worker` (3 running, autoscaler active)
-- Docker hostname discovery fixed: `/local/patch-hosts.sh` (Consul template)
-  maps `db` → MongoDB IP and `queue` → Redis IP in startup scripts.
-- Web, db, and redis are constrained to `meta.disk_type = local-large`
-  (179d nodes) to avoid disk-full failures with large Docker images.
+- Normalize node roles:
+  - worker nodes on `azimuth.compute1-179d-250disk`
+  - non-worker service nodes on `azimuth.web1-179d` / `azimuth.web2-179d`
+- Finish node config convergence
+- Verify persistent storage
+- Redeploy the pack from the current OpenStack profile
+- Smoke test the web UI with one small analysis
 
-## Known remaining issues
+## Execute in order
 
-1. **infra-setup not re-run on 179d nodes**: The Docker data-root, NFS dir,
-   and Docker volumes plugin setup from infra-setup.nomad has NOT been applied
-   to nomad-client-112 through 132. Currently Docker uses its default data-root
-   on these nodes. To fix: re-run infra-setup after confirming the new
-   consul.hcl fix (127.0.0.1:8500) is in the template.
+1. Run `scripts/bootstrap-179d-node.sh --role worker` on worker nodes and
+   `scripts/bootstrap-179d-node.sh --role web` on service nodes that still need
+   bootstrap/config convergence.
+2. Run `scripts/fix-consul-all-nodes.sh` to force local-agent Consul
+   registration on every active client.
+3. Run `nomad run infra-setup.nomad` once to normalize Docker data-root and
+   Nomad client settings.
+4. Confirm the OpenStack Nomad profile uses:
+   - `db_storage_type = "csi"`
+   - `redis_storage_type = "csi"`
+   - `nfs_shared_volume_enabled = true`
+   - `nfs_volume_type = "host_volume"`
+   - `nfs_volume_source = "openstudio-nfs"`
+5. Redeploy with `nomad-pack run -var-file examples/openstack.hcl .`
+6. Verify `openstudio-db`, `openstudio-redis`, `openstudio-rserve`,
+   `openstudio-web`, and `openstudio-worker` are all healthy.
+7. Submit a smoke analysis and confirm it completes using the shared NFS path.
 
-2. **Old nodes may need Consul cleanup**: The batch Consul config fix was applied
-   to all old nodes (1-111) but some 179d nodes (112-132) may still have stale
-   configs. Run `scripts/fix-consul-all-nodes.sh` if service registration issues
-   recur.
+## Guardrails
 
-3. **Worker autoscaling**: Check that the autoscaler is scaling workers up to
-   meet simulation demand. Worker allocs should increase with queue depth.
-
-4. **NFS mount on 179d nodes**: Verify `/nfs/opensstudio/batch/openstudio`
-   is accessible from all worker nodes. Workers need NFS for simulation I/O.
-
-## Bootstrap script for new 179d nodes
-
-When adding new azimuth.compute2-179d nodes, run `scripts/bootstrap-179d-node.sh`
-to provision Docker, Nomad, Consul, CNI plugins, and all required configs.
-
-## Constraints
-
-- Preserve `web_count = 1`
-- Keep vCPU usage within the 9,600 vCPU practical ceiling
-- Static ports 27017 (MongoDB) and 6379 (Redis) must remain available on their
-  host nodes — do not run other jobs needing these ports on nodes with db/redis
+- Keep `web_count = 1`.
+- Do not switch back to ephemeral DB/Redis storage.
+- Treat Helm sizing as the CPU/RAM/storage reference only; keep Nomad-native
+  storage and placement where they are a better fit.
+- If anything fails, inspect the newest failed allocation before changing more
+  configuration.

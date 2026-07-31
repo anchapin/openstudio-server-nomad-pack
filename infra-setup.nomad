@@ -44,6 +44,8 @@ NFS_DOCKER_TGZ="/nfs/opensstudio/batch/docker.tgz"
 
 log() { echo "[$(hostname)] $*"; }
 
+NOMAD_RESTART_REQUIRED=false
+
 # ── Step 1: Install Docker from NFS static binary (no internet access) ───────
 if ! command -v docker &>/dev/null; then
   if [ -f "$NFS_DOCKER_TGZ" ]; then
@@ -141,18 +143,17 @@ if [ -f "$NOMAD_MAIN_CONF" ]; then
   if grep -q 'nomad-server:4646' "$NOMAD_MAIN_CONF"; then
     log "Updating Nomad client RPC port to nomad-server:4647"
     sed -i.bak -E 's/nomad-server:4646/nomad-server:4647/g' "$NOMAD_MAIN_CONF"
+    NOMAD_RESTART_REQUIRED=true
   fi
 
   if grep -q 'network_interface' "$NOMAD_MAIN_CONF"; then
     current_iface="$(sed -n 's/^[[:space:]]*network_interface[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "$NOMAD_MAIN_CONF" | head -n1)"
     if [ "$current_iface" != "$PRIMARY_IFACE" ]; then
       current_iface_safe="$current_iface"
-      [ -z "$current_iface_safe" ] && current_iface_safe="<unset>"
+      [ -z "$current_iface_safe" ] &&       current_iface_safe="<unset>"
       log "Updating Nomad network_interface: $current_iface_safe -> $PRIMARY_IFACE"
       sed -i.bak -E "s|^[[:space:]]*network_interface[[:space:]]*=.*$|  network_interface = \"$PRIMARY_IFACE\"|" "$NOMAD_MAIN_CONF"
-      systemctl reset-failed nomad || true
-      systemctl restart nomad
-      log "Nomad restarted after network_interface update"
+      NOMAD_RESTART_REQUIRED=true
     else
       log "Nomad network_interface already set to $PRIMARY_IFACE"
     fi
@@ -175,8 +176,7 @@ plugin "docker" {
 }
 HCL
 log "Wrote Nomad Docker plugin config with volumes.enabled=true"
-systemctl reset-failed nomad || true
-systemctl restart nomad
+NOMAD_RESTART_REQUIRED=true
 
 # ── Step 6: Add Consul address to Nomad client config ────────────────────────
 CONSUL_CONF="/etc/nomad.d/consul.hcl"
@@ -189,14 +189,17 @@ consul {
   address = "127.0.0.1:8500"
 }
 HCL
-  if pid=$(pgrep -x nomad); then
-    kill -HUP "$pid"
-    log "Sent SIGHUP to nomad (pid $pid)"
-  else
-    log "WARNING: nomad process not found"
-  fi
+  NOMAD_RESTART_REQUIRED=true
 else
   log "Consul config already present, skipping"
+fi
+
+if [ "$NOMAD_RESTART_REQUIRED" = true ]; then
+  log "Restarting Nomad once to apply all config changes"
+  systemctl reset-failed nomad || true
+  systemctl restart nomad
+else
+  log "Nomad config already up to date; no restart needed"
 fi
 
 log "Setup complete on $(hostname)"

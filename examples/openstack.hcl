@@ -45,27 +45,33 @@ poststop_cleanup_image = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/regist
 consul_address = "192.168.100.87:8500"
 
 # ── Storage ───────────────────────────────────────────────────────────────────
-# Ephemeral for DB and Redis — no host_volume registration needed for initial testing.
-# Upgrade to host_volume once testing confirms the stack works end-to-end.
-db_storage_type    = "ephemeral"
-redis_storage_type = "ephemeral"
+# Persistent state: use CSI volumes for MongoDB and Redis so they survive node
+# replacement and can reschedule cleanly.
+db_storage_type    = "csi"
+db_volume_source   = "openstudio-mongodb"
+redis_storage_type = "csi"
+redis_volume_source = "openstudio-redis"
 
-# Shared web+worker volume: use the NFS path directly as a bind mount.
-# All clients mount nomad-server:/nfs/opensstudio/batch at /nfs/opensstudio/batch.
-# This gives web and worker tasks a shared filesystem for analysis artefacts.
-dev_shared_data_path = "/nfs/opensstudio/batch/openstudio"
+# Shared analysis workspace: use a Nomad host_volume backed by the OS-level NFS
+# mount so web, web-background, and worker allocations see the same files.
+nfs_shared_volume_enabled = true
+nfs_volume_type           = "host_volume"
+nfs_volume_source         = "openstudio-nfs"
+nfs_volume_mount_path     = "/mnt/openstudio"
 
-# ── Resources (sized for worker nodes: cc.medium = 4 vCPU, 8 GB RAM) ────────
-web_cpu            = 1000
-web_memory         = 4096
-web_background_cpu    = 500
-web_background_memory = 2048
-db_cpu             = 500
-db_memory          = 1024
-redis_cpu          = 256
-redis_memory       = 512
-rserve_cpu         = 1000
-rserve_memory      = 2048
+# ── Resources ────────────────────────────────────────────────────────────────
+# Helm-equivalent sizing converted to Nomad units (1 CPU core ≈ 1000 MHz).
+web_cpu               = 6000
+web_memory            = 51200
+web_background_cpu    = 12000
+web_background_memory = 12288
+db_cpu                = 4000
+db_memory             = 22528
+db_memory_max         = 45056
+redis_cpu             = 8000
+redis_memory          = 16384
+rserve_cpu            = 2000
+rserve_memory         = 4096
 # Worker: 750 MHz / 1 GB soft / 2 GB max per allocation — dense-pack configuration.
 # On cc.medium (4 vCPU ≈ 4,000 MHz, ~7.5 GB usable RAM):
 #   CPU-bound:  4,000 / 750  = 5.3 → 5 workers per node  ← binding constraint
