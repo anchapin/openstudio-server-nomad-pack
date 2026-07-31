@@ -159,8 +159,8 @@ variable "web_container_port" {
 
 variable "web_redis_url" {
   type        = string
-  description = "Override REDIS_URL env var in the web and worker containers. Required when the default URI scheme parsing ('queue:6379' without '//') resolves incorrectly — e.g. on macOS dev where Redis is reached via host.docker.internal. Set to 'redis://queue:6379' in minimal-dev deployments. Leave empty in production when Vault injects REDIS_URL directly."
-  default     = ""
+  description = "REDIS_URL env var injected into web and worker containers. Defaults to 'redis://queue:6379' which resolves via /etc/hosts patch to the Consul-registered Redis address. Set to empty string when Vault injects REDIS_URL directly. Override with 'redis://host.docker.internal:6379' on macOS dev."
+  default     = "redis://queue:6379"
 }
 
 variable "os_server_sampling_backend" {
