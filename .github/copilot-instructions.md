@@ -96,7 +96,7 @@ worker ──► mongodb
 | `openstudio_server.node_class_constraint` | Hard constraint on `${attr.nomad.node.class}` |
 | `openstudio_server.compute_node_constraint` | Hard constraint on `compute_node_class` variable |
 | `openstudio_server.system_node_constraint` | Hard constraint on `system_node_class` variable |
-| `openstudio_server.arch_constraint` | Hard constraint: `os.name = linux`, `cpu.arch = amd64` |
+| `openstudio_server.arch_constraint` | Hard constraint: `kernel.name = linux`, `cpu.arch = amd64` |
 | `openstudio_server.node_affinity` | Soft affinity with configurable weight |
 
 ### Registry vs. root pack

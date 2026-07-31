@@ -111,7 +111,7 @@ Each Nomad job is a separate `.nomad.tpl` file under `templates/`. The pack rend
 | `openstudio_server.node_class_constraint` | Hard constraint on `${attr.nomad.node.class}` |
 | `openstudio_server.compute_node_constraint` | Shorthand for `compute_node_class` variable |
 | `openstudio_server.system_node_constraint` | Shorthand for `system_node_class` variable |
-| `openstudio_server.arch_constraint` | Hard constraint: `os.name = linux`, `cpu.arch = amd64` |
+| `openstudio_server.arch_constraint` | Hard constraint: `kernel.name = linux`, `cpu.arch = amd64` |
 | `openstudio_server.node_affinity` | Soft affinity with configurable weight |
 
 ### Template syntax

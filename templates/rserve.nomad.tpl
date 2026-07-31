@@ -7,6 +7,7 @@ job "[[ var "job_name" . ]]-rserve" {
     app_version       = "[[ var "app_version" . ]]"
     ingress_domain    = "[[ var "ingress_domain" . ]]"
     vault_integration = "[[ var "vault_integration_enabled" . ]]"
+    deployment_marker = "openstack-aurora-179d"
   }
 
   group "rserve" {

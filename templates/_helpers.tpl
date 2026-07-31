@@ -18,7 +18,7 @@
 //     [[ template "openstudio_server.system_node_constraint" . ]]
 //
 // openstudio_server.arch_constraint
-//   Emits hard constraints for os.name = linux and cpu.arch = amd64.
+//   Emits hard constraints for kernel.name = linux and cpu.arch = amd64.
 //   Call with the root context:
 //     [[ template "openstudio_server.arch_constraint" . ]]
 //
@@ -93,7 +93,7 @@
 [[- define "openstudio_server.arch_constraint" -]]
 
   constraint {
-    attribute = "${attr.os.name}"
+    attribute = "${attr.kernel.name}"
     value     = "linux"
   }
 

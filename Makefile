@@ -1,13 +1,27 @@
-# OpenStudio Server Nomad Pack — Quick Dev Environment
+# OpenStudio Server Nomad Pack — Dev Environment + OpenStack Cluster
 #
 # Prerequisites: Docker, nomad-pack
 # macOS also needs: consul (auto-installed via brew if missing)
 #
-# Usage:
-#   make up       Start Consul + Nomad
-#   make deploy   Deploy OpenStudio Server via nomad-pack
-#   make open     Open web UI in browser
-#   make down     Stop everything and clean up
+# ── Local dev (Docker Compose) ────────────────────────────────────────────────
+#   make up           Start Consul + Nomad
+#   make deploy       Deploy OpenStudio Server via nomad-pack
+#   make open         Open web UI in browser
+#   make down         Stop everything and clean up
+#
+# ── OpenStack Nomad cluster (NREL aurora-179d) ────────────────────────────────
+#   make os-run       Full bootstrap + deploy (consul + infra + pack)
+#   make os-bootstrap Install Consul + configure all Nomad clients only
+#   make os-deploy    Deploy pack only (bootstrap must be done first)
+#   make os-status    Show job/node/service status
+#   make os-logs      Tail web job logs
+#   make os-ui        Open SSH tunnels + launch Nomad/Consul UIs
+#   make os-stop      Stop pack jobs
+#   make os-teardown  Stop pack + infra-setup
+#   make os-tunnel    Open SSH tunnels only (foreground)
+#
+# OpenStack var-file: examples/openstack.hcl
+# Deploy script:     scripts/deploy-openstack.sh
 
 COMPOSE_FILE   = docker/docker-compose.yaml
 VAR_FILE       = examples/minimal-dev.hcl
@@ -265,9 +279,55 @@ check-infra:
 	@curl -sf http://127.0.0.1:8500/v1/status/leader >/dev/null 2>&1 || { echo "ERROR: Consul not reachable at http://127.0.0.1:8500. Run 'make up' first."; exit 1; }
 	@echo "Infrastructure is running."
 
+# ── OpenStack Cluster ─────────────────────────────────────────────────────────
+# All os-* targets delegate to scripts/deploy-openstack.sh.
+# Env overrides: SSH_KEY, OS_VAR_FILE, OS_JOB_NAME
+
+OS_SCRIPT = bash scripts/deploy-openstack.sh
+
+.PHONY: os-run
+os-run: ## [OpenStack] Full bootstrap + deploy: Consul → infra-setup → pack
+	$(OS_SCRIPT)
+
+.PHONY: os-bootstrap
+os-bootstrap: ## [OpenStack] Install Consul + configure all Nomad clients (no pack deploy)
+	$(OS_SCRIPT) --bootstrap
+
+.PHONY: os-deploy
+os-deploy: ## [OpenStack] Deploy the nomad-pack only (bootstrap must be done first)
+	$(OS_SCRIPT) --deploy
+
+.PHONY: os-redeploy
+os-redeploy: ## [OpenStack] Stop + redeploy the pack
+	$(OS_SCRIPT) --redeploy
+
+.PHONY: os-status
+os-status: ## [OpenStack] Show job, node, and Consul service status
+	$(OS_SCRIPT) --status
+
+.PHONY: os-logs
+os-logs: ## [OpenStack] Tail web job logs (override: make os-logs JOB=worker)
+	$(OS_SCRIPT) --logs $(or $(JOB),web)
+
+.PHONY: os-ui
+os-ui: ## [OpenStack] Open SSH tunnels and launch Nomad + Consul UIs
+	$(OS_SCRIPT) --ui
+
+.PHONY: os-tunnel
+os-tunnel: ## [OpenStack] Open SSH tunnels only (foreground — keep terminal open)
+	$(OS_SCRIPT) --tunnel
+
+.PHONY: os-stop
+os-stop: ## [OpenStack] Stop all pack jobs
+	$(OS_SCRIPT) --stop
+
+.PHONY: os-teardown
+os-teardown: ## [OpenStack] Stop pack jobs + infra-setup system job
+	$(OS_SCRIPT) --teardown
+
 .PHONY: help
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
-		awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+		awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-22s\033[0m %s\n", $$1, $$2}'
 
 .DEFAULT_GOAL := help

@@ -96,7 +96,7 @@ job "[[ var "job_name" . ]]-worker" {
       driver = "docker"
 
       config {
-        image   = "busybox:1.36"
+        image   = "[[ var "verification_image" . ]]"
         network_mode = "host"
         command = "sh"
         args = [

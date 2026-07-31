@@ -4,6 +4,9 @@ job "[[ var "job_name" . ]]-web" {
   namespace   = "[[ var "nomad_namespace" . ]]"
   type        = "service"
   priority    = [[ var "web_priority" . ]]
+  meta {
+    deployment_marker = "openstack-aurora-179d"
+  }
 
   update {
     max_parallel      = [[ var "web_update_max_parallel" . ]]
@@ -65,7 +68,7 @@ job "[[ var "job_name" . ]]-web" {
       driver = "docker"
 
       config {
-        image   = "busybox:1.36"
+        image   = "[[ var "verification_image" . ]]"
         network_mode = "host"
         command = "sh"
         args = [
@@ -318,7 +321,7 @@ EOH
       [[ end ]]
 
       config {
-        image   = "alpine:3.20"
+        image   = "[[ var "poststop_cleanup_image" . ]]"
         # Run as root so we can mkdir and chmod on the NFS mount.
         # CHOWN + FOWNER are re-added after the global cap_drop = ["ALL"].
         cap_drop = ["ALL"]
@@ -352,7 +355,7 @@ EOF
       driver = "docker"
 
       config {
-        image   = "busybox:1.36"
+        image   = "[[ var "verification_image" . ]]"
         network_mode = "host"
         command = "sh"
         args = [
