@@ -355,6 +355,12 @@ variable "worker_autoscaling_cpu_enabled" {
   default     = true
 }
 
+variable "worker_autoscaling_queue_enabled" {
+  type        = bool
+  description = "Enable Prometheus-based queue-depth autoscaling checks for workers. Requires a running Prometheus instance at autoscaler_prometheus_address scraping queue metrics. Defaults to false — safe to omit if Prometheus is not deployed."
+  default     = false
+}
+
 variable "worker_cpu_target_utilization" {
   type        = number
   description = "Target worker CPU utilization percentage used by the nomad-apm avg_cpu scaling check."
@@ -371,6 +377,12 @@ variable "nomad_autoscaler_image" {
   type        = string
   description = "The image name and tag for the Nomad Autoscaler daemon. See https://github.com/hashicorp/nomad-autoscaler/releases for available versions."
   default     = "hashicorp/nomad-autoscaler:0.4.7"
+}
+
+variable "autoscaler_nomad_address" {
+  type        = string
+  description = "Address of the Nomad server for the Nomad Autoscaler to connect to. Use the private IP when Consul DNS is not available (e.g. 'http://192.168.100.87:4646')."
+  default     = "http://nomad.service.consul:4646"
 }
 
 variable "autoscaler_prometheus_address" {
@@ -688,6 +700,12 @@ variable "vector_image" {
 variable "db_constraints" {
   type        = any
   description = "Placement constraints for the db group."
+  default     = []
+}
+
+variable "web_constraints" {
+  type        = any
+  description = "Placement constraints for the web group. Use to pin the web task to nodes with sufficient disk (e.g. 179d nodes) for large Docker image pulls."
   default     = []
 }
 

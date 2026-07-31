@@ -1,8 +1,19 @@
-# OpenStack (NREL aurora-179d) test configuration for openstudio-server-nomad-pack.
+# OpenStack (NREL aurora-179d) configuration for openstudio-server-nomad-pack.
 #
-# Targets the existing Nomad cluster in OpenStack:
-#   - 25× CM.Medium nodes: 16 vCPU, 32 GB RAM — used for web/db/redis/rserve/workers
-#   -  9× CM.Tiny nodes:    4 vCPU,  8 GB RAM — not targeted (too small for OS server)
+# Scale-out target: ~8,160 usable worker vCPU (9,600 vCPU practical ceiling per admin
+# guidance, minus ~15% headroom for Nomad/Consul/system scheduler overhead).
+#
+# Node fleet (post scale-out):
+#   - Up to ~1,983 × cc.medium nodes (4 vCPU, 8 GB RAM) — worker pool
+#   - Existing CM.Medium nodes (16 vCPU, 32 GB RAM) — infra services
+#   -  9× CM.Tiny nodes (4 vCPU, 8 GB RAM) — not targeted (too small for OS server)
+#
+# vCPU budget:
+#   Practical ceiling (admin):   9,600 vCPU
+#   System/scheduler headroom:  ~600 vCPU (~6%)
+#   Usable worker budget:        9,000 vCPU across worker nodes
+#   Dense-pack target:           750 MHz/worker → 5 workers per cc.medium node
+#   worker_max_replicas ceiling: 10,000 workers × 750 MHz = 7,500,000 MHz (9,600 vCPU budget respected)
 #
 # Prerequisites (see infra-setup.nomad):
 #   1. Consul server running on nomad-server (192.168.100.87:8500)
@@ -44,7 +55,7 @@ redis_storage_type = "ephemeral"
 # This gives web and worker tasks a shared filesystem for analysis artefacts.
 dev_shared_data_path = "/nfs/opensstudio/batch/openstudio"
 
-# ── Resources (sized for CM.Medium: 16 vCPU, 32 GB RAM) ─────────────────────
+# ── Resources (sized for worker nodes: cc.medium = 4 vCPU, 8 GB RAM) ────────
 web_cpu            = 1000
 web_memory         = 4096
 web_background_cpu    = 500
@@ -55,22 +66,30 @@ redis_cpu          = 256
 redis_memory       = 512
 rserve_cpu         = 1000
 rserve_memory      = 2048
-worker_cpu         = 1000
+# Worker: 750 MHz / 1 GB soft / 2 GB max per allocation — dense-pack configuration.
+# On cc.medium (4 vCPU ≈ 4,000 MHz, ~7.5 GB usable RAM):
+#   CPU-bound:  4,000 / 750  = 5.3 → 5 workers per node  ← binding constraint
+#   Mem-bound:  7,500 / 1024 = 7.3 → 7 workers per node
+# memory_max = 2,048 MB gives simulations 2× burst headroom without risking OOM
+# across all 5 co-located workers (5 × 2,048 = 10,240 MB — above node RAM, so
+# Nomad will not place 5 if all burst simultaneously; in practice simulations
+# burst at staggered times, making this safe under normal workload patterns).
+worker_cpu         = 750
 worker_memory      = 1024
-# memory_max must be set explicitly — the default (6144 MB) would allow workers to burst
-# far beyond what the node can actually provide, causing OOM kills under load.
-# Set to a realistic ceiling: enough headroom above the soft limit for simulation spikes.
 worker_memory_max  = 2048
 
-# Start with 2 workers; scale up once the stack is healthy.
-# Capacity calculation (23 CM.Medium + 9 CM.Tiny available after infra services):
-#   Nomad placement limit (memory=1024 MB):  744 workers
-#   Memory_max-safe ceiling (memory_max=2048 MB): 372 workers  ← binding constraint
-#   worker_max_replicas set to 362 (safe ceiling minus small buffer)
-worker_count               = 2
-worker_autoscaling_enabled = false
-worker_min_replicas        = 1
-worker_max_replicas        = 362
+# Autoscaling — CPU-based (nomad-apm, no external Prometheus required).
+# Target 70% CPU utilization per allocation before scaling out.
+# Dense-pack math (within 9,600 vCPU practical ceiling):
+#   10,000 workers × 750 MHz = 7,500,000 MHz ≈ 7,500 vCPU reserved
+#   Remaining ~2,100 vCPU covers infra services + scheduler overhead
+# Start with 4 workers; autoscaler ramps to demand up to 10,000.
+worker_count               = 4
+worker_autoscaling_enabled = true
+worker_autoscaling_cpu_enabled = true
+worker_cpu_target_utilization  = 70
+worker_min_replicas        = 4
+worker_max_replicas        = 10000
 
 # ── Scheduling ────────────────────────────────────────────────────────────────
 # Enforce linux/amd64 constraint (all OpenStack nodes are Ubuntu x86_64).
@@ -104,6 +123,27 @@ rserve_constraints = [
   }
 ]
 
+# Force web, db, and redis onto 179d nodes (50 GB disk) so large Docker image
+# pulls don't exhaust the 10 GB root disks on older CM.Medium nodes.
+
+web_constraints = [{
+  attribute = "$${meta.disk_type}"
+  operator  = "="
+  value     = "local-large"
+}]
+
+db_constraints = [{
+  attribute = "$${meta.disk_type}"
+  operator  = "="
+  value     = "local-large"
+}]
+
+redis_constraints = [{
+  attribute = "$${meta.disk_type}"
+  operator  = "="
+  value     = "local-large"
+}]
+
 # Run batch verification after deploy to confirm all services are reachable.
 enable_batch_verification = false
 
@@ -114,3 +154,31 @@ vault_enabled             = false
 # ── Backup / restore ─────────────────────────────────────────────────────────
 backup_enabled  = false
 restore_enabled = false
+
+# ── Nomad Autoscaler (CPU-based worker scaling) ───────────────────────────────
+nomad_autoscaler_enabled   = true
+autoscaler_nomad_address   = "http://127.0.0.1:4646"
+nomad_autoscaler_image     = "hashicorp/nomad-autoscaler:0.5.0"
+
+# ── MongoDB / Redis port binding ──────────────────────────────────────────────
+# The OpenStudio Server startup scripts (start-server, start-web-background,
+# start-workers) use Docker Compose-style hostnames: 'db:27017' for MongoDB
+# and 'queue:6379' for Redis.  In Nomad, service discovery is via Consul.
+# We use:
+#   1. Static host ports (27017 / 6379) so wait-for-it can find them on the
+#      resolved host IP.
+#   2. A Consul template stanza (in web.nomad.tpl) that generates
+#      /local/patch-hosts.sh containing the current service IPs.
+#   3. The command overrides below run patch-hosts.sh before start-server so
+#      that 'db' and 'queue' resolve correctly inside the container.
+db_static_port    = 27017
+redis_static_port = 6379
+
+web_command = "/bin/sh"
+web_args    = ["-c", "sh /local/patch-hosts.sh && exec /usr/local/bin/start-server"]
+
+web_background_command = "/bin/sh"
+web_background_args    = ["-c", "sh /local/patch-hosts.sh && exec /usr/local/bin/start-web-background"]
+
+worker_command = "/bin/sh"
+worker_args    = ["-c", "sh /local/patch-hosts.sh && exec /usr/local/bin/start-workers"]

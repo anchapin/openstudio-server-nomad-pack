@@ -180,11 +180,13 @@ systemctl restart nomad
 
 # ── Step 6: Add Consul address to Nomad client config ────────────────────────
 CONSUL_CONF="/etc/nomad.d/consul.hcl"
-if [ ! -f "$CONSUL_CONF" ] || ! grep -q "$CONSUL_SERVER_IP" "$CONSUL_CONF" 2>/dev/null; then
+# Nomad must register services with the LOCAL Consul agent (127.0.0.1), not
+# the remote Consul server. The local agent propagates registrations cluster-wide.
+if [ ! -f "$CONSUL_CONF" ] || ! grep -q "127.0.0.1:8500" "$CONSUL_CONF" 2>/dev/null; then
   log "Adding Consul config → $CONSUL_CONF"
   cat > "$CONSUL_CONF" <<HCL
 consul {
-  address = "${CONSUL_SERVER_IP}:8500"
+  address = "127.0.0.1:8500"
 }
 HCL
   if pid=$(pgrep -x nomad); then

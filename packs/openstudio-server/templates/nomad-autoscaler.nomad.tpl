@@ -18,16 +18,17 @@ job "[[ var "job_name" . ]]-autoscaler" {
       driver = "docker"
 
       config {
-        image   = "[[ var "nomad_autoscaler_image" . ]]"
-        command = "nomad-autoscaler"
-        args    = ["agent", "-config", "local/autoscaler.hcl"]
+        image        = "[[ var "nomad_autoscaler_image" . ]]"
+        command      = "nomad-autoscaler"
+        args         = ["agent", "-config", "local/autoscaler.hcl"]
+        network_mode = "host"
       }
 
       template {
         destination = "local/autoscaler.hcl"
         data        = <<EOH
 nomad {
-  address = "http://nomad.service.consul:4646"
+  address = "[[ var "autoscaler_nomad_address" . ]]"
 }
 
 apm "nomad-apm" {

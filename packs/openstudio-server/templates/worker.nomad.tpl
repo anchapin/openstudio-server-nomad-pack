@@ -38,6 +38,7 @@ job "[[ var "job_name" . ]]-worker" {
         }
         [[ end ]]
 
+        [[ if var "worker_autoscaling_queue_enabled" . ]]
         check "queue-requeued-depth" {
           source = "prometheus"
           query  = [[ var "worker_queue_requeued_query" . | toJson ]]
@@ -63,6 +64,7 @@ job "[[ var "job_name" . ]]-worker" {
             target = [[ var "worker_queue_simulations_target" . ]]
           }
         }
+        [[ end ]]
       }
     }
     [[ end ]]
@@ -205,6 +207,22 @@ EOT
         REDIS_PASSWORD  = "[[ var "redis_password" . ]]"
         SECRET_KEY_BASE = "[[ var "app_secret_key_base" . ]]"
         [[ end ]]
+      }
+
+      template {
+        destination   = "local/patch-hosts.sh"
+        change_mode   = "noop"
+        left_delimiter  = "{{"
+        right_delimiter = "}}"
+        data = <<-EOT
+#!/bin/sh
+{{ range service "openstudio-db" -}}
+echo "{{ .Address }} db" >> /etc/hosts
+{{ end -}}
+{{ range service "openstudio-redis" -}}
+echo "{{ .Address }} queue" >> /etc/hosts
+{{ end -}}
+EOT
       }
 
       resources {

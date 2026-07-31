@@ -34,6 +34,8 @@ job "[[ var "job_name" . ]]-web" {
     #      (e.g. S3) and eliminate local-disk writes from the request path.
     count = [[ var "web_count" . ]]
 
+    [[ template "constraints" (var "web_constraints" .) ]]
+
     [[ if var "nfs_shared_volume_enabled" . ]]
     [[ if eq (var "nfs_volume_type" .) "csi" ]]
     volume "nfs-shared" {
@@ -143,6 +145,26 @@ EOT
         REDIS_PASSWORD  = "[[ var "redis_password" . ]]"
         SECRET_KEY_BASE = "[[ var "app_secret_key_base" . ]]"
         [[ end ]]
+      }
+
+      # Consul template to resolve 'db' and 'queue' hostnames used by the
+      # OpenStudio Server startup scripts (which were written for Docker Compose
+      # where MongoDB is 'db:27017' and Redis is 'queue:6379').
+      # The generated script is executed via web_command/web_args overrides.
+      template {
+        destination   = "local/patch-hosts.sh"
+        change_mode   = "noop"
+        left_delimiter  = "{{"
+        right_delimiter = "}}"
+        data = <<-EOT
+#!/bin/sh
+{{ range service "openstudio-db" -}}
+echo "{{ .Address }} db" >> /etc/hosts
+{{ end -}}
+{{ range service "openstudio-redis" -}}
+echo "{{ .Address }} queue" >> /etc/hosts
+{{ end -}}
+EOT
       }
 
       config {
@@ -345,7 +367,7 @@ EOF
       }
     }
 
-    # Prestart: wait for MongoDB, Redis, and the web service to be healthy in Consul
+    # Prestart: wait for MongoDB, Redis, and Rserve to be healthy in Consul
     task "wait-for-deps" {
       lifecycle {
         hook    = "prestart"
@@ -360,7 +382,7 @@ EOF
         command = "sh"
         args = [
           "-ec",
-          "until wget -qO- \"http://[[ var "consul_address" . ]]/v1/health/service/openstudio-db?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-db\"'; do sleep 2; done; until wget -qO- \"http://[[ var "consul_address" . ]]/v1/health/service/openstudio-redis?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-redis\"'; do sleep 2; done; until wget -qO- \"http://[[ var "consul_address" . ]]/v1/health/service/openstudio-web?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-web\"'; do sleep 2; done",
+          "until wget -qO- \"http://[[ var "consul_address" . ]]/v1/health/service/openstudio-db?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-db\"'; do sleep 2; done; until wget -qO- \"http://[[ var "consul_address" . ]]/v1/health/service/openstudio-redis?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-redis\"'; do sleep 2; done; until wget -qO- \"http://[[ var "consul_address" . ]]/v1/health/service/openstudio-rserve?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-rserve\"'; do sleep 2; done",
         ]
       }
 
@@ -431,6 +453,22 @@ EOT
         REDIS_PASSWORD  = "[[ var "redis_password" . ]]"
         SECRET_KEY_BASE = "[[ var "app_secret_key_base" . ]]"
         [[ end ]]
+      }
+
+      template {
+        destination   = "local/patch-hosts.sh"
+        change_mode   = "noop"
+        left_delimiter  = "{{"
+        right_delimiter = "}}"
+        data = <<-EOT
+#!/bin/sh
+{{ range service "openstudio-db" -}}
+echo "{{ .Address }} db" >> /etc/hosts
+{{ end -}}
+{{ range service "openstudio-redis" -}}
+echo "{{ .Address }} queue" >> /etc/hosts
+{{ end -}}
+EOT
       }
 
       config {
