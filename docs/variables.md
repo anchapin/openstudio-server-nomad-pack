@@ -7,7 +7,7 @@
 | --- | --- | --- | --- |
 | `job_name` | `string` | `"openstudio-server"` | The name of the Nomad job. |
 | `app_version` | `string` | `"3.11.0"` | Application version tag injected as APP_VERSION into all OpenStudio Server containers. Must match the image tag used in web_image, worker_image, web_background_image, and rserve_image to avoid version mismatch. |
-| `worker_min_replicas` | `number` | `2` | Minimum number of worker replicas. Aligned with Helm chart worker-hpa.yaml minReplicas: 2. |
+| `worker_min_replicas` | `number` | `0` | Minimum number of worker replicas when autoscaling is enabled. Set to 0 to allow scale-to-zero when the queue is empty. The Helm chart default of 2 is intentionally changed here to prevent idle worker accumulation. |
 | `worker_max_replicas` | `number` | `20` | Maximum number of worker replicas. Aligned with Helm chart worker-hpa.yaml maxReplicas: 20. |
 | `vault_integration_enabled` | `bool` | `false` | Enable Vault KV v2 secrets injection via Nomad template stanzas (`secrets/env`). Typically enabled together with vault_enabled so tasks use explicit Vault roles. |
 | `ingress_domain` | `string` | `"localhost"` | Ingress domain used when constructing service hostnames and Traefik router rules. |
@@ -76,13 +76,13 @@
 | `worker_kill_timeout` | `string` | `"5200s"` | Grace period Nomad grants the worker task to finish in-flight work before force-killing it on drain or update. Must be >= the longest expected simulation run. Matches Helm terminationGracePeriodSeconds: 5200. WARNING: reducing this below the longest simulation duration will result in data loss on node drains and rolling updates. |
 | `worker_autoscaling_enabled` | `bool` | `false` | Enable Nomad Autoscaler integration for the worker task group. When false (default), the scaling block is omitted and worker_count controls the fixed allocation count. |
 | `worker_autoscaling_cpu_enabled` | `bool` | `true` | Enable the built-in Nomad APM CPU autoscaling check for workers (avg_cpu target-value strategy). |
-| `worker_autoscaling_queue_enabled` | `bool` | `false` | Enable Prometheus-based queue-depth autoscaling checks for workers. Requires a running Prometheus instance at autoscaler_prometheus_address scraping queue metrics. Defaults to false — safe to omit if Prometheus is not deployed. |
+| `worker_autoscaling_queue_enabled` | `bool` | `false` | Enable Prometheus-based queue-depth autoscaling checks for workers. When true, workers scale based on openstudio_worker_queue_depth metrics scraped from Prometheus. Requires a running Prometheus instance at autoscaler_prometheus_address. Set to false only when Prometheus is not deployed and CPU-only scaling (worker_autoscaling_cpu_enabled) is acceptable. NOTE: CPU-only scaling does NOT scale workers to zero when the queue is empty — enable this flag for queue-driven scale-to-zero behavior. |
 | `worker_cpu_target_utilization` | `number` | `50` | Target worker CPU utilization percentage used by the nomad-apm avg_cpu scaling check. |
 | `nomad_autoscaler_enabled` | `bool` | `false` | Render an optional Nomad Autoscaler daemon job stub. When false (default), the autoscaler job template is omitted. |
 | `nomad_autoscaler_image` | `string` | `"hashicorp/nomad-autoscaler:0.4.7"` | The image name and tag for the Nomad Autoscaler daemon. See https://github.com/hashicorp/nomad-autoscaler/releases for available versions. |
 | `autoscaler_nomad_address` | `string` | `"http://nomad.service.consul:4646"` | Address of the Nomad server for the Nomad Autoscaler to connect to. Use the private IP when Consul DNS is not available (e.g. 'http://192.168.100.87:4646'). |
 | `autoscaler_prometheus_address` | `string` | `"http://openstudio-prometheus.service.consul:9090"` | Address of the Prometheus server used by the Nomad Autoscaler APM plugin to evaluate scaling checks. |
-| `autoscaler_cooldown` | `string` | `"60m"` | Cooldown duration between worker autoscaling actions (e.g. '60m', '30m'). Defaults to 60m to match the Helm chart stabilizationWindowSeconds of 3600. |
+| `autoscaler_cooldown` | `string` | `"10m"` | Cooldown duration between worker autoscaling actions (e.g. '5m', '10m', '60m'). Reduced from the Helm chart stabilizationWindowSeconds of 3600 (60m) to 10m so idle workers are reclaimed faster after the queue drains. Increase if you see oscillation (rapid scale-up/scale-down cycles). |
 | `autoscaler_constraints` | `any` | `[]` | Placement constraints for the optional Nomad Autoscaler group. |
 | `autoscaler_affinities` | `any` | `[]` | Placement affinities for the optional Nomad Autoscaler group. |
 | `autoscaler_spreads` | `any` | `[]` | Spread rules for the optional Nomad Autoscaler group. |

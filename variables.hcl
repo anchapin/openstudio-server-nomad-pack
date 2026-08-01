@@ -14,8 +14,8 @@ variable "app_version" {
 
 variable "worker_min_replicas" {
   type        = number
-  description = "Minimum number of worker replicas. Aligned with Helm chart worker-hpa.yaml minReplicas: 2."
-  default     = 2
+  description = "Minimum number of worker replicas when autoscaling is enabled. Set to 0 to allow scale-to-zero when the queue is empty. The Helm chart default of 2 is intentionally changed here to prevent idle worker accumulation."
+  default     = 0
 }
 
 variable "worker_max_replicas" {
@@ -429,7 +429,7 @@ variable "worker_autoscaling_cpu_enabled" {
 
 variable "worker_autoscaling_queue_enabled" {
   type        = bool
-  description = "Enable Prometheus-based queue-depth autoscaling checks for workers. Requires a running Prometheus instance at autoscaler_prometheus_address scraping queue metrics. Defaults to false — safe to omit if Prometheus is not deployed."
+  description = "Enable Prometheus-based queue-depth autoscaling checks for workers. When true, workers scale based on openstudio_worker_queue_depth metrics scraped from Prometheus. Requires a running Prometheus instance at autoscaler_prometheus_address. Set to false only when Prometheus is not deployed and CPU-only scaling (worker_autoscaling_cpu_enabled) is acceptable. NOTE: CPU-only scaling does NOT scale workers to zero when the queue is empty — enable this flag for queue-driven scale-to-zero behavior."
   default     = false
 }
 
@@ -465,8 +465,8 @@ variable "autoscaler_prometheus_address" {
 
 variable "autoscaler_cooldown" {
   type        = string
-  description = "Cooldown duration between worker autoscaling actions (e.g. '60m', '30m'). Defaults to 60m to match the Helm chart stabilizationWindowSeconds of 3600."
-  default     = "60m"
+  description = "Cooldown duration between worker autoscaling actions (e.g. '5m', '10m', '60m'). Reduced from the Helm chart stabilizationWindowSeconds of 3600 (60m) to 10m so idle workers are reclaimed faster after the queue drains. Increase if you see oscillation (rapid scale-up/scale-down cycles)."
+  default     = "10m"
 }
 
 variable "autoscaler_constraints" {

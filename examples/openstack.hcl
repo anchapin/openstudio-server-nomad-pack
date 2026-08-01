@@ -118,7 +118,7 @@ worker_count               = 4
 worker_autoscaling_enabled = true
 worker_autoscaling_queue_enabled = true
 worker_autoscaling_cpu_enabled = false
-worker_min_replicas        = 4
+worker_min_replicas        = 0      # Allow scale-to-zero when both queues are empty
 worker_max_replicas        = 10000
 # Queue depth from redis_exporter key sizes (exposed via in-pack Prometheus job).
 worker_queue_simulations_query = "sum(redis_key_size{key=\"resque:queue:simulations\"})"
