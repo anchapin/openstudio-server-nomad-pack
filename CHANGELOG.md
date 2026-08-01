@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added `rserve_count` variable to allow configuring Rserve replica count (default: 1) (#360)
+- Added `docs/openstack-staged-rollout-runbook.md` with staged worker ramp procedure, gate criteria (latency, iowait%, queue lag, failure rate), abort/rollback steps, evidence collection checklist, and final recommended OpenStack defaults (#365)
+- Added `examples/openstack-production.hcl` with finalized tuned defaults for OpenStack-hosted Nomad clusters and inline rollback guidance (#365)
 - Added `redis_config_tcp_keepalive` variable (default `60` s): passes `--tcp-keepalive` to the Redis container to prevent NAT/firewall dropping idle Resque connections during long-running background initialization steps.
 - Added `redis_memory_max` variable (default `0`, disabled): exposes Nomad `memory_max` for the Redis task so operators can allow Redis to burst above its soft limit during mass-enqueue spikes without being OOM-killed.
 - Added `web_mongoid_pool_size` variable (default `10`): injects `MONGOID_POOL` into the `web` task so Passenger processes never stall waiting for a MongoDB connection; set equal to `MAX_POOL` for large deployments.
