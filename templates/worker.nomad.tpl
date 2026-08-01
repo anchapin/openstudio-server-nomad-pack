@@ -16,6 +16,23 @@ job "[[ var "job_name" . ]]-worker" {
 
   group "worker" {
     count = [[ var "worker_count" . ]]
+    [[ if ne (var "worker_instance_type" .) "" ]]
+    constraint {
+      attribute = "${attr.platform.aws.instance-type}"
+      operator  = "="
+      value     = "[[ var "worker_instance_type" . ]]"
+    }
+    [[ end ]]
+    [[ template "constraints" (var "worker_constraints" .) ]]
+    [[ range $nodeID := var "worker_excluded_node_ids" . ]]
+    constraint {
+      attribute = "${node.unique.id}"
+      operator  = "!="
+      value     = "[[ $nodeID ]]"
+    }
+    [[ end ]]
+    [[ template "affinities" (var "worker_affinities" .) ]]
+    [[ template "spreads" (var "worker_spreads" .) ]]
 
     [[ if var "worker_autoscaling_enabled" . ]]
     scaling {
@@ -160,7 +177,11 @@ EOT
 
       config {
         image           = "[[ var "worker_image" . ]]"
+        force_pull      = [[ var "worker_force_pull" . ]]
         command         = "[[ var "worker_command" . ]]"
+        ulimit {
+          nofile = "[[ var "docker_ulimit_nofile" . ]]"
+        }
         readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
         cap_drop        = [[ var "docker_cap_drop" . | toJson ]]
         [[ if var "worker_extra_hosts" . ]]
@@ -221,6 +242,9 @@ echo "{{ .Address }} db" >> /etc/hosts
 {{ end -}}
 {{ range service "openstudio-redis" -}}
 echo "{{ .Address }} queue" >> /etc/hosts
+{{ end -}}
+{{ range service "openstudio-rserve" -}}
+echo "{{ .Address }} rserve" >> /etc/hosts
 {{ end -}}
 EOT
       }

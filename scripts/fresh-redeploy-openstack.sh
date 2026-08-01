@@ -19,6 +19,7 @@ BOOTSTRAP_WORKER_MAX_REPLICAS="${OS_BOOTSTRAP_WORKER_MAX_REPLICAS:-200}"
 BOOTSTRAP_AUTOSCALER_COOLDOWN="${OS_BOOTSTRAP_AUTOSCALER_COOLDOWN:-10m}"
 PREPULL_WAIT_TIMEOUT_SECONDS="${OS_PREPULL_WAIT_TIMEOUT_SECONDS:-900}"
 PREPULL_MIN_READY_PERCENT="${OS_PREPULL_MIN_READY_PERCENT:-10}"
+PREPULL_REQUIRE_ALL="${OS_PREPULL_REQUIRE_ALL:-false}"
 CSI_WIPE_MAX_ATTEMPTS="${OS_CSI_WIPE_MAX_ATTEMPTS:-3}"
 CSI_WIPE_JOB_IMAGE="${OS_CSI_WIPE_JOB_IMAGE:-}"
 STATEFUL_CSI_NODE_ROLE="${OS_STATEFUL_CSI_NODE_ROLE:-web}"
@@ -571,18 +572,23 @@ PY
   fi
 
   total_count="$(printf "%s\n" "${target_nodes}" | awk 'NF' | wc -l | tr -d ' ')"
-  required_by_percent=$(( (total_count * PREPULL_MIN_READY_PERCENT + 99) / 100 ))
-  if (( required_by_percent < 1 )); then
-    required_by_percent=1
-  fi
-  required_ready_count="${required_by_percent}"
-  if (( required_ready_count < worker_count )); then
-    required_ready_count="${worker_count}"
-  fi
-  if (( required_ready_count > total_count )); then
+  if [[ "${PREPULL_REQUIRE_ALL}" == "true" ]]; then
     required_ready_count="${total_count}"
+    echo "  pre-pull gate requires ${required_ready_count}/${total_count} worker nodes (OS_PREPULL_REQUIRE_ALL=true)"
+  else
+    required_by_percent=$(( (total_count * PREPULL_MIN_READY_PERCENT + 99) / 100 ))
+    if (( required_by_percent < 1 )); then
+      required_by_percent=1
+    fi
+    required_ready_count="${required_by_percent}"
+    if (( required_ready_count < worker_count )); then
+      required_ready_count="${worker_count}"
+    fi
+    if (( required_ready_count > total_count )); then
+      required_ready_count="${total_count}"
+    fi
+    echo "  pre-pull gate requires ${required_ready_count}/${total_count} worker nodes (min ${PREPULL_MIN_READY_PERCENT}%, worker_count=${worker_count})"
   fi
-  echo "  pre-pull gate requires ${required_ready_count}/${total_count} worker nodes (min ${PREPULL_MIN_READY_PERCENT}%, worker_count=${worker_count})"
   deadline=$(( $(date +%s) + PREPULL_WAIT_TIMEOUT_SECONDS ))
 
   while true; do

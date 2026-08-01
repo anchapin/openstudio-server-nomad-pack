@@ -89,6 +89,9 @@ job "[[ var "job_name" . ]]-redis" {
       config {
         image           = "[[ var "redis_image" . ]]"
         ports           = ["redis"]
+        ulimit {
+          nofile = "[[ var "redis_docker_ulimit_nofile" . ]]"
+        }
         readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
         cap_drop        = [[ var "docker_cap_drop" . | toJson ]]
         logging {

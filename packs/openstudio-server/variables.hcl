@@ -139,6 +139,30 @@ variable "web_memory_max" {
   default     = 4096
 }
 
+variable "web_passenger_memory_per_process" {
+  type        = number
+  description = "Passenger memory budget (MB) per web process used to derive MAX_POOL when web_max_pool is unset. Formula: ceil((web_memory * 0.75) / web_passenger_memory_per_process). Mirrors Helm passenger_memory_per_process behavior."
+  default     = 250
+}
+
+variable "web_max_pool" {
+  type        = number
+  description = "Explicit Passenger MAX_POOL for the web task. Set to 0 to auto-calculate from web_memory and web_passenger_memory_per_process."
+  default     = 0
+}
+
+variable "web_max_requests_multiplier" {
+  type        = number
+  description = "Multiplier used to derive web MAX_REQUESTS from worker_max_replicas when web_max_requests is unset. Mirrors Helm behavior (maxReplicas * 1.05)."
+  default     = 1.05
+}
+
+variable "web_max_requests" {
+  type        = number
+  description = "Explicit MAX_REQUESTS for the web task. Set to 0 to auto-calculate as ceil(worker_max_replicas * web_max_requests_multiplier)."
+  default     = 0
+}
+
 variable "web_count" {
   type        = number
   description = "The number of web task group allocations. MUST remain 1 (the default). The OpenStudio Server web process writes uploaded analysis artefacts to local container filesystem without a distributed file-locking scheme. When nfs_shared_volume_enabled = true, NFS provides a shared filesystem but does NOT guarantee POSIX file-locking across multiple simultaneous web writers — each allocation still has its own isolated view of open file handles. Setting web_count > 1 therefore causes split-brain: requests routed to replica B cannot find files written by replica A. This mirrors the Kubernetes Helm chart constraint (web-hpa.yaml maxReplicas: 1). To safely run web_count > 1 you must first implement either: (a) a distributed lock manager such as Redlock via Redis wrapping every filesystem operation, or (b) stateless file handling by moving all persistent artefacts to object storage (e.g. S3/MinIO). See docs/storage.md §'Web Replica Constraint' for details."
@@ -239,6 +263,18 @@ variable "worker_image" {
   type        = string
   description = "The image name and tag for the OpenStudio Server worker container."
   default     = "nrel/openstudio-server:179-flock"
+}
+
+variable "worker_force_pull" {
+  type        = bool
+  description = "When true, force Docker to pull worker_image on every worker allocation start. Keep false (default) in OpenStack to use pre-pulled/cached images and avoid registry pull storms."
+  default     = false
+}
+
+variable "worker_runtime_image" {
+  type        = string
+  description = "Optional local image reference used by worker allocations at runtime (for example a host-local cache alias). When empty, worker_image is used. If set, ensure system-hooks pre-pull tags this image on every eligible worker node."
+  default     = ""
 }
 
 variable "worker_command" {

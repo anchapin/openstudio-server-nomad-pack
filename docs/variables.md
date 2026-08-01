@@ -28,6 +28,10 @@
 | `web_cpu` | `number` | `1000` | CPU shares allocated to the OpenStudio Web task. |
 | `web_memory` | `number` | `2048` | Memory (MB) allocated to the OpenStudio Web task. |
 | `web_memory_max` | `number` | `4096` | Memory hard limit (MB) for the OpenStudio Web task (Nomad memory_max). Must be greater than web_memory for burst capacity. |
+| `web_passenger_memory_per_process` | `number` | `250` | Passenger memory budget (MB) per web process used to derive MAX_POOL when web_max_pool is unset. Formula: ceil((web_memory * 0.75) / web_passenger_memory_per_process). Mirrors Helm passenger_memory_per_process behavior. |
+| `web_max_pool` | `number` | `0` | Explicit Passenger MAX_POOL for the web task. Set to 0 to auto-calculate from web_memory and web_passenger_memory_per_process. |
+| `web_max_requests_multiplier` | `number` | `1.05` | Multiplier used to derive web MAX_REQUESTS from worker_max_replicas when web_max_requests is unset. Mirrors Helm behavior (maxReplicas * 1.05). |
+| `web_max_requests` | `number` | `0` | Explicit MAX_REQUESTS for the web task. Set to 0 to auto-calculate as ceil(worker_max_replicas * web_max_requests_multiplier). |
 | `web_count` | `number` | `1` | The number of web task group allocations. MUST remain 1 (the default). The OpenStudio Server web process writes uploaded analysis artefacts to local container filesystem without a distributed file-locking scheme. When nfs_shared_volume_enabled = true, NFS provides a shared filesystem but does NOT guarantee POSIX file-locking across multiple simultaneous web writers — each allocation still has its own isolated view of open file handles. Setting web_count > 1 therefore causes split-brain: requests routed to replica B cannot find files written by replica A. This mirrors the Kubernetes Helm chart constraint (web-hpa.yaml maxReplicas: 1). To safely run web_count > 1 you must first implement either: (a) a distributed lock manager such as Redlock via Redis wrapping every filesystem operation, or (b) stateless file handling by moving all persistent artefacts to object storage (e.g. S3/MinIO). See docs/storage.md §'Web Replica Constraint' for details. |
 | `web_port` | `number` | `80` | Host-side static port mapped to the web container HTTP port. |
 | `web_container_port` | `number` | `80` | Port that the web container's nginx listens on internally. The OpenStudio Server image listens on port 80 by default. Must match the nginx listen directive in the image. |
@@ -45,6 +49,8 @@
 | `web_background_cpu` | `number` | `250` | CPU shares allocated to the OpenStudio web-background task. |
 | `web_background_memory` | `number` | `512` | Memory (MB) allocated to the OpenStudio web-background task. |
 | `worker_image` | `string` | `"nrel/openstudio-server:179-flock"` | The image name and tag for the OpenStudio Server worker container. |
+| `worker_force_pull` | `bool` | `false` | When true, force Docker to pull worker_image on every worker allocation start. Keep false (default) in OpenStack to use pre-pulled/cached images and avoid registry pull storms. |
+| `worker_runtime_image` | `string` | `""` | Optional local image reference used by worker allocations at runtime (for example a host-local cache alias). When empty, worker_image is used. If set, ensure system-hooks pre-pull tags this image on every eligible worker node. |
 | `worker_command` | `string` | `"/usr/local/bin/start-workers"` | Command used to start the worker task. |
 | `worker_args` | `list(string)` | `[]` | Optional args passed to worker_command. |
 | `worker_health_check_command` | `string` | `"pgrep -f resque > /dev/null"` | Shell command used by the worker service health check. |

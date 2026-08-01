@@ -33,6 +33,9 @@ datacenters = ["dc1"]
 web_image            = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/nrel/openstudio-server:179-flock"
 web_background_image = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/nrel/openstudio-server:179-flock"
 worker_image         = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/nrel/openstudio-server:179-flock"
+# Worker allocations use a host-local alias to avoid runtime registry lookups.
+# system-hooks pre-pull tags this alias after pulling worker_image.
+worker_force_pull    = false
 rserve_image         = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/nrel/openstudio-rserve:179-flock"
 db_image             = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/nrel/mongo:8.0.12"
 redis_image          = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/nrel/redis:6.0.9"
@@ -66,10 +69,20 @@ nfs_volume_mount_path     = "/mnt/openstudio"
 web_cpu               = 6000
 web_memory            = 51200
 web_memory_max        = 61440
+# Helm-equivalent Passenger tuning:
+#   MAX_POOL = ceil((web_memory * 0.75) / web_passenger_memory_per_process)
+#            = ceil((51200 * 0.75) / 250) = 154
+#   MAX_REQUESTS = ceil(worker_max_replicas * web_max_requests_multiplier)
+#                = ceil(10000 * 1.05) = 10500
+web_passenger_memory_per_process = 250
+web_max_pool                     = 154
+web_max_requests_multiplier      = 1.05
+web_max_requests                 = 10500
 web_background_cpu    = 12000
 web_background_memory = 12288
 web_background_count  = 1
 web_background_worker_count = 240
+web_background_queues = "analyses,background"
 db_cpu                = 4000
 db_memory             = 22528
 db_memory_max         = 45056

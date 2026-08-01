@@ -15,6 +15,9 @@
 #   CONSUL_SERVER_IP    Consul server address  (default: 192.168.100.87)
 #   ROLE                worker|web (default: worker)
 #   DISK_TYPE           Nomad meta.disk_type value (default: local-large)
+#   DOCKER_MAX_CONCURRENT_DOWNLOADS  Docker image pull concurrency cap (default: 2)
+#   PULP_REGISTRY_HOST  Registry hostname to pin in /etc/hosts (default: pulp-dev.hpc.nlr.gov)
+#   PULP_REGISTRY_IP    Registry IP to pin in /etc/hosts (default: 10.60.127.127)
 #
 set -euo pipefail
 
@@ -40,6 +43,9 @@ ROLE="${ROLE:-worker}"
 NOMAD_SERVER_IP="${NOMAD_SERVER_IP:-192.168.100.87}"
 CONSUL_SERVER_IP="${CONSUL_SERVER_IP:-192.168.100.87}"
 DISK_TYPE="${DISK_TYPE:-local-large}"
+DOCKER_MAX_CONCURRENT_DOWNLOADS="${DOCKER_MAX_CONCURRENT_DOWNLOADS:-2}"
+PULP_REGISTRY_HOST="${PULP_REGISTRY_HOST:-pulp-dev.hpc.nlr.gov}"
+PULP_REGISTRY_IP="${PULP_REGISTRY_IP:-10.60.127.127}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -79,6 +85,19 @@ NFS_OPENSTUDIO_DIR="/nfs/opensstudio/batch/openstudio"
 NFS_DOCKER_TGZ="/nfs/opensstudio/batch/docker.tgz"
 
 log() { echo "[$(hostname)] $*"; }
+
+pin_registry_host() {
+  local host="$1"
+  local ip="$2"
+  local hosts_file="/etc/hosts"
+  [[ -n "${host}" && -n "${ip}" ]] || return 0
+
+  if grep -qE "[[:space:]]${host}([[:space:]]|\$)" "${hosts_file}"; then
+    sed -i.bak -E "/[[:space:]]${host}([[:space:]]|\$)/d" "${hosts_file}"
+  fi
+  echo "${ip} ${host}" >> "${hosts_file}"
+  log "Pinned registry host ${host} -> ${ip} in ${hosts_file}"
+}
 
 install -d -m 0755 /etc/apt/keyrings
 if ! command -v consul >/dev/null 2>&1 || ! command -v nomad >/dev/null 2>&1; then
@@ -145,9 +164,19 @@ consul {
 plugin "docker" {
   config {
     allow_privileged = true
+    volumes {
+      enabled = true
+    }
   }
 }
 
+plugin "raw_exec" {
+  config {
+    enabled = true
+  }
+}
+
+# Retain legacy option for older Nomad versions
 options = {
   "driver.raw_exec.enable" = "1"
 }
@@ -220,6 +249,28 @@ LimitCORE=infinity
 WantedBy=multi-user.target
 UNIT
 fi
+
+install -d -m 0755 /etc/docker
+python3 - <<PY
+import json
+from pathlib import Path
+
+path = Path("/etc/docker/daemon.json")
+cfg = {}
+if path.exists():
+    try:
+        cfg = json.loads(path.read_text())
+    except Exception:
+        cfg = {}
+cfg["max-concurrent-downloads"] = int("${DOCKER_MAX_CONCURRENT_DOWNLOADS}")
+# Pin the Pulp registry IP in Docker's DNS so the daemon does not rely on
+# systemd-resolved (127.0.0.53), which can time-out under load.
+# Use the registry IP as primary DNS, fall back to public resolvers.
+cfg["dns"] = ["${PULP_REGISTRY_IP}", "8.8.8.8", "8.8.4.4"]
+path.write_text(json.dumps(cfg, indent=2) + "\n")
+PY
+log "Docker daemon.json updated (max-concurrent-downloads, dns)"
+pin_registry_host "${PULP_REGISTRY_HOST}" "${PULP_REGISTRY_IP}"
 
 mkdir -p "$NFS_OPENSTUDIO_DIR"
 chmod 777 "$NFS_OPENSTUDIO_DIR"
