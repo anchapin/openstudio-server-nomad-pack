@@ -80,12 +80,20 @@ web_passenger_memory_per_process = 250
 web_max_pool                     = 154
 web_max_requests_multiplier      = 1.05
 web_max_requests                 = 10500
-web_background_cpu        = 12000  # matches Helm values.yaml (12 cores)
-web_background_memory     = 12288  # matches Helm values.yaml (12Gi request)
-web_background_memory_max = 24576  # matches Helm values.yaml (24Gi limit)
+web_background_cpu        = 16000  # scaled: 56 workers × ~286 MHz/worker
+web_background_memory     = 16384  # scaled: 56 workers × ~293 MB/worker (16 GiB soft)
+web_background_memory_max = 32768  # 2× soft limit (32 GiB hard ceiling)
 web_background_count      = 1      # matches Helm values.yaml (1 replica)
-web_background_worker_count = 42   # matches Helm values.yaml (COUNT=42)
+web_background_worker_count = 56   # increased from 42 — proportional to above CPU/memory budget
 web_background_queues = "background,analyses"  # matches Helm hardcoded QUEUES order
+# Mongoid connection pool: web — one pool per Passenger process.
+# Set equal to MAX_POOL (154) so no process stalls waiting for a MongoDB connection
+# when all 154 Passenger slots are active simultaneously.
+web_mongoid_pool_size = 154
+# Mongoid connection pool: web-background — one pool per Resque child process.
+# 56 children + 2 headroom = 58 connections so every forked child can acquire
+# a MongoDB connection immediately without blocking.
+web_background_mongoid_pool_size = 58
 db_cpu                = 4000
 db_memory             = 22528
 db_memory_max         = 45056
@@ -95,10 +103,17 @@ redis_memory          = 16384
 redis_config_maxclients         = 50000
 redis_config_tcp_backlog        = 511
 redis_config_timeout_seconds    = 0
+# Keepalive: prevents NAT/firewall dropping idle Redis connections during long
+# background initialization steps (e.g. large analysis extraction).  60 s is
+# aggressive; increase to 300 s for more relaxed environments.
+redis_config_tcp_keepalive      = 60
 redis_config_maxmemory          = "22000000000"
 redis_config_maxmemory_policy   = "noeviction"
 redis_config_appendfsync        = "everysec"
 redis_config_save               = ""
+# Allow Redis to burst to 1.5× its soft limit during mass-enqueue spikes without
+# being OOM-killed by the kernel; the hard cap prevents runaway allocation.
+redis_memory_max                = 24576
 
 # Optional hard pin for dedicated high-memory Redis nodes.
 # Set this to a real Nomad node.class label in your cluster (for example:

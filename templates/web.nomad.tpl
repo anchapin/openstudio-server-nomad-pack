@@ -140,6 +140,9 @@ EOT
       env {
         MONGO_USER      = "[[ var "mongo_user" . ]]"
         QUEUES          = "analysis_wrappers"
+        [[ if gt (var "web_mongoid_pool_size" .) 0 ]]
+        MONGOID_POOL    = "[[ var "web_mongoid_pool_size" . ]]"
+        [[ end ]]
         [[ if gt (var "web_max_requests" .) 0 ]]
         MAX_REQUESTS    = "[[ var "web_max_requests" . ]]"
         [[ else ]]
@@ -444,6 +447,11 @@ EOT
         MONGO_USER      = "[[ var "mongo_user" . ]]"
         QUEUES          = "[[ var "web_background_queues" . ]]"
         COUNT           = "[[ var "web_background_worker_count" . ]]"
+        [[ if gt (var "web_background_mongoid_pool_size" .) 0 ]]
+        MONGOID_POOL    = "[[ var "web_background_mongoid_pool_size" . ]]"
+        [[ else ]]
+        MONGOID_POOL    = "[[ add (var "web_background_worker_count" .) 2 ]]"
+        [[ end ]]
         OS_SERVER_NUMBER_OF_WORKERS = "[[ var "worker_process_count" . ]]"
         [[ if var "os_server_sampling_backend" . ]]
         OS_SERVER_SAMPLING_BACKEND = "[[ var "os_server_sampling_backend" . ]]"

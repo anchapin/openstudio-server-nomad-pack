@@ -163,6 +163,18 @@ variable "web_max_requests" {
   default     = 0
 }
 
+variable "web_mongoid_pool_size" {
+  type        = number
+  description = "Mongoid connection pool size (MONGOID_POOL) for the web task. Passenger runs one Ruby process per pool slot; each process needs at least one MongoDB connection. Set to match web_max_pool so no process ever waits for a connection. Default 10 is safe for small deployments; set equal to MAX_POOL for large ones."
+  default     = 10
+}
+
+variable "web_background_mongoid_pool_size" {
+  type        = number
+  description = "Mongoid connection pool size (MONGOID_POOL) for the web-background task. Each Resque child process inherits this pool. Set to 0 to auto-derive as web_background_worker_count + 2, which ensures every forked child can acquire a MongoDB connection immediately."
+  default     = 0
+}
+
 variable "web_count" {
   type        = number
   description = "The number of web task group allocations. MUST remain 1 (the default). The OpenStudio Server web process writes uploaded analysis artefacts to local container filesystem without a distributed file-locking scheme. When nfs_shared_volume_enabled = true, NFS provides a shared filesystem but does NOT guarantee POSIX file-locking across multiple simultaneous web writers — each allocation still has its own isolated view of open file handles. Setting web_count > 1 therefore causes split-brain: requests routed to replica B cannot find files written by replica A. This mirrors the Kubernetes Helm chart constraint (web-hpa.yaml maxReplicas: 1). To safely run web_count > 1 you must first implement either: (a) a distributed lock manager such as Redlock via Redis wrapping every filesystem operation, or (b) stateless file handling by moving all persistent artefacts to object storage (e.g. S3/MinIO). See docs/storage.md §'Web Replica Constraint' for details."
@@ -249,20 +261,20 @@ variable "web_update_auto_revert" {
 
 variable "web_background_cpu" {
   type        = number
-  description = "CPU shares allocated to the OpenStudio web-background task."
-  default     = 250
+  description = "CPU shares allocated to the OpenStudio web-background task. Scale proportionally with web_background_worker_count: each Resque child needs roughly 250 MHz."
+  default     = 2000
 }
 
 variable "web_background_memory" {
   type        = number
-  description = "Memory (MB) allocated to the OpenStudio web-background task."
-  default     = 512
+  description = "Memory soft limit (MB) for the OpenStudio web-background task. Scale proportionally with web_background_worker_count: each Resque child needs roughly 256 MB."
+  default     = 2048
 }
 
 variable "web_background_memory_max" {
   type        = number
-  description = "Memory hard limit (MB) for the OpenStudio web-background task (Nomad memory_max). Must be greater than web_background_memory for burst capacity. Set to 0 to disable."
-  default     = 0
+  description = "Memory hard limit (MB) for the OpenStudio web-background task (Nomad memory_max). Must be greater than web_background_memory for burst capacity. Set to 0 to disable. Recommended: 2× web_background_memory."
+  default     = 4096
 }
 
 variable "worker_image" {
@@ -591,8 +603,8 @@ variable "web_background_count" {
 
 variable "web_background_worker_count" {
   type        = number
-  description = "COUNT env var for the web-background task: number of Resque child worker processes per allocation. Increase to drain the background/analyses/analysis_wrappers queues faster. Tune in proportion to web_background_memory."
-  default     = 6
+  description = "COUNT env var for the web-background task: number of Resque child worker processes per allocation. Increase to drain the background/analyses/analysis_wrappers queues faster. Tune in proportion to web_background_memory (each child ~256 MB) and web_background_cpu (each child ~250 MHz)."
+  default     = 8
 }
 
 variable "web_background_autoscaling_enabled" {
@@ -740,6 +752,18 @@ variable "redis_config_save" {
   type        = string
   description = "Redis save schedule passed to --save. Set to an empty string to disable automatic RDB snapshots."
   default     = ""
+}
+
+variable "redis_config_tcp_keepalive" {
+  type        = number
+  description = "Redis tcp-keepalive interval in seconds. Redis sends TCP ACKs to idle clients at this interval to prevent NAT/firewall dropping long-lived connections during background initialization. Set to 0 to disable. Redis docs recommend 300; 60 is more aggressive and useful for burst-workload environments."
+  default     = 60
+}
+
+variable "redis_memory_max" {
+  type        = number
+  description = "Memory hard limit (MB) for the Redis task (Nomad memory_max). Set to 0 to disable. Recommended: set to ~1.5× redis_memory so Redis can absorb a mass-enqueue spike without being OOM-killed while staying below the Nomad hard limit."
+  default     = 0
 }
 
 variable "redis_storage_type" {

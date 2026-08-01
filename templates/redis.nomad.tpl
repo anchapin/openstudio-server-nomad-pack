@@ -96,6 +96,9 @@ job "[[ var "job_name" . ]]-redis" {
           "--maxclients", "[[ var "redis_config_maxclients" . ]]",
           "--tcp-backlog", "[[ var "redis_config_tcp_backlog" . ]]",
           "--timeout", "[[ var "redis_config_timeout_seconds" . ]]",
+          [[ if gt (var "redis_config_tcp_keepalive" .) 0 ]]
+          "--tcp-keepalive", "[[ var "redis_config_tcp_keepalive" . ]]",
+          [[ end ]]
           "--maxmemory", "[[ var "redis_config_maxmemory" . ]]",
           "--maxmemory-policy", "[[ var "redis_config_maxmemory_policy" . ]]",
           "--appendfsync", "[[ var "redis_config_appendfsync" . ]]",
@@ -142,6 +145,7 @@ job "[[ var "job_name" . ]]-redis" {
       resources {
         cpu    = [[ var "redis_cpu" . ]]
         memory = [[ var "redis_memory" . ]]
+        [[ if gt (var "redis_memory_max" .) 0 ]]memory_max = [[ var "redis_memory_max" . ]][[ end ]]
       }
 
       env {

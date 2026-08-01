@@ -9,7 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Changed `worker_min_replicas` to `0` in `examples/openstack.hcl` to allow scale-to-zero when both queues (`requeued`, `simulations`) are empty; queue-depth autoscaling and Prometheus were already enabled in that file.
+- Added `redis_config_tcp_keepalive` variable (default `60` s): passes `--tcp-keepalive` to the Redis container to prevent NAT/firewall dropping idle Resque connections during long-running background initialization steps.
+- Added `redis_memory_max` variable (default `0`, disabled): exposes Nomad `memory_max` for the Redis task so operators can allow Redis to burst above its soft limit during mass-enqueue spikes without being OOM-killed.
+- Added `web_mongoid_pool_size` variable (default `10`): injects `MONGOID_POOL` into the `web` task so Passenger processes never stall waiting for a MongoDB connection; set equal to `MAX_POOL` for large deployments.
+- Added `web_background_mongoid_pool_size` variable (default `0`, auto-derived as `web_background_worker_count + 2`): injects `MONGOID_POOL` into the `web-background` task so every Resque child can acquire a MongoDB connection immediately.
+
+### Changed
+
+- Updated `web_background_worker_count` default from `6` to `8` to drain the `background` / `analyses` queues faster out-of-the-box.
+- Updated `web_background_cpu` default from `250` MHz to `2000` MHz (8 workers × ~250 MHz each) and `web_background_memory` from `512` MB to `2048` MB (8 workers × ~256 MB each) to match the new default worker count; `web_background_memory_max` default updated from `0` (disabled) to `4096` MB (2× soft limit) to allow burst headroom.
+- Updated `examples/openstack.hcl`: scaled `web_background_worker_count` from `42` to `56` (+33%) with proportional resource adjustments (`cpu` 12000→16000 MHz, `memory` 12288→16384 MB, `memory_max` 24576→32768 MB); added `redis_config_tcp_keepalive = 60`, `redis_memory_max = 24576` (1.5× redis_memory), `web_mongoid_pool_size = 154` (matching MAX_POOL), and `web_background_mongoid_pool_size = 58` (56 workers + 2 headroom).
+
 
 ### Changed
 
