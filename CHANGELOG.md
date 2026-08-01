@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `redis_config_tcp_keepalive` variable (default `60` s): passes `--tcp-keepalive` to the Redis container to prevent NAT/firewall dropping idle Resque connections during long-running background initialization steps.- Added `redis_memory_max` variable (default `0`, disabled): exposes Nomad `memory_max` for the Redis task so operators can allow Redis to burst above its soft limit during mass-enqueue spikes without being OOM-killed.
 - Added `docs/rserve-horizontal-scaling.md`: benchmark methodology, Amdahl's Law analysis, recommended `rserve_count` operating points by worker count (1–10 workers: count=1; 10–25: count=2; 25–50: count=3; 50+: count=3–4 with diminishing returns), per-replica resource guidance, and prerequisites (issue #361 multi-replica-safe routing) (#362).
 - Updated `examples/openstack.hcl` with `rserve_count` guidance comment and reference to the scaling doc (#362).
+- Added `docs/nfs-tuning-guide.md`: comprehensive NFS client/server tuning guide with three deployment profiles (Conservative / Balanced / Aggressive), OpenStack Manila/Ganesha export tuning, benchmark methodology using `fio`/`nfsstat`/`iostat`, and guardrails for high-concurrency (100+ worker) deployments (#358).
+
+### Changed
+
+- Updated `docs/storage.md` §5.1 NFS mount options: promoted `nfsvers=4.1`, increased `rsize`/`wsize` from 64 KiB to 1 MiB, replaced `sync`/`intr`/`timeo=14` with `hard,timeo=600,retrans=2,noresvport,_netdev` (Balanced profile); added §8 NFS Tuning for High Concurrency cross-reference to `nfs-tuning-guide.md` (#358).
+- Updated `examples/openstack.hcl`: added inline Balanced-profile `/etc/fstab` snippet and mount option rationale comments for the NFS shared volume block (#358).
 
 - Added `redis_config_tcp_keepalive` variable (default `60` s): passes `--tcp-keepalive` to the Redis container to prevent NAT/firewall dropping idle Resque connections during long-running background initialization steps.
 - Added `redis_memory_max` variable (default `0`, disabled): exposes Nomad `memory_max` for the Redis task so operators can allow Redis to burst above its soft limit during mass-enqueue spikes without being OOM-killed.- Added `web_mongoid_pool_size` variable (default `10`): injects `MONGOID_POOL` into the `web` task so Passenger processes never stall waiting for a MongoDB connection; set equal to `MAX_POOL` for large deployments.

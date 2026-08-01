@@ -61,6 +61,28 @@ redis_csi_plugin_id = "hostpath-web-plugin0"
 
 # Shared analysis workspace: use a Nomad host_volume backed by the OS-level NFS
 # mount so web, web-background, and worker allocations see the same files.
+#
+# NFS MOUNT TUNING (Balanced profile — recommended for 100+ concurrent workers):
+# Add the following to /etc/fstab on every Nomad client node, replacing
+# <manila-share-ip> and <export-path> with your Manila share endpoint
+# (from: openstack share access-list <share-name>):
+#
+#   <manila-share-ip>:<export-path> /mnt/openstudio nfs \
+#     nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport,_netdev \
+#     0 0
+#
+# Key options:
+#   nfsvers=4.1  — session-based reconnect; works with OpenStack Manila/Ganesha
+#   rsize/wsize=1048576 — 1 MiB buffers; ~16x fewer round-trips vs the 64 KiB default
+#   hard         — never silently drop writes; retry until the server responds
+#   timeo=600    — 60 s RPC timeout; tolerates Manila HA failover
+#   noresvport   — allows reconnection from a non-privileged port (required by Manila)
+#   _netdev      — wait for network before mounting (prevents boot hangs)
+#
+# For very high concurrency (200+ workers) or if write throughput is still a
+# bottleneck, add the `async` option and tune Ganesha Nb_Worker=128.
+# See docs/nfs-tuning-guide.md for Conservative/Balanced/Aggressive profiles,
+# benchmark methodology, and guardrails.
 nfs_shared_volume_enabled = true
 nfs_volume_type           = "host_volume"
 nfs_volume_source         = "openstudio-nfs"

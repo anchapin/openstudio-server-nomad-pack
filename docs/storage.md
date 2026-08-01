@@ -392,7 +392,7 @@ AWS EFS, NetApp, a NAS appliance, or a dedicated NFS VM).
 `/etc/fstab` (Linux clients):
 
 ```fstab
-<nfs-host>:/exports/openstudio /mnt/openstudio nfs nfsvers=4,sync,hard,intr,rsize=65536,wsize=65536,timeo=14 0 0
+<nfs-host>:/exports/openstudio /mnt/openstudio nfs nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport,_netdev 0 0
 ```
 
 #### 5.1.1 NFS Mount Options (equivalent to Helm `configmaps/nfs-cm.yaml`)
@@ -400,15 +400,22 @@ AWS EFS, NetApp, a NAS appliance, or a dedicated NFS VM).
 No Consul KV entry, Nomad `template` stanza, or additional ConfigMap is needed — set NFS mount
 options directly in `/etc/fstab` (or a systemd `.mount` unit) on each Nomad client.
 
-Recommended options for OpenStudio simulation workloads:
+Recommended options for OpenStudio simulation workloads (Balanced profile):
 
-- `nfsvers=4`: Uses NFSv4 for modern locking/session behavior and broad managed-NFS compatibility.
-- `sync`: Confirms writes on stable storage to reduce corruption risk for shared run artifacts.
+- `nfsvers=4.1`: NFSv4.1 adds pNFS and session trunking; preferred over `4.0` for Manila/Ganesha.
+- `rsize=1048576`: 1 MiB read buffer — reduces round-trips ~16× vs the 64 KiB kernel default.
+- `wsize=1048576`: 1 MiB write buffer — same rationale; critical at 100+ concurrent workers.
 - `hard`: Retries I/O until the NFS server recovers, avoiding silent data loss on transient outages.
-- `intr`: Allows interrupted operations so admin actions can stop blocked tasks during incidents.
-- `rsize=65536`: Uses larger read requests to improve throughput for large simulation outputs.
-- `wsize=65536`: Uses larger write requests to improve throughput for large simulation outputs.
-- `timeo=14`: Sets a moderate RPC timeout to balance retry responsiveness and stability.
+- `timeo=600`: 60 s RPC timeout (units are 0.1 s) — tolerates Manila HA failover.
+- `retrans=2`: Retransmit twice before raising a warning; reduces noise from transient hiccups.
+- `noresvport`: Allows reconnection from a non-privileged port; required by some Manila back-ends.
+- `_netdev`: Tells systemd to wait for network before mounting; prevents boot hangs.
+
+> **Performance note:** At 100+ concurrent workers the 64 KiB default `rsize`/`wsize` forces
+> ~16× more NFS round-trips for the same data volume. Using 1 MiB buffers is the single
+> highest-impact tuning change for high-concurrency deployments.
+> See [nfs-tuning-guide.md](./nfs-tuning-guide.md) for three deployment profiles
+> (Conservative / Balanced / Aggressive), server-side tuning, and benchmark methodology.
 
 Equivalent systemd mount unit (`/etc/systemd/system/mnt-openstudio.mount`):
 
@@ -422,7 +429,7 @@ Wants=network-online.target
 What=<nfs-host>:/exports/openstudio
 Where=/mnt/openstudio
 Type=nfs
-Options=nfsvers=4,sync,hard,intr,rsize=65536,wsize=65536,timeo=14
+Options=nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport
 
 [Install]
 WantedBy=multi-user.target
@@ -635,9 +642,28 @@ sudo systemctl reload nomad
 
 ---
 
+## 8. NFS Tuning for High Concurrency
+
+The mount options in §5.1 reflect the **Balanced profile** from the dedicated NFS tuning
+guide. For deployments with 100+ concurrent workers, or when investigating NFS-related
+performance issues, see:
+
+**[docs/nfs-tuning-guide.md](./nfs-tuning-guide.md)**
+
+That guide covers:
+
+- Three tuned profiles: Conservative, Balanced (recommended), and Aggressive
+- Server-side / Ganesha export tuning and connection limits
+- Benchmark methodology using `fio`, `nfsstat`, and `iostat`
+- Guardrails: when to downgrade to the Conservative profile
+- Step-by-step `/etc/fstab`, systemd mount unit, and `client.hcl` integration
+
+---
+
 ## Further Reading
 
 - [Nomad Host Volumes](https://developer.hashicorp.com/nomad/docs/configuration/client#host_volume-stanza)
 - [Nomad CSI Volumes](https://developer.hashicorp.com/nomad/docs/other-specifications/volume)
+- [NFS Tuning Guide](./nfs-tuning-guide.md) — high-concurrency mount profiles and benchmarks
 - [Getting Started: Single-Node Walkthrough](./getting-started-single-node.md)
 - [Kubernetes-to-Nomad Migration](./migration-k8s-to-nomad.md) — for migrating existing volume data
