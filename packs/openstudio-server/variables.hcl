@@ -1457,3 +1457,52 @@ variable "system_node_class" {
   description = "Nomad node class label for infrastructure/system nodes. Used by the openstudio_server.system_node_constraint helper macro."
   default     = "system"
 }
+
+# Swift / object-storage artifact backend variables
+variable "swift_artifact_storage_enabled" {
+  type        = bool
+  description = "When true, injects OpenStack Swift credentials and ARTIFACT_STORAGE_BACKEND=swift env vars into web and worker tasks, enabling the application to store analysis artifacts in an object-storage container instead of shared NFS. Requires the application to support the ARTIFACT_STORAGE_BACKEND env var. Defaults to false (NFS/shared-filesystem mode)."
+  default     = false
+}
+
+variable "swift_auth_url" {
+  type        = string
+  description = "OpenStack Keystone authentication endpoint URL (OS_AUTH_URL). Required when swift_artifact_storage_enabled = true. Example: https://keystone.example.com:5000/v3"
+  default     = ""
+}
+
+variable "swift_username" {
+  type        = string
+  description = "OpenStack username for Swift authentication (OS_USERNAME). Required when swift_artifact_storage_enabled = true."
+  default     = ""
+}
+
+variable "swift_password" {
+  type        = string
+  description = "OpenStack password for Swift authentication (OS_PASSWORD). Sensitive — use Vault integration in production (vault_integration_enabled = true) rather than passing this in plaintext."
+  default     = ""
+}
+
+variable "swift_tenant_name" {
+  type        = string
+  description = "OpenStack project/tenant name (OS_TENANT_NAME / OS_PROJECT_NAME). Required when swift_artifact_storage_enabled = true."
+  default     = ""
+}
+
+variable "swift_container" {
+  type        = string
+  description = "Swift container name where analysis artifacts are stored (SWIFT_CONTAINER). The container must exist before deploying — see docs/swift-artifact-backend.md."
+  default     = "openstudio-artifacts"
+}
+
+variable "swift_region" {
+  type        = string
+  description = "OpenStack region name (OS_REGION_NAME). Leave empty to use the default region."
+  default     = ""
+}
+
+variable "swift_auth_version" {
+  type        = string
+  description = "Keystone API version used for Swift authentication (OS_AUTH_VERSION). Accepted values: '2', '3' (default)."
+  default     = "3"
+}

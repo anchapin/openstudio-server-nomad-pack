@@ -240,6 +240,14 @@
 | `test_busybox_image_tag` | `string` | `"stable"` | Tag for the busybox image used in TCP check tasks. |
 | `compute_node_class` | `string` | `"compute"` | Nomad node class label for CPU-intensive compute nodes. Used by the openstudio_server.compute_node_constraint helper macro. |
 | `system_node_class` | `string` | `"system"` | Nomad node class label for infrastructure/system nodes. Used by the openstudio_server.system_node_constraint helper macro. |
+| `swift_artifact_storage_enabled` | `bool` | `false` | When true, injects OpenStack Swift credentials and ARTIFACT_STORAGE_BACKEND=swift env vars into web and worker tasks, enabling the application to store analysis artifacts in an object-storage container instead of shared NFS. Requires the application to support the ARTIFACT_STORAGE_BACKEND env var. Defaults to false (NFS/shared-filesystem mode). |
+| `swift_auth_url` | `string` | `""` | OpenStack Keystone authentication endpoint URL (OS_AUTH_URL). Required when swift_artifact_storage_enabled = true. Example: https://keystone.example.com:5000/v3 |
+| `swift_username` | `string` | `""` | OpenStack username for Swift authentication (OS_USERNAME). Required when swift_artifact_storage_enabled = true. |
+| `swift_password` | `string` | `""` | OpenStack password for Swift authentication (OS_PASSWORD). Sensitive — use Vault integration in production (vault_integration_enabled = true) rather than passing this in plaintext. |
+| `swift_tenant_name` | `string` | `""` | OpenStack project/tenant name (OS_TENANT_NAME / OS_PROJECT_NAME). Required when swift_artifact_storage_enabled = true. |
+| `swift_container` | `string` | `"openstudio-artifacts"` | Swift container name where analysis artifacts are stored (SWIFT_CONTAINER). The container must exist before deploying — see docs/swift-artifact-backend.md. |
+| `swift_region` | `string` | `""` | OpenStack region name (OS_REGION_NAME). Leave empty to use the default region. |
+| `swift_auth_version` | `string` | `"3"` | Keystone API version used for Swift authentication (OS_AUTH_VERSION). Accepted values: '2', '3' (default). |
 
 ## Job Priority
 

@@ -165,6 +165,16 @@ EOT
         REDIS_PASSWORD  = "[[ var "redis_password" . ]]"
         SECRET_KEY_BASE = "[[ var "app_secret_key_base" . ]]"
         [[ end ]]
+        [[ if var "swift_artifact_storage_enabled" . ]]
+        ARTIFACT_STORAGE_BACKEND = "swift"
+        OS_AUTH_URL     = "[[ var "swift_auth_url" . ]]"
+        OS_USERNAME     = "[[ var "swift_username" . ]]"
+        OS_PASSWORD     = "[[ var "swift_password" . ]]"
+        OS_TENANT_NAME  = "[[ var "swift_tenant_name" . ]]"
+        OS_REGION_NAME  = "[[ var "swift_region" . ]]"
+        OS_AUTH_VERSION = "[[ var "swift_auth_version" . ]]"
+        SWIFT_CONTAINER = "[[ var "swift_container" . ]]"
+        [[ end ]]
       }
 
       # Consul template to resolve 'db', 'queue', and 'rserve' hostnames used by the
