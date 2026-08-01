@@ -34,7 +34,9 @@ web_image            = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/nrel/ope
 web_background_image = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/nrel/openstudio-server:179-flock"
 worker_image         = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/nrel/openstudio-server:179-flock"
 # Worker allocations use a host-local alias to avoid runtime registry lookups.
-# system-hooks pre-pull tags this alias after pulling worker_image.
+# system-hooks pre-pull tags this alias after pulling worker_image (raw_exec pull+tag).
+# Using a short unqualified name ensures Docker never contacts a registry at alloc start.
+worker_runtime_image = "openstudio-worker:local"
 worker_force_pull    = false
 rserve_image         = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/nrel/openstudio-rserve:179-flock"
 db_image             = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/nrel/mongo:8.0.12"
@@ -90,16 +92,16 @@ redis_cpu             = 8000
 redis_memory          = 16384
 rserve_cpu            = 2000
 rserve_memory         = 4096
-# Worker: 750 MHz / 1 GB soft / 2 GB max per allocation — dense-pack configuration.
-# On cc.medium (4 vCPU ≈ 4,000 MHz, ~7.5 GB usable RAM):
-#   CPU-bound:  4,000 / 750  = 5.3 → 5 workers per node  ← binding constraint
-#   Mem-bound:  7,500 / 1024 = 7.3 → 7 workers per node
-# memory_max = 2,048 MB gives simulations 2× burst headroom without risking OOM
-# across all 5 co-located workers (5 × 2,048 = 10,240 MB — above node RAM, so
-# Nomad will not place 5 if all burst simultaneously; in practice simulations
-# burst at staggered times, making this safe under normal workload patterns).
+# Worker: 750 MHz / 875 MB soft / 2 GB max per allocation — dense-pack configuration.
+# On azimuth.compute1-179d-250disk (62 vCPU ≈ 124,000 MHz, ~79.4 GB usable RAM):
+#   CPU-bound:  124,000 / 750  = 165 workers per node
+#   Mem-bound:  (80,412 - 1,000) / 875 = 90 workers per node  ← binding constraint
+# 113 nodes × 90 workers = 10,170 workers total (exceeds 10,000 target).
+# memory_max = 2,048 MB gives simulations 2× burst headroom. 90 workers × 2,048 MB
+# = 184,320 MB — above node RAM, so Nomad will not co-locate 90 bursting workers
+# simultaneously; in practice simulations burst at staggered times.
 worker_cpu         = 750
-worker_memory      = 1024
+worker_memory      = 875
 worker_memory_max  = 2048
 # Restrict workers to this OpenStack flavor (also used by deploy scripts for
 # pre-pull readiness checks).
