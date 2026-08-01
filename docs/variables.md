@@ -7,7 +7,7 @@
 | --- | --- | --- | --- |
 | `job_name` | `string` | `"openstudio-server"` | The name of the Nomad job. |
 | `app_version` | `string` | `"3.11.0"` | Application version tag injected as APP_VERSION into all OpenStudio Server containers. Must match the image tag used in web_image, worker_image, web_background_image, and rserve_image to avoid version mismatch. |
-| `worker_min_replicas` | `number` | `2` | Minimum number of worker replicas. Aligned with Helm chart worker-hpa.yaml minReplicas: 2. |
+| `worker_min_replicas` | `number` | `0` | Minimum number of worker replicas when autoscaling is enabled. Set to 0 to allow scale-to-zero when the queue is empty. The Helm chart default of 2 is intentionally changed here to prevent idle worker accumulation. |
 | `worker_max_replicas` | `number` | `20` | Maximum number of worker replicas. Aligned with Helm chart worker-hpa.yaml maxReplicas: 20. |
 | `vault_integration_enabled` | `bool` | `false` | Enable Vault KV v2 secrets injection via Nomad template stanzas (`secrets/env`). Typically enabled together with vault_enabled so tasks use explicit Vault roles. |
 | `ingress_domain` | `string` | `"localhost"` | Ingress domain used when constructing service hostnames and Traefik router rules. |
@@ -28,10 +28,14 @@
 | `web_cpu` | `number` | `1000` | CPU shares allocated to the OpenStudio Web task. |
 | `web_memory` | `number` | `2048` | Memory (MB) allocated to the OpenStudio Web task. |
 | `web_memory_max` | `number` | `4096` | Memory hard limit (MB) for the OpenStudio Web task (Nomad memory_max). Must be greater than web_memory for burst capacity. |
+| `web_passenger_memory_per_process` | `number` | `250` | Passenger memory budget (MB) per web process used to derive MAX_POOL when web_max_pool is unset. Formula: ceil((web_memory * 0.75) / web_passenger_memory_per_process). Mirrors Helm passenger_memory_per_process behavior. |
+| `web_max_pool` | `number` | `0` | Explicit Passenger MAX_POOL for the web task. Set to 0 to auto-calculate from web_memory and web_passenger_memory_per_process. |
+| `web_max_requests_multiplier` | `number` | `1.05` | Multiplier used to derive web MAX_REQUESTS from worker_max_replicas when web_max_requests is unset. Mirrors Helm behavior (maxReplicas * 1.05). |
+| `web_max_requests` | `number` | `0` | Explicit MAX_REQUESTS for the web task. Set to 0 to auto-calculate as ceil(worker_max_replicas * web_max_requests_multiplier). |
 | `web_count` | `number` | `1` | The number of web task group allocations. MUST remain 1 (the default). The OpenStudio Server web process writes uploaded analysis artefacts to local container filesystem without a distributed file-locking scheme. When nfs_shared_volume_enabled = true, NFS provides a shared filesystem but does NOT guarantee POSIX file-locking across multiple simultaneous web writers — each allocation still has its own isolated view of open file handles. Setting web_count > 1 therefore causes split-brain: requests routed to replica B cannot find files written by replica A. This mirrors the Kubernetes Helm chart constraint (web-hpa.yaml maxReplicas: 1). To safely run web_count > 1 you must first implement either: (a) a distributed lock manager such as Redlock via Redis wrapping every filesystem operation, or (b) stateless file handling by moving all persistent artefacts to object storage (e.g. S3/MinIO). See docs/storage.md §'Web Replica Constraint' for details. |
 | `web_port` | `number` | `80` | Host-side static port mapped to the web container HTTP port. |
 | `web_container_port` | `number` | `80` | Port that the web container's nginx listens on internally. The OpenStudio Server image listens on port 80 by default. Must match the nginx listen directive in the image. |
-| `web_redis_url` | `string` | `""` | Override REDIS_URL env var in the web and worker containers. Required when the default URI scheme parsing ('queue:6379' without '//') resolves incorrectly — e.g. on macOS dev where Redis is reached via host.docker.internal. Set to 'redis://queue:6379' in minimal-dev deployments. Leave empty in production when Vault injects REDIS_URL directly. |
+| `web_redis_url` | `string` | `"redis://queue:6379"` | REDIS_URL env var injected into web and worker containers. Defaults to 'redis://queue:6379' which resolves via /etc/hosts patch to the Consul-registered Redis address. Set to empty string when Vault injects REDIS_URL directly. Override with 'redis://host.docker.internal:6379' on macOS dev. |
 | `os_server_sampling_backend` | `string` | `""` | Optional override for OS_SERVER_SAMPLING_BACKEND in web and web-background tasks. Valid values: 'rserve' (default app behavior) or 'ruby' (Rserve-independent LHS sampling fallback). Leave empty to use the image default. |
 | `worker_extra_hosts` | `list(string)` | `[]` | Additional /etc/hosts entries for the worker container, in 'hostname:ip' format. Use 'host-gateway' as the IP value to map to the Docker host machine. Required on macOS dev when the worker's start-workers script uses hostnames (db, queue) that must resolve to the host running MongoDB/Redis. |
 | `web_health_check_interval` | `string` | `"10s"` | Interval between Consul health checks for the web service. |
@@ -44,11 +48,19 @@
 | `web_update_auto_revert` | `bool` | `true` | Automatically revert a web deployment if the update fails. |
 | `web_background_cpu` | `number` | `250` | CPU shares allocated to the OpenStudio web-background task. |
 | `web_background_memory` | `number` | `512` | Memory (MB) allocated to the OpenStudio web-background task. |
+| `web_background_memory_max` | `number` | `0` | Memory hard limit (MB) for the OpenStudio web-background task (Nomad memory_max). Must be greater than web_background_memory for burst capacity. Set to 0 to disable. |
 | `worker_image` | `string` | `"nrel/openstudio-server:179-flock"` | The image name and tag for the OpenStudio Server worker container. |
+| `worker_force_pull` | `bool` | `false` | When true, force Docker to pull worker_image on every worker allocation start. Keep false (default) in OpenStack to use pre-pulled/cached images and avoid registry pull storms. |
+| `worker_runtime_image` | `string` | `""` | Optional host-local image alias used by worker allocations at runtime instead of worker_image. When set, system-hooks uses raw_exec to run 'docker pull worker_image && docker tag worker_image worker_runtime_image' on every eligible node. Worker allocations then reference this short unqualified name so Docker never contacts the upstream registry at alloc start — eliminating TLS handshake timeouts (e.g. Pulp). Requires raw_exec driver enabled on worker nodes. Leave empty to use worker_image directly. |
 | `worker_command` | `string` | `"/usr/local/bin/start-workers"` | Command used to start the worker task. |
 | `worker_args` | `list(string)` | `[]` | Optional args passed to worker_command. |
 | `worker_health_check_command` | `string` | `"pgrep -f resque > /dev/null"` | Shell command used by the worker service health check. |
 | `worker_count` | `number` | `1` | The number of worker task group allocations. |
+| `worker_instance_type` | `string` | `""` | Optional worker node instance type/flavor selector (matches attr.platform.aws.instance-type). Leave empty to disable. |
+| `worker_constraints` | `any` | `[]` | Placement constraints for the worker group. |
+| `worker_affinities` | `any` | `[]` | Placement affinities for the worker group. |
+| `worker_spreads` | `any` | `[]` | Spread rules for the worker group. |
+| `worker_excluded_node_ids` | `list(string)` | `[]` | Node IDs that workers must not run on. Useful for protecting stateful service nodes (for example CSI topology-pinned MongoDB/Redis nodes) from worker placement. |
 | `worker_update_max_parallel` | `number` | `1` | Maximum number of worker allocations updated in parallel. |
 | `worker_update_health_check` | `string` | `"task_states"` | Health check mode for worker rolling updates. |
 | `worker_update_min_healthy_time` | `string` | `"30s"` | How long a worker allocation must remain healthy before promotion. |
@@ -64,24 +76,35 @@
 | `worker_kill_timeout` | `string` | `"5200s"` | Grace period Nomad grants the worker task to finish in-flight work before force-killing it on drain or update. Must be >= the longest expected simulation run. Matches Helm terminationGracePeriodSeconds: 5200. WARNING: reducing this below the longest simulation duration will result in data loss on node drains and rolling updates. |
 | `worker_autoscaling_enabled` | `bool` | `false` | Enable Nomad Autoscaler integration for the worker task group. When false (default), the scaling block is omitted and worker_count controls the fixed allocation count. |
 | `worker_autoscaling_cpu_enabled` | `bool` | `true` | Enable the built-in Nomad APM CPU autoscaling check for workers (avg_cpu target-value strategy). |
-| `worker_autoscaling_queue_enabled` | `bool` | `false` | Enable Prometheus-based queue-depth autoscaling checks for workers. Requires a running Prometheus instance at autoscaler_prometheus_address scraping queue metrics. Defaults to false — safe to omit if Prometheus is not deployed. |
+| `worker_autoscaling_queue_enabled` | `bool` | `false` | Enable Prometheus-based queue-depth autoscaling checks for workers. When true, workers scale based on openstudio_worker_queue_depth metrics scraped from Prometheus. Requires a running Prometheus instance at autoscaler_prometheus_address. Set to false only when Prometheus is not deployed and CPU-only scaling (worker_autoscaling_cpu_enabled) is acceptable. NOTE: CPU-only scaling does NOT scale workers to zero when the queue is empty — enable this flag for queue-driven scale-to-zero behavior. |
 | `worker_cpu_target_utilization` | `number` | `50` | Target worker CPU utilization percentage used by the nomad-apm avg_cpu scaling check. |
 | `nomad_autoscaler_enabled` | `bool` | `false` | Render an optional Nomad Autoscaler daemon job stub. When false (default), the autoscaler job template is omitted. |
 | `nomad_autoscaler_image` | `string` | `"hashicorp/nomad-autoscaler:0.4.7"` | The image name and tag for the Nomad Autoscaler daemon. See https://github.com/hashicorp/nomad-autoscaler/releases for available versions. |
 | `autoscaler_nomad_address` | `string` | `"http://nomad.service.consul:4646"` | Address of the Nomad server for the Nomad Autoscaler to connect to. Use the private IP when Consul DNS is not available (e.g. 'http://192.168.100.87:4646'). |
-| `autoscaler_prometheus_address` | `string` | `"http://prometheus:9090"` | Address of the Prometheus server used by the Nomad Autoscaler APM plugin to evaluate scaling checks. |
-| `autoscaler_cooldown` | `string` | `"60m"` | Cooldown duration between worker autoscaling actions (e.g. '60m', '30m'). Defaults to 60m to match the Helm chart stabilizationWindowSeconds of 3600. |
-| `worker_queue_requeued_query` | `string` | `"sum(openstudio_worker_queue_depth{queue=\"requeued\"})"` | Prometheus query for requeued backlog depth. |
+| `autoscaler_prometheus_address` | `string` | `"http://openstudio-prometheus.service.consul:9090"` | Address of the Prometheus server used by the Nomad Autoscaler APM plugin to evaluate scaling checks. |
+| `autoscaler_cooldown` | `string` | `"10m"` | Cooldown duration between worker autoscaling actions (e.g. '5m', '10m', '60m'). Reduced from the Helm chart stabilizationWindowSeconds of 3600 (60m) to 10m so idle workers are reclaimed faster after the queue drains. Increase if you see oscillation (rapid scale-up/scale-down cycles). |
+| `autoscaler_constraints` | `any` | `[]` | Placement constraints for the optional Nomad Autoscaler group. |
+| `autoscaler_affinities` | `any` | `[]` | Placement affinities for the optional Nomad Autoscaler group. |
+| `autoscaler_spreads` | `any` | `[]` | Spread rules for the optional Nomad Autoscaler group. |
+| `prometheus_enabled` | `bool` | `false` | Render an in-pack Prometheus job for autoscaler queue-depth metrics. |
+| `prometheus_image` | `string` | `"prom/prometheus:v2.53.2"` | Prometheus image used by the optional in-pack Prometheus job. |
+| `prometheus_static_port` | `number` | `9090` | Static host port for the optional in-pack Prometheus HTTP endpoint. |
+| `prometheus_scrape_interval` | `string` | `"15s"` | Prometheus global scrape interval for the optional in-pack Prometheus job. |
+| `prometheus_constraints` | `any` | `[]` | Placement constraints for the optional Prometheus group. |
+| `prometheus_affinities` | `any` | `[]` | Placement affinities for the optional Prometheus group. |
+| `prometheus_spreads` | `any` | `[]` | Spread rules for the optional Prometheus group. |
+| `redis_exporter_image` | `string` | `"oliver006/redis_exporter:v1.62.0"` | Redis exporter image used by the optional in-pack Prometheus job. |
+| `worker_queue_requeued_query` | `string` | `"sum(redis_key_size{key=\"resque:queue:requeued\"}) + 1"` | Prometheus query for requeued backlog depth. The +1 keeps the series non-zero when the queue is empty so the autoscaler doesn't treat a missing series as an error. |
 | `worker_queue_requeued_target` | `number` | `1` | Target queue depth for requeued jobs per worker allocation. |
-| `worker_queue_simulations_query` | `string` | `"sum(openstudio_worker_queue_depth{queue=\"simulations\"})"` | Prometheus query for simulations backlog depth. |
-| `worker_queue_simulations_target` | `number` | `5` | Target queue depth for simulation jobs per worker allocation. |
+| `worker_queue_simulations_query` | `string` | `"(sum(redis_key_size{key=\"resque:queue:simulations\"}) or vector(0))"` | Prometheus query for simulations backlog depth. or vector(0) ensures the series always resolves even when the queue key doesn't exist yet in Redis. |
+| `worker_queue_simulations_target` | `number` | `2` | Target queue depth for simulation jobs per worker allocation. |
 | `web_background_image` | `string` | `"nrel/openstudio-server:179-flock"` | The image name and tag for the OpenStudio Server web-background container. |
 | `web_background_command` | `string` | `"/usr/local/bin/start-web-background"` | Command run by the web-background task. Defaults to the image's start-web-background script, which launches Resque workers for background analysis lifecycle queues. |
 | `web_background_queues` | `string` | `"background,analyses"` | Resque QUEUES env var for the web-background task. Controls which queue(s) the start-web-background Resque workers process. Keep both 'background' and 'analyses': the 'analyses' queue handles analysis initialization/cleanup (including directory setup before zip extraction), and 'background' handles general async tasks. The 'analysis_wrappers' queue is consumed by the web task. Omitting 'analyses' causes the 'Destination already exists' error on re-initialization. Separate multiple queues with commas. NOTE: Use QUEUES (not QUEUE) — the application's resque:setup task explicitly resets QUEUE to prevent environment leaks. |
 | `web_background_args` | `list(string)` | `[]` | Optional args passed to web_background_command when set. |
-| `web_background_count` | `number` | `1` | The number of web-background tasks to run. |
+| `web_background_count` | `number` | `1` | The number of web-background task allocations. Must remain 1. Horizontal scale-out for this group is intentionally disabled; increase web_background_worker_count (COUNT) instead. |
 | `web_background_worker_count` | `number` | `6` | COUNT env var for the web-background task: number of Resque child worker processes per allocation. Increase to drain the background/analyses/analysis_wrappers queues faster. Tune in proportion to web_background_memory. |
-| `web_background_autoscaling_enabled` | `bool` | `false` | Enable Nomad Autoscaler scaling for the web-background task group. |
+| `web_background_autoscaling_enabled` | `bool` | `false` | Deprecated for this pack profile. Keep false: web-background is pinned to a single allocation by design. |
 | `web_background_min_replicas` | `number` | `1` | Minimum number of web-background replicas when autoscaling is enabled. |
 | `web_background_max_replicas` | `number` | `5` | Maximum number of web-background replicas when autoscaling is enabled. |
 | `web_background_autoscaling_cpu_enabled` | `bool` | `false` | Enable the built-in Nomad APM CPU autoscaling check for the web-background task group (avg_cpu target-value strategy). Only applies when web_background_autoscaling_enabled is true. |
@@ -94,17 +117,27 @@
 | `db_health_check_timeout` | `string` | `"2s"` | Timeout for Consul health checks for the MongoDB service. |
 | `db_storage_type` | `string` | `"host_volume"` | MongoDB storage type: host_volume, csi, or ephemeral. Use ephemeral to disable persistent volume wiring. |
 | `db_volume_source` | `string` | `"openstudio-mongodb"` | Nomad volume source name for MongoDB persistent storage (host_volume name or CSI volume ID). |
+| `db_csi_plugin_id` | `string` | `""` | Optional CSI plugin ID used by OpenStack helper scripts when creating the MongoDB volume. No effect unless db_storage_type = \"csi\". |
 | `redis_image` | `string` | `"redis:6.2-alpine"` | The Redis image name and tag. Intentionally diverges from the Helm chart default (redis:6.0.9) by using redis:6.2-alpine; align Redis major.minor with your target OpenStudio Server release requirements. |
 | `redis_cpu` | `number` | `250` | CPU shares allocated to the Redis task. |
 | `redis_memory` | `number` | `1024` | Memory (MB) allocated to the Redis task. |
+| `redis_config_maxclients` | `number` | `50000` | Redis maxclients limit. Increase for large worker/background fleets to avoid ERR max number of clients reached. |
+| `redis_config_tcp_backlog` | `number` | `511` | Redis tcp-backlog value controlling queued inbound TCP connections. |
+| `redis_config_timeout_seconds` | `number` | `0` | Redis client idle timeout in seconds. Set to 0 to disable idle disconnects. |
+| `redis_config_maxmemory` | `string` | `"22000000000"` | Redis maxmemory in bytes. Keep below the Redis container memory limit to leave headroom for forks and allocator overhead. |
+| `redis_config_maxmemory_policy` | `string` | `"noeviction"` | Redis maxmemory-policy. Use noeviction for queue durability so writes fail loudly instead of silently evicting jobs. |
+| `redis_config_appendfsync` | `string` | `"everysec"` | Redis appendfsync policy (for example everysec, always, no). |
+| `redis_config_save` | `string` | `""` | Redis save schedule passed to --save. Set to an empty string to disable automatic RDB snapshots. |
 | `redis_storage_type` | `string` | `"host_volume"` | Redis storage type: host_volume, csi, or ephemeral. Use ephemeral to disable persistent volume wiring. |
 | `redis_volume_source` | `string` | `"openstudio-redis"` | Nomad volume source name for Redis persistent storage (host_volume name or CSI volume ID). |
+| `redis_csi_plugin_id` | `string` | `""` | Optional CSI plugin ID used by OpenStack helper scripts when creating the Redis volume. No effect unless redis_storage_type = \"csi\". |
 | `redis_health_check_interval` | `string` | `"10s"` | Interval between Consul health checks for the Redis service. |
 | `redis_health_check_timeout` | `string` | `"2s"` | Timeout for Consul health checks for the Redis service. |
 | `nfs_shared_volume_enabled` | `bool` | `false` | When true, an NFS shared volume is declared and mounted in both web and worker task groups. Volume type is controlled by nfs_volume_type. |
 | `nfs_volume_type` | `string` | `"host_volume"` | Storage backend for the NFS shared volume. Use \"host_volume\" (default, recommended) for an OS-level NFS mount registered as a Nomad host volume, or \"csi\" for a CSI-managed NFS volume. Mirrors the db_storage_type / redis_storage_type pattern. |
 | `nfs_volume_source` | `string` | `"openstudio-nfs"` | Nomad volume ID for the NFS shared volume used by web and worker task groups. For host_volume this is the host_volume name; for csi this is the CSI volume ID. |
 | `nfs_volume_mount_path` | `string` | `"/mnt/openstudio"` | Mount path inside web and worker tasks where the NFS shared volume is attached. |
+| `web_rserve_colocation_node` | `string` | `""` | Optional hard node name pin applied to both the web and rserve task groups. Set to a Nomad node name (for example, \"nomad-client-172\") to force web and rserve onto the same host when shared local paths must be identical. Leave empty to disable explicit co-location pinning. |
 | `dev_shared_data_path` | `string` | `""` | Host path to bind-mount as the shared data volume at nfs_volume_mount_path (e.g. /mnt/openstudio) in the web, web-background, and worker tasks. Intended for single-node development where a full NFS setup is impractical. When set, a Docker bind mount is added to each task so all three containers share the same host directory, replicating the Docker Compose osdata named volume behaviour. Leave empty (default) in production; use nfs_shared_volume_enabled instead. NOTE: On macOS with Docker Desktop, use dev_shared_volume_name instead to avoid VirtioFS write-consistency issues. |
 | `dev_shared_volume_name` | `string` | `""` | Docker named volume to mount at nfs_volume_mount_path in the web, web-background, and worker tasks. Preferred over dev_shared_data_path on macOS/Docker Desktop: named volumes live in the Docker VM filesystem and bypass VirtioFS, avoiding write-consistency issues (CRC corruption) that occur with macOS host bind mounts. Pre-create with 'docker volume create <name>' before deploying. Leave empty (default) when using dev_shared_data_path or nfs_shared_volume_enabled. |
 | `rserve_image` | `string` | `"nrel/openstudio-rserve:179-flock"` | The Rserve image name and tag. |
@@ -125,6 +158,7 @@
 | `db_affinities` | `any` | `[]` | Placement affinities for the db group. |
 | `db_spreads` | `any` | `[]` | Spread rules for the db group. |
 | `redis_constraints` | `any` | `[]` | Placement constraints for the redis group. |
+| `redis_node_class` | `string` | `""` | Optional Nomad node class for Redis. When set, applies a hard node.class constraint for dedicated queue nodes. |
 | `redis_affinities` | `any` | `[]` | Placement affinities for the redis group. |
 | `redis_spreads` | `any` | `[]` | Spread rules for the redis group. |
 | `rserve_constraints` | `any` | `[]` | Placement constraints for the rserve group. |
@@ -143,12 +177,15 @@
 | `redis_backup_port` | `number` | `6379` | Redis port used by backup and restore jobs. |
 | `restore_enabled` | `bool` | `false` | Enable the on-demand restore batch job definition. |
 | `docker_user` | `string` | `"1000:1000"` | UID:GID to run containers as (non-root). Applies to web, worker, and rserve tasks. |
+| `docker_ulimit_nofile` | `string` | `"65535:65535"` | Default Docker nofile ulimit (soft:hard) applied to web, web-background, worker, rserve, and autoscaler tasks. |
 | `db_static_port` | `number` | `0` |  |
 | `redis_static_port` | `number` | `0` |  |
 | `rserve_static_port` | `number` | `0` |  |
 | `web_extra_hosts` | `list(string)` | `[]` |  |
 | `db_docker_user` | `string` | `"999:999"` | User to run the MongoDB container as. MongoDB official images expect UID/GID 999. |
+| `db_docker_ulimit_nofile` | `string` | `"262144:262144"` | Docker nofile ulimit (soft:hard) for MongoDB. Increase this for high worker concurrency to prevent file descriptor exhaustion. |
 | `redis_docker_user` | `string` | `"999:999"` | User to run the Redis container as. Redis official images expect UID/GID 999. |
+| `redis_docker_ulimit_nofile` | `string` | `"131072:131072"` | Docker nofile ulimit (soft:hard) for Redis. Keep this high when queue fan-out is aggressive. |
 | `docker_readonly_rootfs` | `bool` | `true` | Enable Docker read-only root filesystem. |
 | `enable_arch_constraint` | `bool` | `true` | When true, the worker job enforces hard constraints requiring os.name=linux and cpu.arch=amd64. Set false for macOS or ARM64 local dev nodes. |
 | `consul_address` | `string` | `"127.0.0.1:8500"` |  |
@@ -160,6 +197,12 @@
 | `enable_batch_verification` | `bool` | `false` | Enable standalone batch connectivity verification job. |
 | `verification_image` | `string` | `"busybox:1.36"` | The image used for batch connectivity verification checks. |
 | `verification_targets` | `list(string)` | `[ "db=openstudio-db.service.consul:27017", "redis=openstudio-redis.service.consul:6379", "rserve=openstudio-rserve.service.consul:6311", ]` | Connectivity targets in component=host:port format for batch verification. |
+| `enable_queue_sweeper` | `bool` | `false` | Enable periodic batch job that automatically clears stale resque:analysis:*:queuing locks from Redis. A lock is stale if it has no TTL and has been idle for longer than queue_sweeper_max_lock_age_seconds. |
+| `queue_sweeper_cron` | `string` | `"*/2 * * * *"` | Cron schedule for the queue-sweeper periodic job (UTC). Runs every 2 minutes by default to recover stale locks quickly. |
+| `queue_sweeper_max_lock_age_seconds` | `number` | `120` | Minimum idle seconds (OBJECT IDLETIME) before a TTL-less queuing lock is considered stale and eligible for deletion. Default 120s (2 min) — shorter than a typical analysis enqueue cycle while long enough to avoid racing an active enqueue. |
+| `queue_sweeper_image` | `string` | `"redis:6.2-alpine"` | Docker image used for the queue-sweeper task. Must include redis-cli. |
+| `queue_sweeper_cpu` | `number` | `50` | CPU MHz reserved for the queue-sweeper task. |
+| `queue_sweeper_memory` | `number` | `64` | Memory (MiB) reserved for the queue-sweeper task. |
 | `vault_policy` | `string` | `"openstudio-server"` | Fallback Vault policy attached to task tokens when vault_integration_enabled is true and vault_enabled is false. |
 | `vault_kv_mongodb_path` | `string` | `"secret/data/openstudio/mongodb"` | Vault KV v2 path for MongoDB credentials (must contain a 'password' key). |
 | `vault_kv_redis_path` | `string` | `"secret/data/openstudio/redis"` | Vault KV v2 path for Redis credentials (must contain a 'password' key). |

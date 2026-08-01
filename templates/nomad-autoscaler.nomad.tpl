@@ -7,6 +7,9 @@ job "[[ var "job_name" . ]]-autoscaler" {
 
   group "autoscaler" {
     count = 1
+    [[ template "constraints" (var "autoscaler_constraints" .) ]]
+    [[ template "affinities" (var "autoscaler_affinities" .) ]]
+    [[ template "spreads" (var "autoscaler_spreads" .) ]]
 
     network {
       port "http" {
@@ -22,6 +25,9 @@ job "[[ var "job_name" . ]]-autoscaler" {
         command      = "nomad-autoscaler"
         args         = ["agent", "-config", "local/autoscaler.hcl"]
         network_mode = "host"
+        ulimit {
+          nofile = "[[ var "docker_ulimit_nofile" . ]]"
+        }
       }
 
       template {
@@ -35,13 +41,14 @@ apm "nomad-apm" {
   driver = "nomad-apm"
 }
 
-# Optional Prometheus APM source:
-# apm "prometheus" {
-#   driver = "prometheus"
-#   config = {
-#     address = "http://prometheus:9090"
-#   }
-# }
+[[ if var "worker_autoscaling_queue_enabled" . ]]
+apm "prometheus" {
+  driver = "prometheus"
+  config = {
+    address = "{{ with service "openstudio-prometheus" }}http://{{ (index . 0).Address }}:{{ (index . 0).Port }}{{ else }}[[ var "autoscaler_prometheus_address" . ]]{{ end }}"
+  }
+}
+[[ end ]]
 
 strategy "target-value" {
   driver = "target-value"

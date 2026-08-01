@@ -26,6 +26,12 @@
 #   OS_VAR_FILE      Override var-file (default: examples/openstack.hcl)
 #   OS_JOB_NAME      Override job name  (default: openstudio-server)
 #   OS_WORKER_COUNT  Override initial worker count (default: from var-file)
+#   OS_CREATE_MISSING_CSI  Auto-create missing CSI volumes before deploy (default: true)
+#   OS_BOOTSTRAP_WORKER_MAX_REPLICAS  Temporary max replicas during initial ramp (default: 200)
+#   OS_BOOTSTRAP_AUTOSCALER_COOLDOWN  Temporary cooldown during initial ramp (default: 10m)
+#   OS_PREPULL_WAIT_TIMEOUT_SECONDS   Timeout for pre-pull readiness gate (default: 900)
+#   OS_PREPULL_MIN_READY_PERCENT      Minimum worker pre-pull readiness percent required to proceed (default: 10)
+#   OS_PREPULL_REQUIRE_ALL            Require all eligible worker nodes to pass pre-pull before scheduling workers (default: false)
 
 set -euo pipefail
 
@@ -48,6 +54,16 @@ CONSUL_API="http://127.0.0.1:${CONSUL_LOCAL_PORT}"
 VAR_FILE="${OS_VAR_FILE:-${REPO_ROOT}/examples/openstack.hcl}"
 JOB_NAME="${OS_JOB_NAME:-openstudio-server}"
 INFRA_JOB="${REPO_ROOT}/infra-setup.nomad"
+PREFLIGHT_SCRIPT="${REPO_ROOT}/scripts/preflight-storage.sh"
+CREATE_MISSING_CSI="${OS_CREATE_MISSING_CSI:-true}"
+BOOTSTRAP_WORKER_MAX_REPLICAS="${OS_BOOTSTRAP_WORKER_MAX_REPLICAS:-200}"
+BOOTSTRAP_AUTOSCALER_COOLDOWN="${OS_BOOTSTRAP_AUTOSCALER_COOLDOWN:-10m}"
+PREPULL_WAIT_TIMEOUT_SECONDS="${OS_PREPULL_WAIT_TIMEOUT_SECONDS:-900}"
+PREPULL_MIN_READY_PERCENT="${OS_PREPULL_MIN_READY_PERCENT:-10}"
+PREPULL_REQUIRE_ALL="${OS_PREPULL_REQUIRE_ALL:-false}"
+
+PREPULL_READY_NODE_IDS=""
+PREPULL_NOT_READY_NODE_IDS=""
 
 TUNNEL_PID_FILE="/tmp/nomad-openstack-tunnel.pid"
 CONSUL_TUNNEL_PID_FILE="/tmp/consul-openstack-tunnel.pid"
@@ -200,6 +216,7 @@ check_prereqs() {
   [ -f "${SSH_KEY}" ] || { err "SSH key not found: ${SSH_KEY}"; ok=false; }
   [ -f "${VAR_FILE}" ] || { err "Var file not found: ${VAR_FILE}"; ok=false; }
   [ -f "${INFRA_JOB}" ] || { err "Infra job not found: ${INFRA_JOB}"; ok=false; }
+  [ -f "${PREFLIGHT_SCRIPT}" ] || { err "Preflight script not found: ${PREFLIGHT_SCRIPT}"; ok=false; }
 
   $ok || exit 1
 
@@ -353,6 +370,312 @@ except Exception:
 }
 
 # ── Pack deployment ───────────────────────────────────────────────────────────
+csi_volume_topology_nodes() {
+  local volume_name="$1"
+  NOMAD_ADDR="${NOMAD_API}" NOMAD_NAMESPACE="${NOMAD_NAMESPACE:-default}" nomad volume status -json "${volume_name}" 2>/dev/null | python3 -c '
+import json, sys
+
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+
+seen = set()
+for topo in data.get("Topologies") or []:
+    if not isinstance(topo, dict):
+        continue
+    segments = topo.get("Segments") or {}
+    for key, value in segments.items():
+        if not value:
+            continue
+        if key.endswith("/node") or "node" in key:
+            if value not in seen:
+                seen.add(value)
+                print(value)
+'
+}
+
+job_running_node_ids() {
+  local job_id="$1"
+  NOMAD_ADDR="${NOMAD_API}" NOMAD_NAMESPACE="${NOMAD_NAMESPACE:-default}" nomad job allocs -json "${job_id}" 2>/dev/null | python3 -c '
+import json, sys
+try:
+    allocs = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+seen = set()
+for alloc in allocs:
+    if (alloc.get("DesiredStatus") or "").lower() != "run":
+        continue
+    if (alloc.get("ClientStatus") or "").lower() not in ("running", "starting", "pending"):
+        continue
+    node_id = alloc.get("NodeID") or ""
+    if node_id and node_id not in seen:
+        seen.add(node_id)
+        print(node_id)
+'
+}
+
+build_worker_exclusion_var() {
+  local nodes=("$@")
+  if [ ${#nodes[@]} -eq 0 ]; then
+    return 0
+  fi
+  printf "%s\n" "${nodes[@]}" | awk 'NF && !seen[$0]++' | python3 -c '
+import json, sys
+items = [line.strip() for line in sys.stdin if line.strip()]
+if items:
+    print(json.dumps(items))
+'
+}
+
+extract_simple_var() {
+  local key="$1"
+  local default="${2:-}"
+  local line value
+  line="$(grep -E "^[[:space:]]*${key}[[:space:]]*=" "${VAR_FILE}" | tail -n 1 || true)"
+  if [ -z "${line}" ]; then
+    echo "${default}"
+    return
+  fi
+  value="${line#*=}"
+  value="$(echo "${value}" | sed -E 's/[[:space:]]*#.*$//' | xargs)"
+  value="${value%\"}"
+  value="${value#\"}"
+  echo "${value}"
+}
+
+enforce_web_background_singleton() {
+  local web_background_count web_background_autoscaling_enabled web_background_min_replicas web_background_max_replicas
+  web_background_count="$(extract_simple_var web_background_count 1)"
+  web_background_autoscaling_enabled="$(extract_simple_var web_background_autoscaling_enabled false)"
+  web_background_min_replicas="$(extract_simple_var web_background_min_replicas 1)"
+  web_background_max_replicas="$(extract_simple_var web_background_max_replicas 1)"
+
+  if [ "${web_background_count}" != "1" ] || [ "${web_background_autoscaling_enabled}" = "true" ] || \
+     [ "${web_background_min_replicas}" != "1" ] || [ "${web_background_max_replicas}" != "1" ]; then
+    err "web-background must remain a singleton allocation."
+    err "Set web_background_count=1, web_background_autoscaling_enabled=false, web_background_min_replicas=1, and web_background_max_replicas=1."
+    exit 1
+  fi
+}
+
+run_pack_with_guard() {
+  local run_log
+  local -a run_args=("$@")
+  run_log="$(mktemp)"
+  if ! NOMAD_ADDR="${NOMAD_API}" nomad-pack run "${run_args[@]}" "${REPO_ROOT}" 2>&1 | tee "${run_log}"; then
+    if grep -q 'Failed To Query For Previously Deployed Jobs' "${run_log}"; then
+      core_jobs_ready=false
+      for _ in $(seq 1 30); do
+        if NOMAD_ADDR="${NOMAD_API}" nomad job status -namespace "${NOMAD_NAMESPACE:-default}" "${JOB_NAME}-web" >/dev/null 2>&1 && \
+           NOMAD_ADDR="${NOMAD_API}" nomad job status -namespace "${NOMAD_NAMESPACE:-default}" "${JOB_NAME}-worker" >/dev/null 2>&1 && \
+           NOMAD_ADDR="${NOMAD_API}" nomad job status -namespace "${NOMAD_NAMESPACE:-default}" "${JOB_NAME}-db" >/dev/null 2>&1 && \
+           NOMAD_ADDR="${NOMAD_API}" nomad job status -namespace "${NOMAD_NAMESPACE:-default}" "${JOB_NAME}-redis" >/dev/null 2>&1 && \
+           NOMAD_ADDR="${NOMAD_API}" nomad job status -namespace "${NOMAD_NAMESPACE:-default}" "${JOB_NAME}-rserve" >/dev/null 2>&1; then
+          core_jobs_ready=true
+          break
+        fi
+        sleep 1
+      done
+      if [ "${core_jobs_ready}" != "true" ]; then
+        rm -f "${run_log}"
+        exit 1
+      fi
+      warn "nomad-pack reported a deployment metadata query error, but core jobs were registered."
+    else
+      rm -f "${run_log}"
+      exit 1
+    fi
+  fi
+  rm -f "${run_log}"
+}
+
+run_system_hooks_phase() {
+  local enable_image_prepull worker_instance_type rendered spec
+  local total_count deadline now ready_count ready_nodes required_by_percent required_ready_count
+  enable_image_prepull="$(extract_simple_var enable_image_prepull false)"
+  [ "${enable_image_prepull}" = "true" ] || return 0
+
+  worker_instance_type="$(extract_simple_var worker_instance_type "")"
+  rendered="$(mktemp)"
+  spec="$(mktemp)"
+  nomad-pack render --var-file "${VAR_FILE}" --var "job_name=${JOB_NAME}" "${REPO_ROOT}" > "${rendered}"
+  awk '
+    /^openstudio-server\/system-hooks\.nomad:$/ { in_section=1; next }
+    /^openstudio-server\/.*\.nomad:$/ { if (in_section) exit }
+    in_section { print }
+  ' "${rendered}" > "${spec}"
+  rm -f "${rendered}"
+
+  if [ ! -s "${spec}" ]; then
+    rm -f "${spec}"
+    err "Failed to render system-hooks job spec for pre-pull phase."
+    exit 1
+  fi
+
+  section "Phase 1/3 — warm image cache (system-hooks)"
+  NOMAD_ADDR="${NOMAD_API}" NOMAD_NAMESPACE="${NOMAD_NAMESPACE:-default}" nomad job run "${spec}" >/dev/null
+  rm -f "${spec}"
+
+  target_nodes="$(
+    NOMAD_ADDR="${NOMAD_API}" WORKER_INSTANCE_TYPE="${worker_instance_type}" python3 - <<'PY'
+import json, os, urllib.request
+addr = os.environ["NOMAD_ADDR"].rstrip("/")
+instance_type = os.environ.get("WORKER_INSTANCE_TYPE", "").strip()
+with urllib.request.urlopen(f"{addr}/v1/nodes", timeout=20) as r:
+    nodes = json.load(r)
+targets = []
+for n in nodes:
+    if n.get("Status") != "ready" or n.get("SchedulingEligibility") != "eligible":
+        continue
+    nid = n.get("ID")
+    if not nid:
+        continue
+    with urllib.request.urlopen(f"{addr}/v1/node/{nid}", timeout=20) as r:
+        detail = json.load(r)
+    meta = detail.get("Meta") or {}
+    attrs = detail.get("Attributes") or {}
+    if meta.get("node_role") != "worker":
+        continue
+    if attrs.get("driver.docker") != "1":
+        continue
+    if instance_type and attrs.get("platform.aws.instance-type") != instance_type:
+        continue
+    targets.append(nid)
+for nid in targets:
+    print(nid)
+PY
+  )"
+
+  if [ -z "${target_nodes}" ]; then
+    err "No target worker nodes found for pre-pull readiness checks."
+    exit 1
+  fi
+
+  total_count="$(printf "%s\n" "${target_nodes}" | awk 'NF' | wc -l | tr -d ' ')"
+  if [ "${PREPULL_REQUIRE_ALL}" = "true" ]; then
+    required_ready_count="${total_count}"
+    info "Pre-pull gate requires ${required_ready_count}/${total_count} worker nodes (OS_PREPULL_REQUIRE_ALL=true)."
+  else
+    required_by_percent=$(( (total_count * PREPULL_MIN_READY_PERCENT + 99) / 100 ))
+    if [ "${required_by_percent}" -lt 1 ]; then
+      required_by_percent=1
+    fi
+    required_ready_count="${required_by_percent}"
+    if [ "${required_ready_count}" -lt "${worker_count}" ]; then
+      required_ready_count="${worker_count}"
+    fi
+    if [ "${required_ready_count}" -gt "${total_count}" ]; then
+      required_ready_count="${total_count}"
+    fi
+    info "Pre-pull gate requires ${required_ready_count}/${total_count} worker nodes (min ${PREPULL_MIN_READY_PERCENT}%, worker_count=${worker_count})."
+  fi
+  deadline=$(( $(date +%s) + PREPULL_WAIT_TIMEOUT_SECONDS ))
+  ready_nodes=""
+
+  while true; do
+    now="$(date +%s)"
+    if [ "${now}" -gt "${deadline}" ]; then
+      err "Timed out waiting for system-hooks pre-pull readiness on target worker nodes."
+      exit 1
+    fi
+
+    ready_nodes="$(
+      TARGET_NODE_IDS="${target_nodes}" NOMAD_ADDR="${NOMAD_API}" NOMAD_NAMESPACE="${NOMAD_NAMESPACE:-default}" JOB_ID="${JOB_NAME}-system-hooks" python3 - <<'PY'
+import json, os, subprocess
+targets = {x.strip() for x in os.environ.get("TARGET_NODE_IDS", "").splitlines() if x.strip()}
+if not targets:
+    raise SystemExit(0)
+proc = subprocess.run(["nomad", "job", "allocs", "-json", os.environ["JOB_ID"]], capture_output=True, text=True, env=os.environ.copy())
+if proc.returncode != 0:
+    raise SystemExit(0)
+allocs = json.loads(proc.stdout)
+ready = set()
+for alloc in allocs:
+    if alloc.get("DesiredStatus") != "run":
+        continue
+    if alloc.get("ClientStatus") != "running":
+        continue
+    node = alloc.get("NodeID")
+    if node not in targets:
+        continue
+    task = (alloc.get("TaskStates") or {}).get("image-cache-ready") or {}
+    if task.get("State") == "running":
+        ready.add(node)
+for node_id in sorted(ready):
+    print(node_id)
+PY
+    )"
+    ready_count="$(printf "%s\n" "${ready_nodes}" | awk 'NF' | wc -l | tr -d ' ')"
+    printf "\r  pre-pull readiness: %s/%s worker nodes ready (required: %s)" "${ready_count}" "${total_count}" "${required_ready_count}"
+    if [ "${ready_count}" -ge "${required_ready_count}" ]; then
+      echo ""
+      ok "Pre-pull readiness threshold met."
+      break
+    fi
+    sleep 5
+  done
+
+  PREPULL_READY_NODE_IDS="${ready_nodes}"
+  PREPULL_NOT_READY_NODE_IDS="$(
+    TARGET_NODE_IDS="${target_nodes}" READY_NODE_IDS="${ready_nodes}" python3 - <<'PY'
+import os
+targets = {x.strip() for x in (os.environ.get("TARGET_NODE_IDS", "").splitlines()) if x.strip()}
+ready = {x.strip() for x in (os.environ.get("READY_NODE_IDS", "").splitlines()) if x.strip()}
+for node_id in sorted(targets - ready):
+    print(node_id)
+PY
+  )"
+}
+
+wait_for_core_services() {
+  section "Phase 2/3 — waiting for core services"
+  local all_ready=false
+
+  for i in $(seq 1 120); do
+    status_line="$(
+      NOMAD_ADDR="${NOMAD_API}" NOMAD_NAMESPACE="${NOMAD_NAMESPACE:-default}" JOB_PREFIX="${JOB_NAME}" python3 - <<'PY'
+import json, os, urllib.request
+core = [f"{os.environ['JOB_PREFIX']}-db", f"{os.environ['JOB_PREFIX']}-redis", f"{os.environ['JOB_PREFIX']}-rserve", f"{os.environ['JOB_PREFIX']}-web"]
+addr = os.environ["NOMAD_ADDR"].rstrip("/")
+ns = os.environ.get("NOMAD_NAMESPACE", "default")
+with urllib.request.urlopen(f"{addr}/v1/jobs?namespace={ns}", timeout=20) as r:
+    jobs = json.load(r)
+status = {j.get("ID"): j.get("Status") for j in jobs}
+ready = 0
+for job_id in core:
+    if status.get(job_id) != "running":
+        continue
+    dep_status = ""
+    try:
+        with urllib.request.urlopen(f"{addr}/v1/job/{job_id}/deployments?namespace={ns}", timeout=20) as r:
+            deps = json.load(r)
+        if deps:
+            dep_status = (deps[0].get("Status") or "").lower()
+    except Exception:
+        dep_status = ""
+    if dep_status == "successful":
+        ready += 1
+print(f"{ready}/4")
+PY
+    )"
+    printf "\r  core readiness (deployment healthy): %s" "${status_line}"
+    if [ "${status_line}" = "4/4" ]; then
+      all_ready=true
+      break
+    fi
+    sleep 5
+  done
+  echo ""
+
+  if [ "${all_ready}" != "true" ]; then
+    err "Core services did not reach running state in time."
+    exit 1
+  fi
+  ok "Core services are running."
+}
+
 deploy_pack() {
   section "Deploying openstudio-server-nomad-pack"
 
@@ -370,11 +693,106 @@ deploy_pack() {
     return 0
   fi
 
-  info "Running: nomad-pack run --var-file ${VAR_FILE} --name ${JOB_NAME} ."
-  NOMAD_ADDR="${NOMAD_API}" nomad-pack run \
-    --var-file "${VAR_FILE}" \
-    --name "${JOB_NAME}" \
-    "${REPO_ROOT}"
+  info "Running storage preflight..."
+  enforce_web_background_singleton
+  PREFLIGHT_ARGS=(
+    --var-file "${VAR_FILE}"
+    --nomad-addr "${NOMAD_API}"
+    --namespace "${NOMAD_NAMESPACE:-default}"
+  )
+  if [ "${CREATE_MISSING_CSI}" = "true" ]; then
+    PREFLIGHT_ARGS+=(--create-missing-csi)
+  fi
+  "${PREFLIGHT_SCRIPT}" "${PREFLIGHT_ARGS[@]}"
+
+  db_storage_type="$(extract_simple_var db_storage_type host_volume)"
+  db_volume_source="$(extract_simple_var db_volume_source openstudio-mongodb)"
+  redis_storage_type="$(extract_simple_var redis_storage_type host_volume)"
+  redis_volume_source="$(extract_simple_var redis_volume_source openstudio-redis)"
+  worker_count="$(extract_simple_var worker_count 1)"
+  worker_max_replicas="$(extract_simple_var worker_max_replicas 10)"
+  autoscaler_cooldown="$(extract_simple_var autoscaler_cooldown 60m)"
+
+  topology_nodes=()
+  db_nodes=()
+  redis_nodes=()
+  if [ "${db_storage_type}" = "csi" ]; then
+    while IFS= read -r node_id; do
+      [ -n "${node_id}" ] && db_nodes+=("${node_id}")
+    done < <(csi_volume_topology_nodes "${db_volume_source}")
+    if [ ${#db_nodes[@]} -eq 0 ]; then
+      while IFS= read -r node_id; do
+        [ -n "${node_id}" ] && db_nodes+=("${node_id}")
+      done < <(job_running_node_ids "${JOB_NAME}-db")
+    fi
+    topology_nodes+=("${db_nodes[@]}")
+  fi
+  if [ "${redis_storage_type}" = "csi" ]; then
+    while IFS= read -r node_id; do
+      [ -n "${node_id}" ] && redis_nodes+=("${node_id}")
+    done < <(csi_volume_topology_nodes "${redis_volume_source}")
+    if [ ${#redis_nodes[@]} -eq 0 ]; then
+      while IFS= read -r node_id; do
+        [ -n "${node_id}" ] && redis_nodes+=("${node_id}")
+      done < <(job_running_node_ids "${JOB_NAME}-redis")
+    fi
+    topology_nodes+=("${redis_nodes[@]}")
+  fi
+
+  run_system_hooks_phase
+
+  combined_worker_exclusions=()
+  combined_worker_exclusions+=("${topology_nodes[@]}")
+  while IFS= read -r node_id; do
+    [ -n "${node_id}" ] && combined_worker_exclusions+=("${node_id}")
+  done <<< "${PREPULL_NOT_READY_NODE_IDS}"
+
+  worker_excluded_node_ids_json="$(build_worker_exclusion_var "${combined_worker_exclusions[@]}" || true)"
+  if [ "${db_storage_type}" = "csi" ] || [ "${redis_storage_type}" = "csi" ]; then
+    if [ -z "${worker_excluded_node_ids_json}" ]; then
+      err "Could not derive worker exclusion node IDs from CSI topology/allocation state; aborting to avoid DB/Redis starvation."
+      exit 1
+    fi
+  fi
+
+  section "Phase 2/3 — deploy stack with conservative worker ramp"
+  bootstrap_worker_max_replicas="${BOOTSTRAP_WORKER_MAX_REPLICAS}"
+  if [ "${bootstrap_worker_max_replicas}" -gt "${worker_max_replicas}" ] 2>/dev/null; then
+    bootstrap_worker_max_replicas="${worker_max_replicas}"
+  fi
+
+  PHASE2_ARGS=(
+    --var-file "${VAR_FILE}"
+    --name "${JOB_NAME}"
+    --var "enable_image_prepull=false"
+    --var "worker_count=${worker_count}"
+    --var "worker_max_replicas=${bootstrap_worker_max_replicas}"
+    --var "autoscaler_cooldown=${BOOTSTRAP_AUTOSCALER_COOLDOWN}"
+  )
+  if [ -n "${worker_excluded_node_ids_json}" ]; then
+    PHASE2_ARGS+=(--var "worker_excluded_node_ids=${worker_excluded_node_ids_json}")
+    info "Restricting workers to pre-pulled nodes and protecting CSI topology node(s): ${worker_excluded_node_ids_json}"
+  fi
+
+  run_pack_with_guard "${PHASE2_ARGS[@]}"
+  wait_for_core_services
+
+  if [ "${bootstrap_worker_max_replicas}" != "${worker_max_replicas}" ] || [ "${BOOTSTRAP_AUTOSCALER_COOLDOWN}" != "${autoscaler_cooldown}" ]; then
+    section "Phase 3/3 — restore full worker autoscaling bounds"
+    PHASE3_ARGS=(
+      --var-file "${VAR_FILE}"
+      --name "${JOB_NAME}"
+      --var "enable_image_prepull=false"
+      --var "worker_count=${worker_count}"
+      --var "worker_max_replicas=${worker_max_replicas}"
+      --var "autoscaler_cooldown=${autoscaler_cooldown}"
+    )
+    if [ -n "${worker_excluded_node_ids_json}" ]; then
+      PHASE3_ARGS+=(--var "worker_excluded_node_ids=${worker_excluded_node_ids_json}")
+    fi
+    run_pack_with_guard "${PHASE3_ARGS[@]}"
+  fi
+
   ok "Pack submitted"
 
   wait_for_healthy

@@ -39,10 +39,26 @@ set -e
 
 CONSUL_SERVER_IP="192.168.100.87"  # nomad-server nomad-net IP
 LOCAL_DOCKER_DIR="/var/lib/docker-local"
-NFS_OPENSTUDIO_DIR="/nfs/opensstudio/batch/openstudio"
-NFS_DOCKER_TGZ="/nfs/opensstudio/batch/docker.tgz"
+NFS_OPENSTUDIO_DIR="/nfs/openstudio/batch/openstudio"
+NFS_DOCKER_TGZ="/nfs/openstudio/batch/docker.tgz"
+DOCKER_MAX_CONCURRENT_DOWNLOADS="2"
+PULP_REGISTRY_HOST="pulp-dev.hpc.nlr.gov"
+PULP_REGISTRY_IP="10.60.127.127"
 
 log() { echo "[$(hostname)] $*"; }
+
+pin_registry_host() {
+  local host="$1"
+  local ip="$2"
+  local hosts_file="/etc/hosts"
+  [ -n "$host" ] && [ -n "$ip" ] || return 0
+
+  if grep -qE "[[:space:]]${host}([[:space:]]|$)" "$hosts_file"; then
+    sed -i.bak -E "/[[:space:]]${host}([[:space:]]|$)/d" "$hosts_file"
+  fi
+  echo "${ip} ${host}" >> "$hosts_file"
+  log "Pinned registry host ${host} -> ${ip} in ${hosts_file}"
+}
 
 NOMAD_RESTART_REQUIRED=false
 
@@ -93,32 +109,67 @@ fi
 DOCKER_DATA_DIR="${LOCAL_DOCKER_DIR}"
 mkdir -p "$DOCKER_DATA_DIR"
 
-if [ ! -f /etc/docker/daemon.json ] || ! grep -q "\"data-root\": \"${DOCKER_DATA_DIR}\"" /etc/docker/daemon.json 2>/dev/null; then
-  log "Configuring Docker data-root → $DOCKER_DATA_DIR"
-  cat > /etc/docker/daemon.json <<JSON
-{
-  "data-root": "${DOCKER_DATA_DIR}",
-  "log-driver": "json-file",
-  "log-opts": { "max-size": "50m", "max-file": "3" }
-}
-JSON
-fi
+# Rebuild daemon.json ensuring data-root, dns, and max-concurrent-downloads are all set.
+# Using Python to merge safely; only sets DOCKER_RESTART_REQUIRED if the file changed.
+DOCKER_CHANGED=$(python3 - <<PY
+import json
+from pathlib import Path
 
-# Start or restart Docker to pick up config
-if ! systemctl is-active --quiet docker; then
-  systemctl start docker
-  log "Docker started"
+path = Path("/etc/docker/daemon.json")
+cfg = {}
+if path.exists():
+    try:
+        cfg = json.loads(path.read_text())
+    except Exception:
+        cfg = {}
+
+desired = dict(cfg)
+desired["data-root"]                = "${DOCKER_DATA_DIR}"
+desired["max-concurrent-downloads"] = ${DOCKER_MAX_CONCURRENT_DOWNLOADS}
+desired["log-driver"]               = "json-file"
+desired["log-opts"]                 = {"max-size": "50m", "max-file": "3"}
+# Pin Pulp registry IP as Docker's primary DNS so the daemon never relies on
+# systemd-resolved (127.0.0.53), which times out under registry pull load.
+desired["dns"] = ["${PULP_REGISTRY_IP}", "8.8.8.8", "8.8.4.4"]
+
+if cfg == desired:
+    print("unchanged")
+else:
+    path.write_text(json.dumps(desired, indent=2) + "\n")
+    print("changed")
+PY
+)
+if [ "$DOCKER_CHANGED" = "changed" ]; then
+  log "Docker daemon.json updated (data-root, dns, max-concurrent-downloads)"
+  if ! systemctl is-active --quiet docker; then
+    systemctl start docker
+    log "Docker started"
+  else
+    systemctl restart docker
+    log "Docker restarted with data-root=$DOCKER_DATA_DIR"
+  fi
+  # Wait briefly for Docker socket
+  for i in $(seq 1 10); do
+    docker info &>/dev/null && break
+    sleep 2
+  done
+  docker info --format '{{.DockerRootDir}}' 2>/dev/null && log "Docker root dir confirmed" || log "WARNING: docker info failed"
 else
-  systemctl restart docker
-  log "Docker restarted with data-root=$DOCKER_DATA_DIR"
+  log "Docker daemon.json unchanged — skipping restart"
+  systemctl is-active --quiet docker || { systemctl start docker; log "Docker started (was stopped)"; }
 fi
+pin_registry_host "$PULP_REGISTRY_HOST" "$PULP_REGISTRY_IP"
 
-# Wait briefly for Docker socket
-for i in $(seq 1 10); do
-  docker info &>/dev/null && break
-  sleep 2
-done
-docker info --format '{{.DockerRootDir}}' 2>/dev/null && log "Docker root dir confirmed" || log "WARNING: docker info failed"
+# ── Step 2b: Ensure nomad user is in the docker group ────────────────────────
+# raw_exec tasks run as the nomad user; without docker group membership
+# 'docker pull' fails with "permission denied" on /var/run/docker.sock.
+if ! id -nG nomad 2>/dev/null | grep -qw docker; then
+  usermod -aG docker nomad
+  log "Added nomad user to docker group — Nomad restart required to apply group"
+  NOMAD_RESTART_REQUIRED=true
+else
+  log "nomad user already in docker group"
+fi
 
 # ── Step 3: Create shared openstudio data dir on NFS ─────────────────────────
 mkdir -p "$NFS_OPENSTUDIO_DIR"
@@ -166,7 +217,15 @@ fi
 
 # ── Step 5: Enable host-path mounts for Nomad Docker tasks ───────────────────
 NOMAD_DOCKER_CONF="/etc/nomad.d/docker.hcl"
-cat > "$NOMAD_DOCKER_CONF" <<HCL
+DOCKER_HCL_DESIRED='plugin "docker" {
+  config {
+    volumes {
+      enabled = true
+    }
+  }
+}'
+if [ ! -f "$NOMAD_DOCKER_CONF" ] || ! grep -q "enabled = true" "$NOMAD_DOCKER_CONF" 2>/dev/null; then
+  cat > "$NOMAD_DOCKER_CONF" <<HCL
 plugin "docker" {
   config {
     volumes {
@@ -175,8 +234,11 @@ plugin "docker" {
   }
 }
 HCL
-log "Wrote Nomad Docker plugin config with volumes.enabled=true"
-NOMAD_RESTART_REQUIRED=true
+  log "Wrote Nomad Docker plugin config with volumes.enabled=true"
+  NOMAD_RESTART_REQUIRED=true
+else
+  log "Nomad Docker plugin config already present, skipping"
+fi
 
 # ── Step 6: Add Consul address to Nomad client config ────────────────────────
 CONSUL_CONF="/etc/nomad.d/consul.hcl"

@@ -44,6 +44,7 @@
 #                      - <JOB_NAME>-state-backup
 #                      - <JOB_NAME>-state-restore
 #                      - <JOB_NAME>-batch-verify
+#                      - <JOB_NAME>-queue-sweeper
 #                      - <JOB_NAME>-test
 #                      - <JOB_NAME>-nomad-autoscaler
 #                      - <JOB_NAME>-autoscaler (legacy name)
@@ -115,10 +116,19 @@ stop_required_job() {
   shift
   local stop_args=("$@")
 
+  if ! nomad job status -namespace "${NAMESPACE}" "${job_name}" >/dev/null 2>&1; then
+    echo "--> Skipping ${job_name} (not found in namespace '${NAMESPACE}')."
+    return 0
+  fi
+
   echo "--> Stopping ${job_name} ..."
   if ! nomad job stop -purge "${stop_args[@]}" -namespace "${NAMESPACE}" "${job_name}"; then
-    echo "ERROR: Failed to stop job '${job_name}'. Aborting." >&2
-    exit 1
+    if nomad job status -namespace "${NAMESPACE}" "${job_name}" >/dev/null 2>&1; then
+      echo "ERROR: Failed to stop job '${job_name}'. Aborting." >&2
+      exit 1
+    fi
+    echo "    ${job_name}: already absent after stop attempt."
+    return 0
   fi
   echo "    ${job_name}: all allocations dead."
 }
@@ -135,19 +145,32 @@ stop_optional_job() {
 
   echo "--> Stopping optional job ${job_name} ..."
   if ! nomad job stop -purge "${stop_args[@]}" -namespace "${NAMESPACE}" "${job_name}"; then
-    echo "ERROR: Failed to stop optional job '${job_name}'." >&2
-    exit 1
+    if nomad job status -namespace "${NAMESPACE}" "${job_name}" >/dev/null 2>&1; then
+      echo "ERROR: Failed to stop optional job '${job_name}'." >&2
+      exit 1
+    fi
+    echo "    ${job_name}: already absent after stop attempt."
+    return 0
   fi
   echo "    ${job_name}: all allocations dead."
 }
 
 echo "--> Stopping ${JOB_NAME}-worker ..."
 echo "    Note: this may take up to worker_kill_timeout seconds for in-flight simulations to drain."
-if ! nomad job stop -purge -namespace "${NAMESPACE}" "${JOB_NAME}-worker"; then
-  echo "ERROR: Failed to stop job '${JOB_NAME}-worker'. Aborting." >&2
-  exit 1
+if nomad job status -namespace "${NAMESPACE}" "${JOB_NAME}-worker" >/dev/null 2>&1; then
+  if ! nomad job stop -purge -namespace "${NAMESPACE}" "${JOB_NAME}-worker"; then
+    if nomad job status -namespace "${NAMESPACE}" "${JOB_NAME}-worker" >/dev/null 2>&1; then
+      echo "ERROR: Failed to stop job '${JOB_NAME}-worker'. Aborting." >&2
+      exit 1
+    fi
+    echo "    ${JOB_NAME}-worker: already absent after stop attempt."
+    echo ""
+  else
+    echo "    ${JOB_NAME}-worker: all allocations dead."
+  fi
+else
+  echo "    Skipping ${JOB_NAME}-worker (not found in namespace '${NAMESPACE}')."
 fi
-echo "    ${JOB_NAME}-worker: all allocations dead."
 
 echo ""
 stop_required_job "${JOB_NAME}-web"
@@ -162,7 +185,7 @@ echo ""
 stop_required_job "${JOB_NAME}-redis"
 
 echo ""
-stop_required_job "${JOB_NAME}-system-hooks" -global
+stop_optional_job "${JOB_NAME}-system-hooks" -global
 
 echo ""
 stop_optional_job "${JOB_NAME}-state-backup"
@@ -174,6 +197,9 @@ echo ""
 stop_optional_job "${JOB_NAME}-batch-verify"
 
 echo ""
+stop_optional_job "${JOB_NAME}-queue-sweeper"
+
+echo ""
 stop_optional_job "${JOB_NAME}-test"
 
 echo ""
@@ -181,6 +207,9 @@ stop_optional_job "${JOB_NAME}-nomad-autoscaler"
 
 echo ""
 stop_optional_job "${JOB_NAME}-autoscaler"
+
+echo ""
+stop_optional_job "${JOB_NAME}-prometheus"
 
 echo ""
 echo "==> All target jobs stopped successfully."

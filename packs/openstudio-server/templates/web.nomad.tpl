@@ -35,6 +35,13 @@ job "[[ var "job_name" . ]]-web" {
     count = [[ var "web_count" . ]]
 
     [[ template "constraints" (var "web_constraints" .) ]]
+    [[ if ne (var "web_rserve_colocation_node" .) "" ]]
+    constraint {
+      attribute = "${node.unique.name}"
+      operator  = "="
+      value     = "[[ var "web_rserve_colocation_node" . ]]"
+    }
+    [[ end ]]
 
     [[ if var "nfs_shared_volume_enabled" . ]]
     [[ if eq (var "nfs_volume_type" .) "csi" ]]
@@ -133,6 +140,16 @@ EOT
       env {
         MONGO_USER      = "[[ var "mongo_user" . ]]"
         QUEUES          = "analysis_wrappers"
+        [[ if gt (var "web_max_requests" .) 0 ]]
+        MAX_REQUESTS    = "[[ var "web_max_requests" . ]]"
+        [[ else ]]
+        MAX_REQUESTS    = "[[ printf "%.0f" (ceil (mulf (var "worker_max_replicas" .) (var "web_max_requests_multiplier" .))) ]]"
+        [[ end ]]
+        [[ if gt (var "web_max_pool" .) 0 ]]
+        MAX_POOL        = "[[ var "web_max_pool" . ]]"
+        [[ else ]]
+        MAX_POOL        = "[[ printf "%.0f" (ceil (divf (mulf (var "web_memory" .) 0.75) (var "web_passenger_memory_per_process" .))) ]]"
+        [[ end ]]
         OS_SERVER_NUMBER_OF_WORKERS = "[[ var "worker_process_count" . ]]"
         [[ if var "os_server_sampling_backend" . ]]
         OS_SERVER_SAMPLING_BACKEND = "[[ var "os_server_sampling_backend" . ]]"
@@ -147,9 +164,9 @@ EOT
         [[ end ]]
       }
 
-      # Consul template to resolve 'db' and 'queue' hostnames used by the
+      # Consul template to resolve 'db', 'queue', and 'rserve' hostnames used by the
       # OpenStudio Server startup scripts (which were written for Docker Compose
-      # where MongoDB is 'db:27017' and Redis is 'queue:6379').
+      # where MongoDB is 'db:27017', Redis is 'queue:6379', and Rserve is 'rserve:6311').
       # The generated script is executed via web_command/web_args overrides.
       template {
         destination   = "local/patch-hosts.sh"
@@ -164,12 +181,18 @@ echo "{{ .Address }} db" >> /etc/hosts
 {{ range service "openstudio-redis" -}}
 echo "{{ .Address }} queue" >> /etc/hosts
 {{ end -}}
+{{ range service "openstudio-rserve" -}}
+echo "{{ .Address }} rserve" >> /etc/hosts
+{{ end -}}
 EOT
       }
 
       config {
         image           = "[[ var "web_image" . ]]"
         ports           = ["http"]
+        ulimit {
+          nofile = "[[ var "docker_ulimit_nofile" . ]]"
+        }
         readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
         cap_drop        = [[ var "docker_cap_drop" . | toJson ]]
         [[ if var "web_extra_hosts" . ]]
@@ -277,31 +300,11 @@ EOH
   }
 
   group "web-background" {
-    count = [[ var "web_background_count" . ]]
-
-    [[ if var "web_background_autoscaling_enabled" . ]]
-    scaling {
-      enabled = true
-      min     = [[ var "web_background_min_replicas" . ]]
-      max     = [[ var "web_background_max_replicas" . ]]
-
-      policy {
-        cooldown            = "[[ var "autoscaler_cooldown" . ]]"
-        evaluation_interval = "30s"
-
-        [[ if var "web_background_autoscaling_cpu_enabled" . ]]
-        check "cpu-utilization" {
-          source = "nomad-apm"
-          query  = "avg_cpu"
-
-          strategy "target-value" {
-            target = [[ var "web_background_cpu_target_utilization" . ]]
-          }
-        }
-        [[ end ]]
-      }
-    }
-    [[ end ]]
+    # WARNING: web-background must remain a singleton allocation.
+    # Throughput tuning should be done with web_background_worker_count (COUNT),
+    # not by increasing group replicas.
+    count = 1
+    [[ template "constraints" (var "web_constraints" .) ]]
 
     [[ if var "nfs_shared_volume_enabled" . ]]
     [[ if eq (var "nfs_volume_type" .) "csi" ]]
@@ -468,11 +471,17 @@ echo "{{ .Address }} db" >> /etc/hosts
 {{ range service "openstudio-redis" -}}
 echo "{{ .Address }} queue" >> /etc/hosts
 {{ end -}}
+{{ range service "openstudio-rserve" -}}
+echo "{{ .Address }} rserve" >> /etc/hosts
+{{ end -}}
 EOT
       }
 
       config {
         image           = "[[ var "web_background_image" . ]]"
+        ulimit {
+          nofile = "[[ var "docker_ulimit_nofile" . ]]"
+        }
         readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
         cap_drop        = [[ var "docker_cap_drop" . | toJson ]]
         [[ if var "web_extra_hosts" . ]]
@@ -530,8 +539,9 @@ EOT
       }
 
       resources {
-        cpu    = [[ var "web_background_cpu" . ]]
-        memory = [[ var "web_background_memory" . ]]
+        cpu        = [[ var "web_background_cpu" . ]]
+        memory     = [[ var "web_background_memory" . ]]
+        [[ if gt (var "web_background_memory_max" .) 0 ]]memory_max = [[ var "web_background_memory_max" . ]][[ end ]]
       }
     }
 

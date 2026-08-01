@@ -13,8 +13,31 @@ job "[[ var "job_name" . ]]-rserve" {
   group "rserve" {
     count = 1
     [[ template "constraints" (var "rserve_constraints" .) ]]
+    [[ if ne (var "web_rserve_colocation_node" .) "" ]]
+    constraint {
+      attribute = "${node.unique.name}"
+      operator  = "="
+      value     = "[[ var "web_rserve_colocation_node" . ]]"
+    }
+    [[ end ]]
     [[ template "affinities" (var "rserve_affinities" .) ]]
     [[ template "spreads" (var "rserve_spreads" .) ]]
+    [[ if var "nfs_shared_volume_enabled" . ]]
+    [[ if eq (var "nfs_volume_type" .) "csi" ]]
+    volume "nfs-shared" {
+      type            = "csi"
+      source          = "[[ var "nfs_volume_source" . ]]"
+      access_mode     = "multi-node-multi-writer"
+      attachment_mode = "file-system"
+    }
+    [[ else ]]
+    volume "nfs-shared" {
+      type      = "host"
+      source    = "[[ var "nfs_volume_source" . ]]"
+      read_only = false
+    }
+    [[ end ]]
+    [[ end ]]
 
     network {
       port "rserve" {
@@ -26,6 +49,13 @@ job "[[ var "job_name" . ]]-rserve" {
     task "rserve" {
       driver = "docker"
       user   = "[[ var "docker_user" . ]]"
+      [[ if var "nfs_shared_volume_enabled" . ]]
+      volume_mount {
+        volume      = "nfs-shared"
+        destination = "[[ var "nfs_volume_mount_path" . ]]"
+        read_only   = false
+      }
+      [[ end ]]
 
       [[ if var "vault_enabled" . ]]
       [[ if var "vault_rserve_role" . ]]
@@ -64,6 +94,9 @@ job "[[ var "job_name" . ]]-rserve" {
       config {
         image           = "[[ var "rserve_image" . ]]"
         ports           = ["rserve"]
+        ulimit {
+          nofile = "[[ var "docker_ulimit_nofile" . ]]"
+        }
         [[ if ne (var "rserve_command" .) "" ]]
         command = "[[ var "rserve_command" . ]]"
         [[ end ]]

@@ -89,6 +89,9 @@ job "[[ var "job_name" . ]]-db" {
       config {
         image           = "[[ var "db_image" . ]]"
         ports           = ["db"]
+        ulimit {
+          nofile = "[[ var "db_docker_ulimit_nofile" . ]]"
+        }
         readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
         cap_drop        = [[ var "docker_cap_drop" . | toJson ]]
         # MongoDB needs /tmp for its UNIX socket even with a read-only rootfs.

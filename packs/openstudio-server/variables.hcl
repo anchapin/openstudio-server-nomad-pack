@@ -14,8 +14,8 @@ variable "app_version" {
 
 variable "worker_min_replicas" {
   type        = number
-  description = "Minimum number of worker replicas. Aligned with Helm chart worker-hpa.yaml minReplicas: 2."
-  default     = 2
+  description = "Minimum number of worker replicas when autoscaling is enabled. Set to 0 to allow scale-to-zero when the queue is empty. The Helm chart default of 2 is intentionally changed here to prevent idle worker accumulation."
+  default     = 0
 }
 
 variable "worker_max_replicas" {
@@ -139,6 +139,30 @@ variable "web_memory_max" {
   default     = 4096
 }
 
+variable "web_passenger_memory_per_process" {
+  type        = number
+  description = "Passenger memory budget (MB) per web process used to derive MAX_POOL when web_max_pool is unset. Formula: ceil((web_memory * 0.75) / web_passenger_memory_per_process). Mirrors Helm passenger_memory_per_process behavior."
+  default     = 250
+}
+
+variable "web_max_pool" {
+  type        = number
+  description = "Explicit Passenger MAX_POOL for the web task. Set to 0 to auto-calculate from web_memory and web_passenger_memory_per_process."
+  default     = 0
+}
+
+variable "web_max_requests_multiplier" {
+  type        = number
+  description = "Multiplier used to derive web MAX_REQUESTS from worker_max_replicas when web_max_requests is unset. Mirrors Helm behavior (maxReplicas * 1.05)."
+  default     = 1.05
+}
+
+variable "web_max_requests" {
+  type        = number
+  description = "Explicit MAX_REQUESTS for the web task. Set to 0 to auto-calculate as ceil(worker_max_replicas * web_max_requests_multiplier)."
+  default     = 0
+}
+
 variable "web_count" {
   type        = number
   description = "The number of web task group allocations. MUST remain 1 (the default). The OpenStudio Server web process writes uploaded analysis artefacts to local container filesystem without a distributed file-locking scheme. When nfs_shared_volume_enabled = true, NFS provides a shared filesystem but does NOT guarantee POSIX file-locking across multiple simultaneous web writers — each allocation still has its own isolated view of open file handles. Setting web_count > 1 therefore causes split-brain: requests routed to replica B cannot find files written by replica A. This mirrors the Kubernetes Helm chart constraint (web-hpa.yaml maxReplicas: 1). To safely run web_count > 1 you must first implement either: (a) a distributed lock manager such as Redlock via Redis wrapping every filesystem operation, or (b) stateless file handling by moving all persistent artefacts to object storage (e.g. S3/MinIO). See docs/storage.md §'Web Replica Constraint' for details."
@@ -159,8 +183,8 @@ variable "web_container_port" {
 
 variable "web_redis_url" {
   type        = string
-  description = "Override REDIS_URL env var in the web and worker containers. Required when the default URI scheme parsing ('queue:6379' without '//') resolves incorrectly — e.g. on macOS dev where Redis is reached via host.docker.internal. Set to 'redis://queue:6379' in minimal-dev deployments. Leave empty in production when Vault injects REDIS_URL directly."
-  default     = ""
+  description = "REDIS_URL env var injected into web and worker containers. Defaults to 'redis://queue:6379' which resolves via /etc/hosts patch to the Consul-registered Redis address. Set to empty string when Vault injects REDIS_URL directly. Override with 'redis://host.docker.internal:6379' on macOS dev."
+  default     = "redis://queue:6379"
 }
 
 variable "os_server_sampling_backend" {
@@ -235,10 +259,28 @@ variable "web_background_memory" {
   default     = 512
 }
 
+variable "web_background_memory_max" {
+  type        = number
+  description = "Memory hard limit (MB) for the OpenStudio web-background task (Nomad memory_max). Must be greater than web_background_memory for burst capacity. Set to 0 to disable."
+  default     = 0
+}
+
 variable "worker_image" {
   type        = string
   description = "The image name and tag for the OpenStudio Server worker container."
   default     = "nrel/openstudio-server:179-flock"
+}
+
+variable "worker_force_pull" {
+  type        = bool
+  description = "When true, force Docker to pull worker_image on every worker allocation start. Keep false (default) in OpenStack to use pre-pulled/cached images and avoid registry pull storms."
+  default     = false
+}
+
+variable "worker_runtime_image" {
+  type        = string
+  description = "Optional host-local image alias used by worker allocations at runtime instead of worker_image. When set, system-hooks uses raw_exec to run 'docker pull worker_image && docker tag worker_image worker_runtime_image' on every eligible node. Worker allocations then reference this short unqualified name so Docker never contacts the upstream registry at alloc start — eliminating TLS handshake timeouts (e.g. Pulp). Requires raw_exec driver enabled on worker nodes. Leave empty to use worker_image directly."
+  default     = ""
 }
 
 variable "worker_command" {
@@ -263,6 +305,36 @@ variable "worker_count" {
   type        = number
   description = "The number of worker task group allocations."
   default     = 1
+}
+
+variable "worker_instance_type" {
+  type        = string
+  description = "Optional worker node instance type/flavor selector (matches attr.platform.aws.instance-type). Leave empty to disable."
+  default     = ""
+}
+
+variable "worker_constraints" {
+  type        = any
+  description = "Placement constraints for the worker group."
+  default     = []
+}
+
+variable "worker_affinities" {
+  type        = any
+  description = "Placement affinities for the worker group."
+  default     = []
+}
+
+variable "worker_spreads" {
+  type        = any
+  description = "Spread rules for the worker group."
+  default     = []
+}
+
+variable "worker_excluded_node_ids" {
+  type        = list(string)
+  description = "Node IDs that workers must not run on. Useful for protecting stateful service nodes (for example CSI topology-pinned MongoDB/Redis nodes) from worker placement."
+  default     = []
 }
 
 variable "worker_update_max_parallel" {
@@ -357,7 +429,7 @@ variable "worker_autoscaling_cpu_enabled" {
 
 variable "worker_autoscaling_queue_enabled" {
   type        = bool
-  description = "Enable Prometheus-based queue-depth autoscaling checks for workers. Requires a running Prometheus instance at autoscaler_prometheus_address scraping queue metrics. Defaults to false — safe to omit if Prometheus is not deployed."
+  description = "Enable Prometheus-based queue-depth autoscaling checks for workers. When true, workers scale based on openstudio_worker_queue_depth metrics scraped from Prometheus. Requires a running Prometheus instance at autoscaler_prometheus_address. Set to false only when Prometheus is not deployed and CPU-only scaling (worker_autoscaling_cpu_enabled) is acceptable. NOTE: CPU-only scaling does NOT scale workers to zero when the queue is empty — enable this flag for queue-driven scale-to-zero behavior."
   default     = false
 }
 
@@ -388,19 +460,85 @@ variable "autoscaler_nomad_address" {
 variable "autoscaler_prometheus_address" {
   type        = string
   description = "Address of the Prometheus server used by the Nomad Autoscaler APM plugin to evaluate scaling checks."
-  default     = "http://prometheus:9090"
+  default     = "http://openstudio-prometheus.service.consul:9090"
 }
 
 variable "autoscaler_cooldown" {
   type        = string
-  description = "Cooldown duration between worker autoscaling actions (e.g. '60m', '30m'). Defaults to 60m to match the Helm chart stabilizationWindowSeconds of 3600."
-  default     = "60m"
+  description = "Cooldown duration between worker autoscaling actions (e.g. '5m', '10m', '60m'). Reduced from the Helm chart stabilizationWindowSeconds of 3600 (60m) to 10m so idle workers are reclaimed faster after the queue drains. Increase if you see oscillation (rapid scale-up/scale-down cycles)."
+  default     = "10m"
+}
+
+variable "autoscaler_constraints" {
+  type        = any
+  description = "Placement constraints for the optional Nomad Autoscaler group."
+  default     = []
+}
+
+variable "autoscaler_affinities" {
+  type        = any
+  description = "Placement affinities for the optional Nomad Autoscaler group."
+  default     = []
+}
+
+variable "autoscaler_spreads" {
+  type        = any
+  description = "Spread rules for the optional Nomad Autoscaler group."
+  default     = []
+}
+
+variable "prometheus_enabled" {
+  type        = bool
+  description = "Render an in-pack Prometheus job for autoscaler queue-depth metrics."
+  default     = false
+}
+
+variable "prometheus_image" {
+  type        = string
+  description = "Prometheus image used by the optional in-pack Prometheus job."
+  default     = "prom/prometheus:v2.53.2"
+}
+
+variable "prometheus_static_port" {
+  type        = number
+  description = "Static host port for the optional in-pack Prometheus HTTP endpoint."
+  default     = 9090
+}
+
+variable "prometheus_scrape_interval" {
+  type        = string
+  description = "Prometheus global scrape interval for the optional in-pack Prometheus job."
+  default     = "15s"
+}
+
+variable "prometheus_constraints" {
+  type        = any
+  description = "Placement constraints for the optional Prometheus group."
+  default     = []
+}
+
+variable "prometheus_affinities" {
+  type        = any
+  description = "Placement affinities for the optional Prometheus group."
+  default     = []
+}
+
+variable "prometheus_spreads" {
+  type        = any
+  description = "Spread rules for the optional Prometheus group."
+  default     = []
+}
+
+variable "redis_exporter_image" {
+  type        = string
+  description = "Redis exporter image used by the optional in-pack Prometheus job."
+  default     = "oliver006/redis_exporter:v1.62.0"
 }
 
 variable "worker_queue_requeued_query" {
   type        = string
-  description = "Prometheus query for requeued backlog depth."
-  default     = "sum(openstudio_worker_queue_depth{queue=\"requeued\"})"
+  description = "Prometheus query for requeued backlog depth. The +1 keeps the series non-zero when the queue is empty so the autoscaler doesn't treat a missing series as an error."
+  default     = "sum(redis_key_size{key=\"resque:queue:requeued\"}) + 1"
 }
 
 variable "worker_queue_requeued_target" {
@@ -411,14 +549,14 @@ variable "worker_queue_requeued_target" {
 
 variable "worker_queue_simulations_query" {
   type        = string
-  description = "Prometheus query for simulations backlog depth."
-  default     = "sum(openstudio_worker_queue_depth{queue=\"simulations\"})"
+  description = "Prometheus query for simulations backlog depth. or vector(0) ensures the series always resolves even when the queue key doesn't exist yet in Redis."
+  default     = "(sum(redis_key_size{key=\"resque:queue:simulations\"}) or vector(0))"
 }
 
 variable "worker_queue_simulations_target" {
   type        = number
   description = "Target queue depth for simulation jobs per worker allocation."
-  default     = 5
+  default     = 2
 }
 
 variable "web_background_image" {
@@ -447,7 +585,7 @@ variable "web_background_args" {
 
 variable "web_background_count" {
   type        = number
-  description = "The number of web-background tasks to run."
+  description = "The number of web-background task allocations. Must remain 1. Horizontal scale-out for this group is intentionally disabled; increase web_background_worker_count (COUNT) instead."
   default     = 1
 }
 
@@ -459,7 +597,7 @@ variable "web_background_worker_count" {
 
 variable "web_background_autoscaling_enabled" {
   type        = bool
-  description = "Enable Nomad Autoscaler scaling for the web-background task group."
+  description = "Deprecated for this pack profile. Keep false: web-background is pinned to a single allocation by design."
   default     = false
 }
 
@@ -535,6 +673,12 @@ variable "db_volume_source" {
   default     = "openstudio-mongodb"
 }
 
+variable "db_csi_plugin_id" {
+  type        = string
+  description = "Optional CSI plugin ID used by OpenStack helper scripts when creating the MongoDB volume. No effect unless db_storage_type = \"csi\"."
+  default     = ""
+}
+
 # Intentionally uses redis:6.2-alpine (newer, smaller) instead of the Helm chart's
 # redis:6.0.9. Operators should align the Redis major.minor version with their
 # target OpenStudio Server release requirements.
@@ -556,6 +700,48 @@ variable "redis_memory" {
   default     = 1024
 }
 
+variable "redis_config_maxclients" {
+  type        = number
+  description = "Redis maxclients limit. Increase for large worker/background fleets to avoid ERR max number of clients reached."
+  default     = 50000
+}
+
+variable "redis_config_tcp_backlog" {
+  type        = number
+  description = "Redis tcp-backlog value controlling queued inbound TCP connections."
+  default     = 511
+}
+
+variable "redis_config_timeout_seconds" {
+  type        = number
+  description = "Redis client idle timeout in seconds. Set to 0 to disable idle disconnects."
+  default     = 0
+}
+
+variable "redis_config_maxmemory" {
+  type        = string
+  description = "Redis maxmemory in bytes. Keep below the Redis container memory limit to leave headroom for forks and allocator overhead."
+  default     = "22000000000"
+}
+
+variable "redis_config_maxmemory_policy" {
+  type        = string
+  description = "Redis maxmemory-policy. Use noeviction for queue durability so writes fail loudly instead of silently evicting jobs."
+  default     = "noeviction"
+}
+
+variable "redis_config_appendfsync" {
+  type        = string
+  description = "Redis appendfsync policy (for example everysec, always, no)."
+  default     = "everysec"
+}
+
+variable "redis_config_save" {
+  type        = string
+  description = "Redis save schedule passed to --save. Set to an empty string to disable automatic RDB snapshots."
+  default     = ""
+}
+
 variable "redis_storage_type" {
   type        = string
   description = "Redis storage type: host_volume, csi, or ephemeral. Use ephemeral to disable persistent volume wiring."
@@ -566,6 +752,12 @@ variable "redis_volume_source" {
   type        = string
   description = "Nomad volume source name for Redis persistent storage (host_volume name or CSI volume ID)."
   default     = "openstudio-redis"
+}
+
+variable "redis_csi_plugin_id" {
+  type        = string
+  description = "Optional CSI plugin ID used by OpenStack helper scripts when creating the Redis volume. No effect unless redis_storage_type = \"csi\"."
+  default     = ""
 }
 
 variable "redis_health_check_interval" {
@@ -602,6 +794,12 @@ variable "nfs_volume_mount_path" {
   type        = string
   description = "Mount path inside web and worker tasks where the NFS shared volume is attached."
   default     = "/mnt/openstudio"
+}
+
+variable "web_rserve_colocation_node" {
+  type        = string
+  description = "Optional hard node name pin applied to both the web and rserve task groups. Set to a Nomad node name (for example, \"nomad-client-172\") to force web and rserve onto the same host when shared local paths must be identical. Leave empty to disable explicit co-location pinning."
+  default     = ""
 }
 
 variable "dev_shared_data_path" {
@@ -727,6 +925,12 @@ variable "redis_constraints" {
   default     = []
 }
 
+variable "redis_node_class" {
+  type        = string
+  description = "Optional Nomad node class for Redis. When set, applies a hard node.class constraint for dedicated queue nodes."
+  default     = ""
+}
+
 variable "redis_affinities" {
   type        = any
   description = "Placement affinities for the redis group."
@@ -837,6 +1041,12 @@ variable "docker_user" {
   default     = "1000:1000"
 }
 
+variable "docker_ulimit_nofile" {
+  type        = string
+  description = "Default Docker nofile ulimit (soft:hard) applied to web, web-background, worker, rserve, and autoscaler tasks."
+  default     = "65535:65535"
+}
+
 variable "db_static_port" {
   type        = number
   description = <<-EOT
@@ -886,10 +1096,22 @@ variable "db_docker_user" {
   default     = "999:999"
 }
 
+variable "db_docker_ulimit_nofile" {
+  type        = string
+  description = "Docker nofile ulimit (soft:hard) for MongoDB. Increase this for high worker concurrency to prevent file descriptor exhaustion."
+  default     = "262144:262144"
+}
+
 variable "redis_docker_user" {
   type        = string
   description = "User to run the Redis container as. Redis official images expect UID/GID 999."
   default     = "999:999"
+}
+
+variable "redis_docker_ulimit_nofile" {
+  type        = string
+  description = "Docker nofile ulimit (soft:hard) for Redis. Keep this high when queue fan-out is aggressive."
+  default     = "131072:131072"
 }
 
 variable "docker_readonly_rootfs" {
@@ -971,6 +1193,43 @@ variable "verification_targets" {
     "redis=openstudio-redis.service.consul:6379",
     "rserve=openstudio-rserve.service.consul:6311",
   ]
+}
+
+# Queue sweeper — proactive stale Redis queuing-lock recovery
+variable "enable_queue_sweeper" {
+  type        = bool
+  description = "Enable periodic batch job that automatically clears stale resque:analysis:*:queuing locks from Redis. A lock is stale if it has no TTL and has been idle for longer than queue_sweeper_max_lock_age_seconds."
+  default     = false
+}
+
+variable "queue_sweeper_cron" {
+  type        = string
+  description = "Cron schedule for the queue-sweeper periodic job (UTC). Runs every 2 minutes by default to recover stale locks quickly."
+  default     = "*/2 * * * *"
+}
+
+variable "queue_sweeper_max_lock_age_seconds" {
+  type        = number
+  description = "Minimum idle seconds (OBJECT IDLETIME) before a TTL-less queuing lock is considered stale and eligible for deletion. Default 120s (2 min) — shorter than a typical analysis enqueue cycle while long enough to avoid racing an active enqueue."
+  default     = 120
+}
+
+variable "queue_sweeper_image" {
+  type        = string
+  description = "Docker image used for the queue-sweeper task. Must include redis-cli."
+  default     = "redis:6.2-alpine"
+}
+
+variable "queue_sweeper_cpu" {
+  type        = number
+  description = "CPU MHz reserved for the queue-sweeper task."
+  default     = 50
+}
+
+variable "queue_sweeper_memory" {
+  type        = number
+  description = "Memory (MiB) reserved for the queue-sweeper task."
+  default     = 64
 }
 
 # Vault KV secrets integration variables (vault_integration_enabled mechanism)
