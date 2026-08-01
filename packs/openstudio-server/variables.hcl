@@ -78,6 +78,30 @@ variable "traefik_api_insecure" {
   default     = false
 }
 
+variable "traefik_request_timeout" {
+  type        = string
+  description = "Traefik forwarding (response) timeout for the web service. Controls how long Traefik waits for the backend to send a response. Increase for long-running analysis submissions. Only applies when deploy_traefik = true."
+  default     = "300s"
+}
+
+variable "traefik_max_request_body_size" {
+  type        = string
+  description = "Maximum request body size allowed by the Traefik buffering middleware on the web service. Set to 0 to disable the limit. Supports Traefik size notation (e.g. '500MB', '1GB'). Only applies when deploy_traefik = true."
+  default     = "500MB"
+}
+
+variable "traefik_read_timeout" {
+  type        = string
+  description = "Traefik entrypoint read timeout (time to read the full request from the client). Only applies when deploy_traefik = true."
+  default     = "300s"
+}
+
+variable "traefik_write_timeout" {
+  type        = string
+  description = "Traefik entrypoint write timeout (time to write the full response to the client). Only applies when deploy_traefik = true."
+  default     = "300s"
+}
+
 variable "nomad_namespace" {
   type        = string
   description = "The Nomad namespace in which all pack jobs are registered. Use 'default' for the built-in namespace."
