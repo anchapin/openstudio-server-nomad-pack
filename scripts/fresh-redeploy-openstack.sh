@@ -104,6 +104,7 @@ nfs_volume_source="$(_extract_var nfs_volume_source openstudio-nfs)"
 nfs_volume_mount_path="$(_extract_var nfs_volume_mount_path /mnt/openstudio)"
 enable_image_prepull="$(_extract_var enable_image_prepull false)"
 worker_instance_type="$(_extract_var worker_instance_type "")"
+worker_runtime_image="$(_extract_var worker_runtime_image "")"
 worker_count="$(_extract_var worker_count 1)"
 worker_max_replicas="$(_extract_var worker_max_replicas 10)"
 autoscaler_cooldown="$(_extract_var autoscaler_cooldown 60m)"
@@ -266,6 +267,15 @@ delete_csi_volume_if_present() {
     for _ in $(seq 1 20); do
       if nomad volume delete "${vol}" >/dev/null 2>&1; then
         echo "    deleted ${vol}"
+        # Wait for the CSI backend to finish its cleanup before returning.
+        # Without this, an immediate create races the backend and gets AlreadyExists.
+        for _ in $(seq 1 15); do
+          if ! nomad volume status "${vol}" >/dev/null 2>&1; then
+            return 0
+          fi
+          sleep 2
+        done
+        echo "  - warning: volume '${vol}' still visible in Nomad after delete; proceeding anyway"
         return 0
       fi
       sleep 2
@@ -301,8 +311,20 @@ capability {
   attachment_mode = "file-system"
 }
 EOF
-    nomad volume create "${spec}" >/dev/null
+    local create_out create_rc
+    create_out="$(nomad volume create "${spec}" 2>&1)" && create_rc=0 || create_rc=$?
     rm -f "${spec}"
+
+    if [[ "${create_rc}" -ne 0 ]]; then
+      # The CSI backend may still be finishing its previous delete. Retry on AlreadyExists.
+      if echo "${create_out}" | grep -qi "alreadyexists\|already exists"; then
+        echo "  - CSI volume '${vol}' still exists in backend (attempt ${attempt}/${CSI_TOPOLOGY_RECREATE_MAX_ATTEMPTS}); waiting for delete to propagate..."
+        sleep 5
+        continue
+      fi
+      echo "✗ Failed to create CSI volume '${vol}': ${create_out}" >&2
+      return 1
+    fi
 
     if [[ -z "${desired_role}" ]]; then
       echo "  - created CSI volume: ${vol} (plugin=${plugin_id})"
@@ -335,6 +357,13 @@ print(((d.get("Meta") or {}).get("node_role") or "").strip())
 
     echo "  - CSI volume ${vol} pinned to node ${topo_node} (node_role=${topo_role:-unknown}), expected node_role=${desired_role}; recreating (attempt ${attempt}/${CSI_TOPOLOGY_RECREATE_MAX_ATTEMPTS})"
     nomad volume delete "${vol}" >/dev/null 2>&1 || true
+    # Wait for the CSI backend to finish deleting before re-creating
+    for _ in $(seq 1 15); do
+      if ! nomad volume status "${vol}" >/dev/null 2>&1; then
+        break
+      fi
+      sleep 2
+    done
     sleep 2
   done
 
@@ -534,10 +563,13 @@ run_system_hooks_phase() {
 
   local target_nodes
   target_nodes="$(
-    NOMAD_ADDR="${NOMAD_ADDR}" WORKER_INSTANCE_TYPE="${worker_instance_type}" python3 - <<'PY'
+    NOMAD_ADDR="${NOMAD_ADDR}" WORKER_INSTANCE_TYPE="${worker_instance_type}" WORKER_RUNTIME_IMAGE="${worker_runtime_image}" python3 - <<'PY'
 import json, os, urllib.request
 addr = os.environ["NOMAD_ADDR"].rstrip("/")
 instance_type = os.environ.get("WORKER_INSTANCE_TYPE", "").strip()
+# When worker_runtime_image is set, pull-worker-image uses raw_exec driver.
+# Nomad implicitly filters out nodes without driver.raw_exec=1, so match that.
+require_raw_exec = bool(os.environ.get("WORKER_RUNTIME_IMAGE", "").strip())
 
 with urllib.request.urlopen(f"{addr}/v1/nodes", timeout=20) as r:
     nodes = json.load(r)
@@ -558,6 +590,8 @@ for n in nodes:
     if attrs.get("driver.docker") != "1":
         continue
     if instance_type and attrs.get("platform.aws.instance-type") != instance_type:
+        continue
+    if require_raw_exec and attrs.get("driver.raw_exec") != "1":
         continue
     targets.append(nid)
 

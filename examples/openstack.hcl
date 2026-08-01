@@ -80,11 +80,12 @@ web_passenger_memory_per_process = 250
 web_max_pool                     = 154
 web_max_requests_multiplier      = 1.05
 web_max_requests                 = 10500
-web_background_cpu    = 12000
-web_background_memory = 12288
-web_background_count  = 1
-web_background_worker_count = 240
-web_background_queues = "analyses,background"
+web_background_cpu        = 12000  # matches Helm values.yaml (12 cores)
+web_background_memory     = 12288  # matches Helm values.yaml (12Gi request)
+web_background_memory_max = 24576  # matches Helm values.yaml (24Gi limit)
+web_background_count      = 1      # matches Helm values.yaml (1 replica)
+web_background_worker_count = 42   # matches Helm values.yaml (COUNT=42)
+web_background_queues = "background,analyses"  # matches Helm hardcoded QUEUES order
 db_cpu                = 4000
 db_memory             = 22528
 db_memory_max         = 45056
@@ -124,6 +125,12 @@ worker_queue_simulations_query = "sum(redis_key_size{key=\"resque:queue:simulati
 # Keep the requeued check neutral when that queue is empty so it doesn't
 # suppress scale-out driven by the simulations queue.
 worker_queue_requeued_query    = "sum(redis_key_size{key=\"resque:queue:requeued\"}) + 1"
+# Scale out earlier: tolerate at most 2 queued simulation jobs per worker before
+# adding more allocations (default is 5 — too permissive for burst workloads).
+worker_queue_simulations_target = 2
+worker_queue_requeued_target    = 1
+# Process simulations before retries — fresh jobs take priority over requeued ones.
+worker_queues = "simulations,requeued"
 # Prometheus endpoint used by queue-depth checks in worker.nomad.tpl.
 # Autoscaler is host-networked and should co-locate with Prometheus on web nodes.
 autoscaler_prometheus_address = "http://127.0.0.1:9090"

@@ -48,9 +48,10 @@
 | `web_update_auto_revert` | `bool` | `true` | Automatically revert a web deployment if the update fails. |
 | `web_background_cpu` | `number` | `250` | CPU shares allocated to the OpenStudio web-background task. |
 | `web_background_memory` | `number` | `512` | Memory (MB) allocated to the OpenStudio web-background task. |
+| `web_background_memory_max` | `number` | `0` | Memory hard limit (MB) for the OpenStudio web-background task (Nomad memory_max). Must be greater than web_background_memory for burst capacity. Set to 0 to disable. |
 | `worker_image` | `string` | `"nrel/openstudio-server:179-flock"` | The image name and tag for the OpenStudio Server worker container. |
 | `worker_force_pull` | `bool` | `false` | When true, force Docker to pull worker_image on every worker allocation start. Keep false (default) in OpenStack to use pre-pulled/cached images and avoid registry pull storms. |
-| `worker_runtime_image` | `string` | `""` | Optional local image reference used by worker allocations at runtime (for example a host-local cache alias). When empty, worker_image is used. If set, ensure system-hooks pre-pull tags this image on every eligible worker node. |
+| `worker_runtime_image` | `string` | `""` | Optional host-local image alias used by worker allocations at runtime instead of worker_image. When set, system-hooks uses raw_exec to run 'docker pull worker_image && docker tag worker_image worker_runtime_image' on every eligible node. Worker allocations then reference this short unqualified name so Docker never contacts the upstream registry at alloc start — eliminating TLS handshake timeouts (e.g. Pulp). Requires raw_exec driver enabled on worker nodes. Leave empty to use worker_image directly. |
 | `worker_command` | `string` | `"/usr/local/bin/start-workers"` | Command used to start the worker task. |
 | `worker_args` | `list(string)` | `[]` | Optional args passed to worker_command. |
 | `worker_health_check_command` | `string` | `"pgrep -f resque > /dev/null"` | Shell command used by the worker service health check. |

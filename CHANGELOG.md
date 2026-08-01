@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added `worker_runtime_image` support to `worker.nomad.tpl`: when set, worker allocations use this short host-local alias instead of `worker_image`, preventing Docker from contacting the upstream registry at alloc start and eliminating Pulp TLS handshake timeouts on worker allocation retries.
+- Updated `system-hooks.nomad.tpl` `pull-worker-image` task: when `worker_runtime_image` is set, switches from `docker` driver to `raw_exec` and runs `docker pull <worker_image> && docker tag <worker_image> <worker_runtime_image>` atomically, ensuring the local alias is always available before worker allocations start.
+- Set `worker_runtime_image = "openstudio-worker:local"` in `examples/openstack.hcl` to activate the local alias strategy for the Pulp registry environment.
 - Added `mongo_user` variable (`MONGO_USER` env var) injected into web, web-background, and worker containers to align with the Helm chart, which sets `MONGO_USER` on all workloads for MongoDB authenticated connections.
 - Added `web_background_worker_count` variable (default `6`) injected as the `COUNT` env var into the web-background task to control the number of Resque child worker processes per allocation, matching the Helm chart's configurable worker count.
 - Added `init-shared-storage-perms` prestart lifecycle task to the `web-background` group: runs `alpine:3.20` as root (with `CHOWN`+`FOWNER` capabilities) to `mkdir -p` and `chmod 2777` the analysis directory tree on the shared NFS volume before any workers start, mirroring the Helm chart's `init-fix-shared-storage-perms` init container.

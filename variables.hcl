@@ -259,6 +259,12 @@ variable "web_background_memory" {
   default     = 512
 }
 
+variable "web_background_memory_max" {
+  type        = number
+  description = "Memory hard limit (MB) for the OpenStudio web-background task (Nomad memory_max). Must be greater than web_background_memory for burst capacity. Set to 0 to disable."
+  default     = 0
+}
+
 variable "worker_image" {
   type        = string
   description = "The image name and tag for the OpenStudio Server worker container."
@@ -273,7 +279,7 @@ variable "worker_force_pull" {
 
 variable "worker_runtime_image" {
   type        = string
-  description = "Optional local image reference used by worker allocations at runtime (for example a host-local cache alias). When empty, worker_image is used. If set, ensure system-hooks pre-pull tags this image on every eligible worker node."
+  description = "Optional host-local image alias used by worker allocations at runtime instead of worker_image. When set, system-hooks uses raw_exec to run 'docker pull worker_image && docker tag worker_image worker_runtime_image' on every eligible node. Worker allocations then reference this short unqualified name so Docker never contacts the upstream registry at alloc start — eliminating TLS handshake timeouts (e.g. Pulp). Requires raw_exec driver enabled on worker nodes. Leave empty to use worker_image directly."
   default     = ""
 }
 

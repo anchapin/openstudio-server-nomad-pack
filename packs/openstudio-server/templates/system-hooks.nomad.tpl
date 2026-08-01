@@ -20,6 +20,16 @@ job "[[ var "job_name" . ]]-system-hooks" {
       value     = "[[ var "worker_instance_type" . ]]"
     }
     [[ end ]]
+    [[ if var "worker_runtime_image" . ]]
+    # pull-worker-image uses raw_exec to pull+tag atomically; add an explicit
+    # constraint so Nomad's implicit driver filter is visible in the job spec
+    # and the pre-pull target_nodes count stays in sync with scheduler reality.
+    constraint {
+      attribute = "${attr.driver.raw_exec}"
+      operator  = "="
+      value     = "1"
+    }
+    [[ end ]]
 
     restart {
       attempts = 3
@@ -32,6 +42,21 @@ job "[[ var "job_name" . ]]-system-hooks" {
         sidecar = false
       }
 
+      [[ if var "worker_runtime_image" . ]]
+      # When worker_runtime_image is set, use raw_exec so we can both pull the
+      # image from the registry and tag it as the host-local alias in one atomic
+      # step. This prevents worker allocations from ever contacting the upstream
+      # registry at runtime (avoids Pulp TLS handshake timeouts on every alloc start).
+      # Requires raw_exec driver to be enabled on worker nodes (see bootstrap-179d-node.sh).
+      driver = "raw_exec"
+
+      kill_timeout = "[[ var "prepull_kill_timeout" . ]]"
+
+      config {
+        command = "/bin/sh"
+        args    = ["-c", "docker pull [[ var "worker_image" . ]] && docker tag [[ var "worker_image" . ]] [[ var "worker_runtime_image" . ]] && echo 'worker image pulled and tagged as [[ var "worker_runtime_image" . ]]'"]
+      }
+      [[ else ]]
       driver = "docker"
 
       kill_timeout = "[[ var "prepull_kill_timeout" . ]]"
@@ -50,6 +75,7 @@ job "[[ var "job_name" . ]]-system-hooks" {
           }
         }
       }
+      [[ end ]]
 
       resources {
         cpu    = 100
@@ -59,17 +85,21 @@ job "[[ var "job_name" . ]]-system-hooks" {
 
     # Long-running sentinel task that keeps the allocation alive after all
     # prestart tasks complete, so the node retains the pre-pulled image layers.
-    # Uses busybox (pre-pulled for wait-for-deps) — no registry access needed.
+    # Uses the worker image (worker_runtime_image if set, else worker_image) so
+    # Nomad's Docker image GC tracks this alloc as holding a reference to the
+    # worker image. Without this, GC removes the image when worker allocs stop
+    # (e.g. during a redeployment), causing the next set of worker allocs to fail
+    # with "pull access denied" on nodes where the runtime alias was GC'd.
     task "image-cache-ready" {
       driver = "docker"
 
       kill_timeout = "[[ var "prepull_kill_timeout" . ]]"
 
       config {
-        image      = "busybox:1.36"
+        image      = "[[ if var "worker_runtime_image" . ]][[ var "worker_runtime_image" . ]][[ else ]][[ var "worker_image" . ]][[ end ]]"
         force_pull = false
         command    = "sleep"
-        args       = ["infinity"]
+        args       = ["999999999"]
 
         logging {
           type = "[[ var "log_driver_type" . ]]"
@@ -246,9 +276,9 @@ job "[[ var "job_name" . ]]-system-hooks" {
       kill_timeout = "[[ var "prepull_kill_timeout" . ]]"
 
       config {
-        image   = "alpine:3.20"
+        image   = "[[ var "verification_image" . ]]"
         command = "sh"
-        args    = ["-c", "sleep infinity"]
+        args    = ["-c", "sleep 999999999"]
         logging {
           type = "[[ var "log_driver_type" . ]]"
           config {

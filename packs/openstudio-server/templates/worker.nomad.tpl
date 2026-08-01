@@ -176,7 +176,7 @@ EOT
       [[ end ]]
 
       config {
-        image           = "[[ var "worker_image" . ]]"
+        image           = "[[ if var "worker_runtime_image" . ]][[ var "worker_runtime_image" . ]][[ else ]][[ var "worker_image" . ]][[ end ]]"
         force_pull      = [[ var "worker_force_pull" . ]]
         command         = "[[ var "worker_command" . ]]"
         ulimit {

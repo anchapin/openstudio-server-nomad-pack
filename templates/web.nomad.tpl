@@ -539,8 +539,9 @@ EOT
       }
 
       resources {
-        cpu    = [[ var "web_background_cpu" . ]]
-        memory = [[ var "web_background_memory" . ]]
+        cpu        = [[ var "web_background_cpu" . ]]
+        memory     = [[ var "web_background_memory" . ]]
+        [[ if gt (var "web_background_memory_max" .) 0 ]]memory_max = [[ var "web_background_memory_max" . ]][[ end ]]
       }
     }
 

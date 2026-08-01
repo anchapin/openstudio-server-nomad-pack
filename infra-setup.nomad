@@ -39,8 +39,8 @@ set -e
 
 CONSUL_SERVER_IP="192.168.100.87"  # nomad-server nomad-net IP
 LOCAL_DOCKER_DIR="/var/lib/docker-local"
-NFS_OPENSTUDIO_DIR="/nfs/opensstudio/batch/openstudio"
-NFS_DOCKER_TGZ="/nfs/opensstudio/batch/docker.tgz"
+NFS_OPENSTUDIO_DIR="/nfs/openstudio/batch/openstudio"
+NFS_DOCKER_TGZ="/nfs/openstudio/batch/docker.tgz"
 DOCKER_MAX_CONCURRENT_DOWNLOADS="2"
 PULP_REGISTRY_HOST="pulp-dev.hpc.nlr.gov"
 PULP_REGISTRY_IP="10.60.127.127"
@@ -159,6 +159,17 @@ else
   systemctl is-active --quiet docker || { systemctl start docker; log "Docker started (was stopped)"; }
 fi
 pin_registry_host "$PULP_REGISTRY_HOST" "$PULP_REGISTRY_IP"
+
+# ── Step 2b: Ensure nomad user is in the docker group ────────────────────────
+# raw_exec tasks run as the nomad user; without docker group membership
+# 'docker pull' fails with "permission denied" on /var/run/docker.sock.
+if ! id -nG nomad 2>/dev/null | grep -qw docker; then
+  usermod -aG docker nomad
+  log "Added nomad user to docker group — Nomad restart required to apply group"
+  NOMAD_RESTART_REQUIRED=true
+else
+  log "nomad user already in docker group"
+fi
 
 # ── Step 3: Create shared openstudio data dir on NFS ─────────────────────────
 mkdir -p "$NFS_OPENSTUDIO_DIR"

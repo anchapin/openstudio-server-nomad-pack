@@ -4,7 +4,7 @@ set -euo pipefail
 NOMAD_ADDR="${NOMAD_ADDR:-http://127.0.0.1:4646}"
 NOMAD_NAMESPACE="${NOMAD_NAMESPACE:-default}"
 DATACENTERS="${DATACENTERS:-dc1}"
-HOSTPATH_IMAGE="${HOSTPATH_IMAGE:-registry.k8s.io/sig-storage/hostpathplugin:v1.9.0}"
+HOSTPATH_IMAGE="${HOSTPATH_IMAGE:-pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/sig-storage/hostpathplugin:v1.9.0}"
 
 WEB_JOB_NAME="${WEB_JOB_NAME:-csi-plugin-hostpath-web}"
 WORKER_JOB_NAME="${WORKER_JOB_NAME:-csi-plugin-hostpath-worker}"

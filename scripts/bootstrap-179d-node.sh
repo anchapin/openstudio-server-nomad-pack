@@ -81,8 +81,8 @@ esac
 PRIVATE_IP="$(ip -4 route get 1.1.1.1 | awk '{print $7; exit}')"
 CODENAME="$(. /etc/os-release && echo "${VERSION_CODENAME}")"
 NOMAD_RESTART=false
-NFS_OPENSTUDIO_DIR="/nfs/opensstudio/batch/openstudio"
-NFS_DOCKER_TGZ="/nfs/opensstudio/batch/docker.tgz"
+NFS_OPENSTUDIO_DIR="/nfs/openstudio/batch/openstudio"
+NFS_DOCKER_TGZ="/nfs/openstudio/batch/docker.tgz"
 
 log() { echo "[$(hostname)] $*"; }
 
