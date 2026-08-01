@@ -156,6 +156,7 @@
 | `rserve_memory` | `number` | `2048` | Memory (MB) allocated to the Rserve task. |
 | `rserve_health_check_interval` | `string` | `"10s"` | Interval between Consul health checks for the Rserve service. |
 | `rserve_health_check_timeout` | `string` | `"2s"` | Timeout for Consul health checks for the Rserve service. |
+| `rserve_count` | `number` | `1` |  |
 | `enable_consul_connect` | `bool` | `false` | Enable Consul Connect sidecar proxies for mTLS service-to-service communication. |
 | `log_driver_type` | `string` | `"json-file"` | The logging driver to use for the containers. |
 | `log_max_size` | `string` | `"10m"` | The maximum size of log files before rotation. |

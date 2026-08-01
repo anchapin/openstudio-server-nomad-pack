@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `redis_config_tcp_keepalive` variable (default `60` s): passes `--tcp-keepalive` to the Redis container to prevent NAT/firewall dropping idle Resque connections during long-running background initialization steps.
 - Added `redis_memory_max` variable (default `0`, disabled): exposes Nomad `memory_max` for the Redis task so operators can allow Redis to burst above its soft limit during mass-enqueue spikes without being OOM-killed.- Added `web_mongoid_pool_size` variable (default `10`): injects `MONGOID_POOL` into the `web` task so Passenger processes never stall waiting for a MongoDB connection; set equal to `MAX_POOL` for large deployments.
 - Added `web_background_mongoid_pool_size` variable (default `0`, auto-derived as `web_background_worker_count + 2`): injects `MONGOID_POOL` into the `web-background` task so every Resque child can acquire a MongoDB connection immediately.
+- Added `rserve_count` variable (default `1`): sets the number of Rserve task group allocations. Set to a higher value to run multiple Rserve replicas for fault tolerance. Each allocation registers independently in Consul; unhealthy replicas are automatically excluded from routing. See `docs/rserve-multi-replica.md`.
+- Added `docs/rserve-multi-replica.md`: documents multi-replica Rserve routing via Consul DNS, health check/failover semantics, `rserve_spreads` configuration, and known limitations. (#361)
 
 ### Changed
 

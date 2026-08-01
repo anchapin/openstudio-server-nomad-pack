@@ -243,7 +243,7 @@ echo "{{ .Address }} db" >> /etc/hosts
 {{ range service "openstudio-redis" -}}
 echo "{{ .Address }} queue" >> /etc/hosts
 {{ end -}}
-{{ range service "openstudio-rserve" -}}
+{{ with index (shuffle (service "openstudio-rserve")) 0 -}}
 echo "{{ .Address }} rserve" >> /etc/hosts
 {{ end -}}
 EOT

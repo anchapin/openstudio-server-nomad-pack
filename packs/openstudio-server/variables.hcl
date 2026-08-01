@@ -910,6 +910,20 @@ variable "rserve_health_check_timeout" {
   default     = "2s"
 }
 
+variable "rserve_count" {
+  type        = number
+  description = <<-EOT
+    Number of Rserve task group allocations. Default 1.
+    Set to a higher value to run multiple Rserve replicas for fault tolerance.
+    When rserve_count > 1, configure rserve_spreads to distribute allocations across
+    nodes and avoid co-location. Each allocation registers independently in Consul under
+    the 'openstudio-rserve' service name; unhealthy replicas are automatically removed
+    from Consul DNS so web and worker tasks only route to passing instances.
+    See docs/rserve-multi-replica.md for details.
+  EOT
+  default     = 1
+}
+
 variable "enable_consul_connect" {
   type        = bool
   description = "Enable Consul Connect sidecar proxies for mTLS service-to-service communication."
