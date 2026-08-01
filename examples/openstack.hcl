@@ -183,7 +183,13 @@ db_docker_ulimit_nofile    = "262144:262144"
 redis_docker_ulimit_nofile = "131072:131072"
 
 # ── Features ─────────────────────────────────────────────────────────────────
-# Traefik route host for external access from the jump host IP.
+# Do NOT enable in-pack Traefik for production.
+# Use OpenStack Octavia LBaaS for ingress (TLS termination via Barbican, HA ACTIVE/STANDBY).
+# Enabling in-pack Traefik (deploy_traefik = true) is only appropriate for dev/Vagrant.
+# See docs/traefik-openstack-decision.md for the full go/no-go rationale and Octavia setup steps.
+deploy_traefik = false
+
+# External LB / jump-host IP — used for Consul service tag routing hints only.
 ingress_domain = "10.60.126.125"
 
 # Disable Vector log collection to reduce image pulls and resource overhead.
