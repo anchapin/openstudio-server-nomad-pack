@@ -505,6 +505,24 @@ variable "autoscaler_cooldown" {
   default     = "10m"
 }
 
+variable "worker_autoscaling_scale_up_cooldown" {
+  type        = string
+  description = "Cooldown between scale-up events for the worker group. Longer values prevent storage shock on shared NFS by limiting how quickly new workers are added during a burst. Recommended minimum 10m for NFS-backed deployments. Only applies when worker_autoscaling_enabled = true."
+  default     = "10m"
+}
+
+variable "worker_autoscaling_scale_down_cooldown" {
+  type        = string
+  description = "Cooldown between scale-down events for the worker group. A longer scale-down window (default 20m) avoids thrashing when the queue briefly empties between simulation batches. Only applies when worker_autoscaling_enabled = true."
+  default     = "20m"
+}
+
+variable "worker_autoscaling_evaluation_interval" {
+  type        = string
+  description = "How often the Nomad Autoscaler evaluates worker scaling policies. Lower values increase responsiveness but also increase Nomad API load. 30s is a safe default for most deployments. Only applies when worker_autoscaling_enabled = true."
+  default     = "30s"
+}
+
 variable "autoscaler_constraints" {
   type        = any
   description = "Placement constraints for the optional Nomad Autoscaler group."

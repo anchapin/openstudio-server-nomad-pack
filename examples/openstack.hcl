@@ -365,6 +365,14 @@ autoscaler_nomad_address   = "http://127.0.0.1:4646"
 nomad_autoscaler_image     = "hashicorp/nomad-autoscaler:0.5.0"
 autoscaler_cooldown        = "2m"
 
+# Storage-aware ramp guardrails (see docs/autoscaling-storage-ramp-policy.md).
+# These values are intentionally conservative for an OpenStack environment where
+# workers share NFS-backed storage. Increase max or shorten cooldowns only after
+# confirming iowait stays below 40% through a full burst-and-drain cycle.
+worker_autoscaling_scale_up_cooldown   = "10m"
+worker_autoscaling_scale_down_cooldown = "20m"
+worker_autoscaling_evaluation_interval = "30s"
+
 # ── MongoDB / Redis / Rserve port binding ─────────────────────────────────────
 # The OpenStudio Server startup scripts (start-server, start-web-background,
 # start-workers) use Docker Compose-style hostnames: 'db:27017' for MongoDB
