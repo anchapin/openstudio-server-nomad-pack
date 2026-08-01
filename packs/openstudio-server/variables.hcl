@@ -537,8 +537,8 @@ variable "redis_exporter_image" {
 
 variable "worker_queue_requeued_query" {
   type        = string
-  description = "Prometheus query for requeued backlog depth."
-  default     = "sum(openstudio_worker_queue_depth{queue=\"requeued\"})"
+  description = "Prometheus query for requeued backlog depth. The +1 keeps the series non-zero when the queue is empty so the autoscaler doesn't treat a missing series as an error."
+  default     = "sum(redis_key_size{key=\"resque:queue:requeued\"}) + 1"
 }
 
 variable "worker_queue_requeued_target" {
@@ -549,14 +549,14 @@ variable "worker_queue_requeued_target" {
 
 variable "worker_queue_simulations_query" {
   type        = string
-  description = "Prometheus query for simulations backlog depth."
-  default     = "sum(openstudio_worker_queue_depth{queue=\"simulations\"})"
+  description = "Prometheus query for simulations backlog depth. or vector(0) ensures the series always resolves even when the queue key doesn't exist yet in Redis."
+  default     = "(sum(redis_key_size{key=\"resque:queue:simulations\"}) or vector(0))"
 }
 
 variable "worker_queue_simulations_target" {
   type        = number
   description = "Target queue depth for simulation jobs per worker allocation."
-  default     = 5
+  default     = 2
 }
 
 variable "web_background_image" {
@@ -698,6 +698,48 @@ variable "redis_memory" {
   type        = number
   description = "Memory (MB) allocated to the Redis task."
   default     = 1024
+}
+
+variable "redis_config_maxclients" {
+  type        = number
+  description = "Redis maxclients limit. Increase for large worker/background fleets to avoid ERR max number of clients reached."
+  default     = 50000
+}
+
+variable "redis_config_tcp_backlog" {
+  type        = number
+  description = "Redis tcp-backlog value controlling queued inbound TCP connections."
+  default     = 511
+}
+
+variable "redis_config_timeout_seconds" {
+  type        = number
+  description = "Redis client idle timeout in seconds. Set to 0 to disable idle disconnects."
+  default     = 0
+}
+
+variable "redis_config_maxmemory" {
+  type        = string
+  description = "Redis maxmemory in bytes. Keep below the Redis container memory limit to leave headroom for forks and allocator overhead."
+  default     = "22000000000"
+}
+
+variable "redis_config_maxmemory_policy" {
+  type        = string
+  description = "Redis maxmemory-policy. Use noeviction for queue durability so writes fail loudly instead of silently evicting jobs."
+  default     = "noeviction"
+}
+
+variable "redis_config_appendfsync" {
+  type        = string
+  description = "Redis appendfsync policy (for example everysec, always, no)."
+  default     = "everysec"
+}
+
+variable "redis_config_save" {
+  type        = string
+  description = "Redis save schedule passed to --save. Set to an empty string to disable automatic RDB snapshots."
+  default     = ""
 }
 
 variable "redis_storage_type" {
@@ -881,6 +923,12 @@ variable "redis_constraints" {
   type        = any
   description = "Placement constraints for the redis group."
   default     = []
+}
+
+variable "redis_node_class" {
+  type        = string
+  description = "Optional Nomad node class for Redis. When set, applies a hard node.class constraint for dedicated queue nodes."
+  default     = ""
 }
 
 variable "redis_affinities" {

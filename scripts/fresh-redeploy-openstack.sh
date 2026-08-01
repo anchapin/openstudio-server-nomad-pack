@@ -14,9 +14,10 @@ DB_CSI_CAPACITY_MIN="${DB_CSI_CAPACITY_MIN:-10GiB}"
 DB_CSI_CAPACITY_MAX="${DB_CSI_CAPACITY_MAX:-50GiB}"
 REDIS_CSI_CAPACITY_MIN="${REDIS_CSI_CAPACITY_MIN:-1GiB}"
 REDIS_CSI_CAPACITY_MAX="${REDIS_CSI_CAPACITY_MAX:-5GiB}"
+REDIS_NODE_CLASS_OVERRIDE="${OS_REDIS_NODE_CLASS:-}"
 WIPE_NFS=true
 BOOTSTRAP_WORKER_MAX_REPLICAS="${OS_BOOTSTRAP_WORKER_MAX_REPLICAS:-200}"
-BOOTSTRAP_AUTOSCALER_COOLDOWN="${OS_BOOTSTRAP_AUTOSCALER_COOLDOWN:-10m}"
+BOOTSTRAP_AUTOSCALER_COOLDOWN="${OS_BOOTSTRAP_AUTOSCALER_COOLDOWN:-2m}"
 PREPULL_WAIT_TIMEOUT_SECONDS="${OS_PREPULL_WAIT_TIMEOUT_SECONDS:-900}"
 PREPULL_MIN_READY_PERCENT="${OS_PREPULL_MIN_READY_PERCENT:-10}"
 PREPULL_REQUIRE_ALL="${OS_PREPULL_REQUIRE_ALL:-false}"
@@ -49,10 +50,36 @@ Options:
   --nomad-addr <url>     Nomad API (default: ${NOMAD_ADDR})
   --namespace <ns>       Nomad namespace (default: ${NOMAD_NAMESPACE})
   --csi-plugin-id <id>   CSI plugin ID for volume create (auto-detected by default)
+  --redis-node-class <class>  Override redis_node_class for this deploy only
   --skip-nfs-wipe        Skip shared NFS wipe step
   --no-auto-csi-plugin-deploy  Disable auto-deploy of role-scoped CSI plugins when missing
   -h, --help             Show help
 EOF
+}
+
+count_ready_eligible_nodes_with_class() {
+  local desired_class="$1"
+  if [[ -z "${desired_class}" ]]; then
+    echo "0"
+    return 0
+  fi
+  NOMAD_ADDR="${NOMAD_ADDR}" NOMAD_NAMESPACE="${NOMAD_NAMESPACE}" DESIRED_CLASS="${desired_class}" python3 - <<'PY'
+import json, os, urllib.request
+
+addr = os.environ["NOMAD_ADDR"].rstrip("/")
+ns = os.environ.get("NOMAD_NAMESPACE", "default")
+desired = os.environ["DESIRED_CLASS"]
+req = urllib.request.Request(f"{addr}/v1/nodes?namespace={ns}")
+with urllib.request.urlopen(req, timeout=20) as r:
+    nodes = json.load(r)
+count = 0
+for n in nodes:
+    if n.get("Status") != "ready" or n.get("SchedulingEligibility") != "eligible":
+        continue
+    if (n.get("NodeClass") or "") == desired:
+        count += 1
+print(count)
+PY
 }
 
 while [[ $# -gt 0 ]]; do
@@ -62,6 +89,7 @@ while [[ $# -gt 0 ]]; do
     --nomad-addr) NOMAD_ADDR="$2"; shift 2 ;;
     --namespace) NOMAD_NAMESPACE="$2"; shift 2 ;;
     --csi-plugin-id) CSI_PLUGIN_ID="$2"; shift 2 ;;
+    --redis-node-class) REDIS_NODE_CLASS_OVERRIDE="$2"; shift 2 ;;
     --skip-nfs-wipe) WIPE_NFS=false; shift ;;
     --no-auto-csi-plugin-deploy) AUTO_DEPLOY_ROLE_CSI_PLUGINS=false; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -110,14 +138,36 @@ worker_max_replicas="$(_extract_var worker_max_replicas 10)"
 autoscaler_cooldown="$(_extract_var autoscaler_cooldown 60m)"
 db_image="$(_extract_var db_image mongo:4.2)"
 redis_image="$(_extract_var redis_image redis:6.2-alpine)"
+redis_node_class="$(_extract_var redis_node_class "")"
+if [[ -n "${REDIS_NODE_CLASS_OVERRIDE}" ]]; then
+  redis_node_class="${REDIS_NODE_CLASS_OVERRIDE}"
+fi
+redis_config_maxclients="$(_extract_var redis_config_maxclients 50000)"
+redis_config_tcp_backlog="$(_extract_var redis_config_tcp_backlog 511)"
+redis_config_timeout_seconds="$(_extract_var redis_config_timeout_seconds 0)"
+redis_config_maxmemory="$(_extract_var redis_config_maxmemory 22000000000)"
+redis_config_maxmemory_policy="$(_extract_var redis_config_maxmemory_policy noeviction)"
+redis_config_appendfsync="$(_extract_var redis_config_appendfsync everysec)"
+redis_config_save="$(_extract_var redis_config_save "")"
 
 echo "==> Fresh redeploy configuration"
 echo "  nomad_addr=${NOMAD_ADDR}"
 echo "  namespace=${NOMAD_NAMESPACE}"
 echo "  var_file=${VAR_FILE}"
 echo "  job_name=${JOB_NAME}"
+echo "  redis_node_class=${redis_node_class:-<unset>}"
+echo "  redis_config: maxclients=${redis_config_maxclients} tcp_backlog=${redis_config_tcp_backlog} timeout=${redis_config_timeout_seconds}s maxmemory=${redis_config_maxmemory} policy=${redis_config_maxmemory_policy} appendfsync=${redis_config_appendfsync} save='${redis_config_save}'"
 
 curl -sf "${NOMAD_ADDR}/v1/status/leader" >/dev/null
+if [[ -n "${redis_node_class}" ]]; then
+  redis_class_ready_count="$(count_ready_eligible_nodes_with_class "${redis_node_class}")"
+  if [[ "${redis_class_ready_count}" == "0" ]]; then
+    echo "✗ redis_node_class='${redis_node_class}' but no ready/eligible nodes advertise that Nomad node class." >&2
+    echo "  Set redis_node_class in ${VAR_FILE} to an existing class, or pass --redis-node-class <class>." >&2
+    exit 1
+  fi
+  echo "  redis_node_class readiness: ${redis_class_ready_count} node(s) ready/eligible"
+fi
 
 echo ""
 echo "==> Stopping jobs in teardown-safe order"
@@ -969,6 +1019,9 @@ fi
 echo "==> Phase 2/3: deploy stack with conservative worker ramp"
 RUN_ARGS=(--var-file "${VAR_FILE}" --name "${JOB_NAME}")
 RUN_ARGS+=(--var "enable_image_prepull=false")
+if [[ -n "${REDIS_NODE_CLASS_OVERRIDE}" ]]; then
+  RUN_ARGS+=(--var "redis_node_class=${REDIS_NODE_CLASS_OVERRIDE}")
+fi
 if [[ -n "${WORKER_EXCLUDED_NODE_IDS_JSON}" ]]; then
   RUN_ARGS+=(--var "worker_excluded_node_ids=${WORKER_EXCLUDED_NODE_IDS_JSON}")
 fi
@@ -988,6 +1041,9 @@ if [[ "${effective_bootstrap_max}" != "${worker_max_replicas}" || "${BOOTSTRAP_A
   echo "==> Phase 3/3: restore full worker autoscaling bounds"
   FINAL_ARGS=(--var-file "${VAR_FILE}" --name "${JOB_NAME}")
   FINAL_ARGS+=(--var "enable_image_prepull=false")
+  if [[ -n "${REDIS_NODE_CLASS_OVERRIDE}" ]]; then
+    FINAL_ARGS+=(--var "redis_node_class=${REDIS_NODE_CLASS_OVERRIDE}")
+  fi
   if [[ -n "${WORKER_EXCLUDED_NODE_IDS_JSON}" ]]; then
     FINAL_ARGS+=(--var "worker_excluded_node_ids=${WORKER_EXCLUDED_NODE_IDS_JSON}")
   fi

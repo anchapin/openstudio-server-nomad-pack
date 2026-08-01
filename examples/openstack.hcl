@@ -91,6 +91,19 @@ db_memory             = 22528
 db_memory_max         = 45056
 redis_cpu             = 8000
 redis_memory          = 16384
+# Redis queue durability / high-throughput tuning (aligned with helm config guidance).
+redis_config_maxclients         = 50000
+redis_config_tcp_backlog        = 511
+redis_config_timeout_seconds    = 0
+redis_config_maxmemory          = "22000000000"
+redis_config_maxmemory_policy   = "noeviction"
+redis_config_appendfsync        = "everysec"
+redis_config_save               = ""
+
+# Optional hard pin for dedicated high-memory Redis nodes.
+# Set this to a real Nomad node.class label in your cluster (for example:
+# "stateful-highmem") when that pool exists.
+redis_node_class = ""
 rserve_cpu            = 2000
 rserve_memory         = 4096
 # Worker: 750 MHz / 875 MB soft / 2 GB max per allocation — dense-pack configuration.
@@ -121,7 +134,7 @@ worker_autoscaling_cpu_enabled = false
 worker_min_replicas        = 0      # Allow scale-to-zero when both queues are empty
 worker_max_replicas        = 10000
 # Queue depth from redis_exporter key sizes (exposed via in-pack Prometheus job).
-worker_queue_simulations_query = "sum(redis_key_size{key=\"resque:queue:simulations\"})"
+worker_queue_simulations_query = "(sum(redis_key_size{key=\"resque:queue:simulations\"}) or vector(0))"
 # Keep the requeued check neutral when that queue is empty so it doesn't
 # suppress scale-out driven by the simulations queue.
 worker_queue_requeued_query    = "sum(redis_key_size{key=\"resque:queue:requeued\"}) + 1"

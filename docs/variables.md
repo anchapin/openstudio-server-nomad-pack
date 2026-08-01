@@ -94,10 +94,10 @@
 | `prometheus_affinities` | `any` | `[]` | Placement affinities for the optional Prometheus group. |
 | `prometheus_spreads` | `any` | `[]` | Spread rules for the optional Prometheus group. |
 | `redis_exporter_image` | `string` | `"oliver006/redis_exporter:v1.62.0"` | Redis exporter image used by the optional in-pack Prometheus job. |
-| `worker_queue_requeued_query` | `string` | `"sum(openstudio_worker_queue_depth{queue=\"requeued\"})"` | Prometheus query for requeued backlog depth. |
+| `worker_queue_requeued_query` | `string` | `"sum(redis_key_size{key=\"resque:queue:requeued\"}) + 1"` | Prometheus query for requeued backlog depth. The +1 keeps the series non-zero when the queue is empty so the autoscaler doesn't treat a missing series as an error. |
 | `worker_queue_requeued_target` | `number` | `1` | Target queue depth for requeued jobs per worker allocation. |
-| `worker_queue_simulations_query` | `string` | `"sum(openstudio_worker_queue_depth{queue=\"simulations\"})"` | Prometheus query for simulations backlog depth. |
-| `worker_queue_simulations_target` | `number` | `5` | Target queue depth for simulation jobs per worker allocation. |
+| `worker_queue_simulations_query` | `string` | `"(sum(redis_key_size{key=\"resque:queue:simulations\"}) or vector(0))"` | Prometheus query for simulations backlog depth. or vector(0) ensures the series always resolves even when the queue key doesn't exist yet in Redis. |
+| `worker_queue_simulations_target` | `number` | `2` | Target queue depth for simulation jobs per worker allocation. |
 | `web_background_image` | `string` | `"nrel/openstudio-server:179-flock"` | The image name and tag for the OpenStudio Server web-background container. |
 | `web_background_command` | `string` | `"/usr/local/bin/start-web-background"` | Command run by the web-background task. Defaults to the image's start-web-background script, which launches Resque workers for background analysis lifecycle queues. |
 | `web_background_queues` | `string` | `"background,analyses"` | Resque QUEUES env var for the web-background task. Controls which queue(s) the start-web-background Resque workers process. Keep both 'background' and 'analyses': the 'analyses' queue handles analysis initialization/cleanup (including directory setup before zip extraction), and 'background' handles general async tasks. The 'analysis_wrappers' queue is consumed by the web task. Omitting 'analyses' causes the 'Destination already exists' error on re-initialization. Separate multiple queues with commas. NOTE: Use QUEUES (not QUEUE) — the application's resque:setup task explicitly resets QUEUE to prevent environment leaks. |
@@ -121,6 +121,13 @@
 | `redis_image` | `string` | `"redis:6.2-alpine"` | The Redis image name and tag. Intentionally diverges from the Helm chart default (redis:6.0.9) by using redis:6.2-alpine; align Redis major.minor with your target OpenStudio Server release requirements. |
 | `redis_cpu` | `number` | `250` | CPU shares allocated to the Redis task. |
 | `redis_memory` | `number` | `1024` | Memory (MB) allocated to the Redis task. |
+| `redis_config_maxclients` | `number` | `50000` | Redis maxclients limit. Increase for large worker/background fleets to avoid ERR max number of clients reached. |
+| `redis_config_tcp_backlog` | `number` | `511` | Redis tcp-backlog value controlling queued inbound TCP connections. |
+| `redis_config_timeout_seconds` | `number` | `0` | Redis client idle timeout in seconds. Set to 0 to disable idle disconnects. |
+| `redis_config_maxmemory` | `string` | `"22000000000"` | Redis maxmemory in bytes. Keep below the Redis container memory limit to leave headroom for forks and allocator overhead. |
+| `redis_config_maxmemory_policy` | `string` | `"noeviction"` | Redis maxmemory-policy. Use noeviction for queue durability so writes fail loudly instead of silently evicting jobs. |
+| `redis_config_appendfsync` | `string` | `"everysec"` | Redis appendfsync policy (for example everysec, always, no). |
+| `redis_config_save` | `string` | `""` | Redis save schedule passed to --save. Set to an empty string to disable automatic RDB snapshots. |
 | `redis_storage_type` | `string` | `"host_volume"` | Redis storage type: host_volume, csi, or ephemeral. Use ephemeral to disable persistent volume wiring. |
 | `redis_volume_source` | `string` | `"openstudio-redis"` | Nomad volume source name for Redis persistent storage (host_volume name or CSI volume ID). |
 | `redis_csi_plugin_id` | `string` | `""` | Optional CSI plugin ID used by OpenStack helper scripts when creating the Redis volume. No effect unless redis_storage_type = \"csi\". |
@@ -151,6 +158,7 @@
 | `db_affinities` | `any` | `[]` | Placement affinities for the db group. |
 | `db_spreads` | `any` | `[]` | Spread rules for the db group. |
 | `redis_constraints` | `any` | `[]` | Placement constraints for the redis group. |
+| `redis_node_class` | `string` | `""` | Optional Nomad node class for Redis. When set, applies a hard node.class constraint for dedicated queue nodes. |
 | `redis_affinities` | `any` | `[]` | Placement affinities for the redis group. |
 | `redis_spreads` | `any` | `[]` | Spread rules for the redis group. |
 | `rserve_constraints` | `any` | `[]` | Placement constraints for the rserve group. |

@@ -12,6 +12,9 @@ job "[[ var "job_name" . ]]-redis" {
 
   group "redis" {
     count = 1
+    [[ if var "redis_node_class" . ]]
+    [[ template "openstudio_server.node_class_constraint" (var "redis_node_class" .) ]]
+    [[ end ]]
     [[ template "constraints" (var "redis_constraints" .) ]]
     [[ template "affinities" (var "redis_affinities" .) ]]
     [[ template "spreads" (var "redis_spreads" .) ]]
@@ -89,6 +92,15 @@ job "[[ var "job_name" . ]]-redis" {
       config {
         image           = "[[ var "redis_image" . ]]"
         ports           = ["redis"]
+        args            = [
+          "--maxclients", "[[ var "redis_config_maxclients" . ]]",
+          "--tcp-backlog", "[[ var "redis_config_tcp_backlog" . ]]",
+          "--timeout", "[[ var "redis_config_timeout_seconds" . ]]",
+          "--maxmemory", "[[ var "redis_config_maxmemory" . ]]",
+          "--maxmemory-policy", "[[ var "redis_config_maxmemory_policy" . ]]",
+          "--appendfsync", "[[ var "redis_config_appendfsync" . ]]",
+          "--save", "[[ var "redis_config_save" . ]]",
+        ]
         ulimit {
           nofile = "[[ var "redis_docker_ulimit_nofile" . ]]"
         }
