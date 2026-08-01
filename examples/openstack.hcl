@@ -119,6 +119,10 @@ redis_memory_max                = 24576
 # Set this to a real Nomad node.class label in your cluster (for example:
 # "stateful-highmem") when that pool exists.
 redis_node_class = ""
+# rserve_count: keep at 1 (default) for typical OpenStack research deployments.
+# Increase to 2 only if concurrent worker count regularly exceeds ~10 workers.
+# Requires issue #361 (multi-replica-safe routing) before scaling above 1.
+# See docs/rserve-horizontal-scaling.md for full benchmark rationale.
 rserve_cpu            = 2000
 rserve_memory         = 4096
 # Worker: 750 MHz / 875 MB soft / 2 GB max per allocation — dense-pack configuration.
