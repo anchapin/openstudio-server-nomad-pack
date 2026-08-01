@@ -243,10 +243,14 @@ EOT
           "traefik.http.routers.[[ var "job_name" . ]].rule=Host(`[[ var "ingress_domain" . ]]`)",
           "traefik.http.routers.[[ var "job_name" . ]].entrypoints=web",
           "traefik.http.services.[[ var "job_name" . ]].loadbalancer.server.port=$${NOMAD_PORT_http}",
+          "traefik.http.services.[[ var "job_name" . ]].loadbalancer.responseForwarding.flushInterval=[[ var "traefik_request_timeout" . ]]",
+          "traefik.http.middlewares.[[ var "job_name" . ]]-upload.buffering.maxRequestBodyBytes=[[ var "traefik_max_request_body_size" . ]]",
+          "traefik.http.routers.[[ var "job_name" . ]].middlewares=[[ var "job_name" . ]]-upload",
           [[ if var "ingress_tls_enabled" . ]]
           "traefik.http.routers.[[ var "job_name" . ]]-tls.rule=Host(`[[ var "ingress_domain" . ]]`)",
           "traefik.http.routers.[[ var "job_name" . ]]-tls.entrypoints=websecure",
           "traefik.http.routers.[[ var "job_name" . ]]-tls.tls=true",
+          "traefik.http.routers.[[ var "job_name" . ]]-tls.middlewares=[[ var "job_name" . ]]-upload",
           [[ end ]]
         ]
 

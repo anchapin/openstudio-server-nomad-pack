@@ -18,6 +18,10 @@
 | `traefik_https_port` | `number` | `443` | Traefik HTTPS entrypoint port. |
 | `traefik_dashboard_port` | `number` | `8080` | Traefik dashboard port. |
 | `traefik_api_insecure` | `bool` | `false` | Enable the Traefik insecure API/dashboard (--api.insecure=true). Set to true only for local development. In production, keep this false and protect the dashboard with authentication and TLS. |
+| `traefik_request_timeout` | `string` | `"300s"` | Traefik forwarding (response) timeout for the web service. Controls how long Traefik waits for the backend to send a response. Increase for long-running analysis submissions. Only applies when deploy_traefik = true. |
+| `traefik_max_request_body_size` | `string` | `"500MB"` | Maximum request body size allowed by the Traefik buffering middleware on the web service. Set to 0 to disable the limit. Supports Traefik size notation (e.g. '500MB', '1GB'). Only applies when deploy_traefik = true. |
+| `traefik_read_timeout` | `string` | `"300s"` | Traefik entrypoint read timeout (time to read the full request from the client). Only applies when deploy_traefik = true. |
+| `traefik_write_timeout` | `string` | `"300s"` | Traefik entrypoint write timeout (time to write the full response to the client). Only applies when deploy_traefik = true. |
 | `nomad_namespace` | `string` | `"default"` | The Nomad namespace in which all pack jobs are registered. Use 'default' for the built-in namespace. |
 | `region` | `string` | `"global"` | The Nomad region where the job will be deployed. |
 | `datacenters` | `list(string)` | `["dc1"]` | A list of datacenters in the region which are eligible for task placement. |
