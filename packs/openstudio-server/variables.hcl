@@ -838,6 +838,12 @@ variable "dev_shared_volume_name" {
   default     = ""
 }
 
+variable "rserve_count" {
+  type        = number
+  description = "The number of rserve task group allocations."
+  default     = 1
+}
+
 variable "rserve_image" {
   type        = string
   description = "The Rserve image name and tag."

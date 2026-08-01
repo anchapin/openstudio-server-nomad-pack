@@ -11,7 +11,7 @@ job "[[ var "job_name" . ]]-rserve" {
   }
 
   group "rserve" {
-    count = 1
+    count = [[ var "rserve_count" . ]]
     [[ template "constraints" (var "rserve_constraints" .) ]]
     [[ if ne (var "web_rserve_colocation_node" .) "" ]]
     constraint {
