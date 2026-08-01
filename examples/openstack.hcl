@@ -49,8 +49,10 @@ consul_address = "192.168.100.87:8500"
 # replacement and can reschedule cleanly.
 db_storage_type    = "csi"
 db_volume_source   = "openstudio-mongodb"
+db_csi_plugin_id   = "hostpath-web-plugin0"
 redis_storage_type = "csi"
 redis_volume_source = "openstudio-redis"
+redis_csi_plugin_id = "hostpath-web-plugin0"
 
 # Shared analysis workspace: use a Nomad host_volume backed by the OS-level NFS
 # mount so web, web-background, and worker allocations see the same files.
@@ -63,8 +65,11 @@ nfs_volume_mount_path     = "/mnt/openstudio"
 # Helm-equivalent sizing converted to Nomad units (1 CPU core ≈ 1000 MHz).
 web_cpu               = 6000
 web_memory            = 51200
+web_memory_max        = 61440
 web_background_cpu    = 12000
 web_background_memory = 12288
+web_background_count  = 1
+web_background_worker_count = 240
 db_cpu                = 4000
 db_memory             = 22528
 db_memory_max         = 45056
@@ -83,19 +88,30 @@ rserve_memory         = 4096
 worker_cpu         = 750
 worker_memory      = 1024
 worker_memory_max  = 2048
+# Restrict workers to this OpenStack flavor (also used by deploy scripts for
+# pre-pull readiness checks).
+worker_instance_type = "azimuth.compute1-179d-250disk"
 
-# Autoscaling — CPU-based (nomad-apm, no external Prometheus required).
-# Target 70% CPU utilization per allocation before scaling out.
+# Autoscaling — queue-based.
+# Queue-depth checks drive scale-up from simulation backlog.
 # Dense-pack math (within 9,600 vCPU practical ceiling):
 #   10,000 workers × 750 MHz = 7,500,000 MHz ≈ 7,500 vCPU reserved
 #   Remaining ~2,100 vCPU covers infra services + scheduler overhead
 # Start with 4 workers; autoscaler ramps to demand up to 10,000.
 worker_count               = 4
 worker_autoscaling_enabled = true
-worker_autoscaling_cpu_enabled = true
-worker_cpu_target_utilization  = 70
+worker_autoscaling_queue_enabled = true
+worker_autoscaling_cpu_enabled = false
 worker_min_replicas        = 4
 worker_max_replicas        = 10000
+# Queue depth from redis_exporter key sizes (exposed via in-pack Prometheus job).
+worker_queue_simulations_query = "sum(redis_key_size{key=\"resque:queue:simulations\"})"
+# Keep the requeued check neutral when that queue is empty so it doesn't
+# suppress scale-out driven by the simulations queue.
+worker_queue_requeued_query    = "sum(redis_key_size{key=\"resque:queue:requeued\"}) + 1"
+# Prometheus endpoint used by queue-depth checks in worker.nomad.tpl.
+# Autoscaler is host-networked and should co-locate with Prometheus on web nodes.
+autoscaler_prometheus_address = "http://127.0.0.1:9090"
 
 # ── Scheduling ────────────────────────────────────────────────────────────────
 # Enforce linux/amd64 constraint (all OpenStack nodes are Ubuntu x86_64).
@@ -108,43 +124,136 @@ docker_readonly_rootfs = false
 # Run containers as root — the openstudio-server image expects root at startup.
 docker_user     = ""
 docker_cap_drop = []
+docker_ulimit_nofile = "65535:65535"
+# For fresh CSI volume recreation on this cluster, run DB/Redis as root so
+# first-start directory creation inside mounted volumes cannot fail on ownership.
+db_docker_user    = ""
+redis_docker_user = ""
+db_docker_ulimit_nofile    = "262144:262144"
+redis_docker_ulimit_nofile = "131072:131072"
 
 # ── Features ─────────────────────────────────────────────────────────────────
+# Traefik route host for external access from the jump host IP.
+ingress_domain = "10.60.126.125"
+
 # Disable Vector log collection to reduce image pulls and resource overhead.
 enable_vector_collection = false
 
 # No Consul Connect mTLS for initial testing.
 enable_consul_connect = false
 
-# Disable system-wide image pre-pull for now.
-enable_image_prepull = false
+# Enable system-wide image pre-pull to reduce pull storms/timeouts during
+# aggressive worker autoscaling.
+enable_image_prepull = true
 
-# Pin rserve to a node with local Docker storage configured
-# to avoid NFS xattr capability extraction failures.
+# Deploy in-pack Prometheus + Redis exporter for queue-depth autoscaling metrics.
+prometheus_enabled = true
+prometheus_constraints = [
+{
+  attribute = "$${meta.node_role}"
+  operator  = "="
+  value     = "web"
+},
+{
+  attribute = "$${attr.driver.docker}"
+  operator  = "="
+  value     = "1"
+}]
+
+autoscaler_constraints = [{
+  attribute = "$${meta.node_role}"
+  operator  = "="
+  value     = "web"
+},
+{
+  attribute = "$${attr.driver.docker}"
+  operator  = "="
+  value     = "1"
+}]
+
+# Keep non-worker services on web-role nodes.
 rserve_constraints = [
-  {
-    attribute = "$${node.unique.name}"
-    operator  = "="
-    value     = "nomad-client-59"
-  }
-]
+{
+  attribute = "$${meta.node_role}"
+  operator  = "="
+  value     = "web"
+},
+{
+  attribute = "$${attr.driver.docker}"
+  operator  = "="
+  value     = "1"
+},
+{
+  attribute = "$${meta.disk_type}"
+  operator  = "="
+  value     = "local-large"
+}]
 
-# Force web, db, and redis onto 179d nodes (50 GB disk) so large Docker image
-# pulls don't exhaust the 10 GB root disks on older CM.Medium nodes.
+# Keep stateful/service jobs on web-role nodes and workers on worker-role nodes.
 
 web_constraints = [{
+  attribute = "$${meta.node_role}"
+  operator  = "="
+  value     = "web"
+},
+{
+  attribute = "$${attr.driver.docker}"
+  operator  = "="
+  value     = "1"
+},
+{
   attribute = "$${meta.disk_type}"
   operator  = "="
   value     = "local-large"
 }]
 
-db_constraints = [{
+db_constraints = [
+{
+  attribute = "$${meta.node_role}"
+  operator  = "="
+  value     = "web"
+},
+{
   attribute = "$${meta.disk_type}"
   operator  = "="
   value     = "local-large"
+},
+{
+  attribute = "$${attr.driver.docker}"
+  operator  = "="
+  value     = "1"
 }]
 
-redis_constraints = [{
+redis_constraints = [
+{
+  attribute = "$${meta.node_role}"
+  operator  = "="
+  value     = "web"
+},
+{
+  attribute = "$${meta.disk_type}"
+  operator  = "="
+  value     = "local-large"
+},
+{
+  attribute = "$${attr.driver.docker}"
+  operator  = "="
+  value     = "1"
+}]
+
+# Keep worker-only nodes isolated from all non-worker services.
+worker_constraints = [
+{
+  attribute = "$${meta.node_role}"
+  operator  = "="
+  value     = "worker"
+},
+{
+  attribute = "$${attr.driver.docker}"
+  operator  = "="
+  value     = "1"
+},
+{
   attribute = "$${meta.disk_type}"
   operator  = "="
   value     = "local-large"
@@ -152,6 +261,13 @@ redis_constraints = [{
 
 # Run batch verification after deploy to confirm all services are reachable.
 enable_batch_verification = false
+
+# Proactive stale-lock recovery: clears orphaned resque:analysis:*:queuing
+# locks from Redis automatically.  Locks orphan when web-background dies
+# mid-enqueue; without this, all other analyses block indefinitely.
+enable_queue_sweeper                   = true
+queue_sweeper_cron                     = "*/2 * * * *"
+queue_sweeper_max_lock_age_seconds     = 120
 
 # ── Vault ─────────────────────────────────────────────────────────────────────
 vault_integration_enabled = false
@@ -165,20 +281,24 @@ restore_enabled = false
 nomad_autoscaler_enabled   = true
 autoscaler_nomad_address   = "http://127.0.0.1:4646"
 nomad_autoscaler_image     = "hashicorp/nomad-autoscaler:0.5.0"
+autoscaler_cooldown        = "2m"
 
-# ── MongoDB / Redis port binding ──────────────────────────────────────────────
+# ── MongoDB / Redis / Rserve port binding ─────────────────────────────────────
 # The OpenStudio Server startup scripts (start-server, start-web-background,
 # start-workers) use Docker Compose-style hostnames: 'db:27017' for MongoDB
-# and 'queue:6379' for Redis.  In Nomad, service discovery is via Consul.
+# and 'queue:6379' for Redis. Rserve clients in the app connect to 'rserve:6311'.
+# In Nomad, service discovery is via Consul.
 # We use:
-#   1. Static host ports (27017 / 6379) so wait-for-it can find them on the
+#   1. Static host ports (27017 / 6379 / 6311) so wait-for-it and Rserve clients
+#      can find services on fixed ports at the resolved host IP.
 #      resolved host IP.
 #   2. A Consul template stanza (in web.nomad.tpl) that generates
 #      /local/patch-hosts.sh containing the current service IPs.
 #   3. The command overrides below run patch-hosts.sh before start-server so
-#      that 'db' and 'queue' resolve correctly inside the container.
+#      that 'db', 'queue', and 'rserve' resolve correctly inside the container.
 db_static_port    = 27017
 redis_static_port = 6379
+rserve_static_port = 6311
 
 web_command = "/bin/sh"
 web_args    = ["-c", "sh /local/patch-hosts.sh && exec /usr/local/bin/start-server"]

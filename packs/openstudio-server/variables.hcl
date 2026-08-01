@@ -265,6 +265,36 @@ variable "worker_count" {
   default     = 1
 }
 
+variable "worker_instance_type" {
+  type        = string
+  description = "Optional worker node instance type/flavor selector (matches attr.platform.aws.instance-type). Leave empty to disable."
+  default     = ""
+}
+
+variable "worker_constraints" {
+  type        = any
+  description = "Placement constraints for the worker group."
+  default     = []
+}
+
+variable "worker_affinities" {
+  type        = any
+  description = "Placement affinities for the worker group."
+  default     = []
+}
+
+variable "worker_spreads" {
+  type        = any
+  description = "Spread rules for the worker group."
+  default     = []
+}
+
+variable "worker_excluded_node_ids" {
+  type        = list(string)
+  description = "Node IDs that workers must not run on. Useful for protecting stateful service nodes (for example CSI topology-pinned MongoDB/Redis nodes) from worker placement."
+  default     = []
+}
+
 variable "worker_update_max_parallel" {
   type        = number
   description = "Maximum number of worker allocations updated in parallel."
@@ -388,13 +418,79 @@ variable "autoscaler_nomad_address" {
 variable "autoscaler_prometheus_address" {
   type        = string
   description = "Address of the Prometheus server used by the Nomad Autoscaler APM plugin to evaluate scaling checks."
-  default     = "http://prometheus:9090"
+  default     = "http://openstudio-prometheus.service.consul:9090"
 }
 
 variable "autoscaler_cooldown" {
   type        = string
   description = "Cooldown duration between worker autoscaling actions (e.g. '60m', '30m'). Defaults to 60m to match the Helm chart stabilizationWindowSeconds of 3600."
   default     = "60m"
+}
+
+variable "autoscaler_constraints" {
+  type        = any
+  description = "Placement constraints for the optional Nomad Autoscaler group."
+  default     = []
+}
+
+variable "autoscaler_affinities" {
+  type        = any
+  description = "Placement affinities for the optional Nomad Autoscaler group."
+  default     = []
+}
+
+variable "autoscaler_spreads" {
+  type        = any
+  description = "Spread rules for the optional Nomad Autoscaler group."
+  default     = []
+}
+
+variable "prometheus_enabled" {
+  type        = bool
+  description = "Render an in-pack Prometheus job for autoscaler queue-depth metrics."
+  default     = false
+}
+
+variable "prometheus_image" {
+  type        = string
+  description = "Prometheus image used by the optional in-pack Prometheus job."
+  default     = "prom/prometheus:v2.53.2"
+}
+
+variable "prometheus_static_port" {
+  type        = number
+  description = "Static host port for the optional in-pack Prometheus HTTP endpoint."
+  default     = 9090
+}
+
+variable "prometheus_scrape_interval" {
+  type        = string
+  description = "Prometheus global scrape interval for the optional in-pack Prometheus job."
+  default     = "15s"
+}
+
+variable "prometheus_constraints" {
+  type        = any
+  description = "Placement constraints for the optional Prometheus group."
+  default     = []
+}
+
+variable "prometheus_affinities" {
+  type        = any
+  description = "Placement affinities for the optional Prometheus group."
+  default     = []
+}
+
+variable "prometheus_spreads" {
+  type        = any
+  description = "Spread rules for the optional Prometheus group."
+  default     = []
+}
+
+variable "redis_exporter_image" {
+  type        = string
+  description = "Redis exporter image used by the optional in-pack Prometheus job."
+  default     = "oliver006/redis_exporter:v1.62.0"
 }
 
 variable "worker_queue_requeued_query" {
@@ -447,7 +543,7 @@ variable "web_background_args" {
 
 variable "web_background_count" {
   type        = number
-  description = "The number of web-background tasks to run."
+  description = "The number of web-background task allocations. Must remain 1. Horizontal scale-out for this group is intentionally disabled; increase web_background_worker_count (COUNT) instead."
   default     = 1
 }
 
@@ -459,7 +555,7 @@ variable "web_background_worker_count" {
 
 variable "web_background_autoscaling_enabled" {
   type        = bool
-  description = "Enable Nomad Autoscaler scaling for the web-background task group."
+  description = "Deprecated for this pack profile. Keep false: web-background is pinned to a single allocation by design."
   default     = false
 }
 
@@ -535,6 +631,12 @@ variable "db_volume_source" {
   default     = "openstudio-mongodb"
 }
 
+variable "db_csi_plugin_id" {
+  type        = string
+  description = "Optional CSI plugin ID used by OpenStack helper scripts when creating the MongoDB volume. No effect unless db_storage_type = \"csi\"."
+  default     = ""
+}
+
 # Intentionally uses redis:6.2-alpine (newer, smaller) instead of the Helm chart's
 # redis:6.0.9. Operators should align the Redis major.minor version with their
 # target OpenStudio Server release requirements.
@@ -566,6 +668,12 @@ variable "redis_volume_source" {
   type        = string
   description = "Nomad volume source name for Redis persistent storage (host_volume name or CSI volume ID)."
   default     = "openstudio-redis"
+}
+
+variable "redis_csi_plugin_id" {
+  type        = string
+  description = "Optional CSI plugin ID used by OpenStack helper scripts when creating the Redis volume. No effect unless redis_storage_type = \"csi\"."
+  default     = ""
 }
 
 variable "redis_health_check_interval" {
@@ -602,6 +710,12 @@ variable "nfs_volume_mount_path" {
   type        = string
   description = "Mount path inside web and worker tasks where the NFS shared volume is attached."
   default     = "/mnt/openstudio"
+}
+
+variable "web_rserve_colocation_node" {
+  type        = string
+  description = "Optional hard node name pin applied to both the web and rserve task groups. Set to a Nomad node name (for example, \"nomad-client-172\") to force web and rserve onto the same host when shared local paths must be identical. Leave empty to disable explicit co-location pinning."
+  default     = ""
 }
 
 variable "dev_shared_data_path" {
@@ -837,6 +951,12 @@ variable "docker_user" {
   default     = "1000:1000"
 }
 
+variable "docker_ulimit_nofile" {
+  type        = string
+  description = "Default Docker nofile ulimit (soft:hard) applied to web, web-background, worker, rserve, and autoscaler tasks."
+  default     = "65535:65535"
+}
+
 variable "db_static_port" {
   type        = number
   description = <<-EOT
@@ -886,10 +1006,22 @@ variable "db_docker_user" {
   default     = "999:999"
 }
 
+variable "db_docker_ulimit_nofile" {
+  type        = string
+  description = "Docker nofile ulimit (soft:hard) for MongoDB. Increase this for high worker concurrency to prevent file descriptor exhaustion."
+  default     = "262144:262144"
+}
+
 variable "redis_docker_user" {
   type        = string
   description = "User to run the Redis container as. Redis official images expect UID/GID 999."
   default     = "999:999"
+}
+
+variable "redis_docker_ulimit_nofile" {
+  type        = string
+  description = "Docker nofile ulimit (soft:hard) for Redis. Keep this high when queue fan-out is aggressive."
+  default     = "131072:131072"
 }
 
 variable "docker_readonly_rootfs" {
@@ -971,6 +1103,43 @@ variable "verification_targets" {
     "redis=openstudio-redis.service.consul:6379",
     "rserve=openstudio-rserve.service.consul:6311",
   ]
+}
+
+# Queue sweeper — proactive stale Redis queuing-lock recovery
+variable "enable_queue_sweeper" {
+  type        = bool
+  description = "Enable periodic batch job that automatically clears stale resque:analysis:*:queuing locks from Redis. A lock is stale if it has no TTL and has been idle for longer than queue_sweeper_max_lock_age_seconds."
+  default     = false
+}
+
+variable "queue_sweeper_cron" {
+  type        = string
+  description = "Cron schedule for the queue-sweeper periodic job (UTC). Runs every 2 minutes by default to recover stale locks quickly."
+  default     = "*/2 * * * *"
+}
+
+variable "queue_sweeper_max_lock_age_seconds" {
+  type        = number
+  description = "Minimum idle seconds (OBJECT IDLETIME) before a TTL-less queuing lock is considered stale and eligible for deletion. Default 120s (2 min) — shorter than a typical analysis enqueue cycle while long enough to avoid racing an active enqueue."
+  default     = 120
+}
+
+variable "queue_sweeper_image" {
+  type        = string
+  description = "Docker image used for the queue-sweeper task. Must include redis-cli."
+  default     = "redis:6.2-alpine"
+}
+
+variable "queue_sweeper_cpu" {
+  type        = number
+  description = "CPU MHz reserved for the queue-sweeper task."
+  default     = 50
+}
+
+variable "queue_sweeper_memory" {
+  type        = number
+  description = "Memory (MiB) reserved for the queue-sweeper task."
+  default     = 64
 }
 
 # Vault KV secrets integration variables (vault_integration_enabled mechanism)
