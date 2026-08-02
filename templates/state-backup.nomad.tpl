@@ -19,7 +19,7 @@ job "[[ var "job_name" . ]]-state-backup" {
       access_mode     = "multi-node-multi-writer"
       attachment_mode = "file-system"
       [[ else ]]
-      type      = "host"
+      type = "host"
       [[ end ]]
       source    = "[[ var "backup_volume_source" . ]]"
       read_only = false
@@ -44,10 +44,10 @@ EOH
       }
 
       env {
-        MONGODB_URI            = "[[ var "db_backup_uri" . ]]"
-        BACKUP_MOUNT_PATH      = "[[ var "backup_mount_path" . ]]"
-        BACKUP_SUBDIRECTORY    = "[[ var "backup_subdirectory" . ]]"
-        BACKUP_RETENTION_DAYS  = "[[ var "backup_retention_days" . ]]"
+        MONGODB_URI           = "[[ var "db_backup_uri" . ]]"
+        BACKUP_MOUNT_PATH     = "[[ var "backup_mount_path" . ]]"
+        BACKUP_SUBDIRECTORY   = "[[ var "backup_subdirectory" . ]]"
+        BACKUP_RETENTION_DAYS = "[[ var "backup_retention_days" . ]]"
       }
 
       volume_mount {
@@ -87,11 +87,11 @@ EOH
       }
 
       env {
-        REDIS_HOST             = "[[ var "redis_backup_host" . ]]"
-        REDIS_PORT             = "[[ var "redis_backup_port" . ]]"
-        BACKUP_MOUNT_PATH      = "[[ var "backup_mount_path" . ]]"
-        BACKUP_SUBDIRECTORY    = "[[ var "backup_subdirectory" . ]]"
-        BACKUP_RETENTION_DAYS  = "[[ var "backup_retention_days" . ]]"
+        REDIS_HOST            = "[[ var "redis_backup_host" . ]]"
+        REDIS_PORT            = "[[ var "redis_backup_port" . ]]"
+        BACKUP_MOUNT_PATH     = "[[ var "backup_mount_path" . ]]"
+        BACKUP_SUBDIRECTORY   = "[[ var "backup_subdirectory" . ]]"
+        BACKUP_RETENTION_DAYS = "[[ var "backup_retention_days" . ]]"
       }
 
       volume_mount {

@@ -1,9 +1,9 @@
-[[- /*
+[[/*
   worker.nomad.tpl
   Only rendered when batch_engine = "internal" (the default).
   When batch_engine is set to "nomad_batch" or "aws_batch", simulation work is
   dispatched externally and local worker allocations are omitted.
-*/ -]]
+*/]]
 [[ if eq (var "batch_engine" .) "internal" ]]
 job "[[ var "job_name" . ]]-worker" {
   region      = "[[ var "region" . ]]"
@@ -126,9 +126,9 @@ job "[[ var "job_name" . ]]-worker" {
       driver = "docker"
 
       config {
-        image   = "[[ var "verification_image" . ]]"
+        image        = "[[ var "verification_image" . ]]"
         network_mode = "host"
-        command = "sh"
+        command      = "sh"
         args = [
           "-ec",
           "until wget -qO- \"http://[[ var "consul_address" . ]]/v1/health/service/openstudio-db?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-db\"'; do sleep 2; done; until wget -qO- \"http://[[ var "consul_address" . ]]/v1/health/service/openstudio-redis?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-redis\"'; do sleep 2; done",
@@ -186,16 +186,16 @@ EOT
       [[ end ]]
 
       config {
-        image           = "[[ if var "worker_runtime_image" . ]][[ var "worker_runtime_image" . ]][[ else ]][[ var "worker_image" . ]][[ end ]]"
-        force_pull      = [[ var "worker_force_pull" . ]]
-        command         = "[[ var "worker_command" . ]]"
+        image      = "[[ if var "worker_runtime_image" . ]][[ var "worker_runtime_image" . ]][[ else ]][[ var "worker_image" . ]][[ end ]]"
+        force_pull = [[ var "worker_force_pull" . ]]
+        command    = "[[ var "worker_command" . ]]"
         ulimit {
           nofile = "[[ var "docker_ulimit_nofile" . ]]"
         }
         readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
         cap_drop        = [[ var "docker_cap_drop" . | toJson ]]
         [[ if var "worker_extra_hosts" . ]]
-        extra_hosts     = [[ var "worker_extra_hosts" . | toJson ]]
+        extra_hosts = [[ var "worker_extra_hosts" . | toJson ]]
         [[ end ]]
         [[ if var "worker_args" . ]]
         args = [[ var "worker_args" . | toJson ]]
@@ -228,8 +228,8 @@ EOT
 
       env {
         MONGO_USER = "[[ var "mongo_user" . ]]"
-        QUEUES = "[[ var "worker_queues" . ]]"
-        COUNT  = "[[ var "worker_process_count" . ]]"
+        QUEUES     = "[[ var "worker_queues" . ]]"
+        COUNT      = "[[ var "worker_process_count" . ]]"
         [[ if var "worker_local_scratch_enabled" . ]]
         WORKER_SCRATCH_PATH = "[[ var "worker_scratch_path" . ]]"
         [[ end ]]
@@ -243,19 +243,19 @@ EOT
         [[ end ]]
         [[ if var "swift_artifact_storage_enabled" . ]]
         ARTIFACT_STORAGE_BACKEND = "swift"
-        OS_AUTH_URL     = "[[ var "swift_auth_url" . ]]"
-        OS_USERNAME     = "[[ var "swift_username" . ]]"
-        OS_PASSWORD     = "[[ var "swift_password" . ]]"
-        OS_TENANT_NAME  = "[[ var "swift_tenant_name" . ]]"
-        OS_REGION_NAME  = "[[ var "swift_region" . ]]"
-        OS_AUTH_VERSION = "[[ var "swift_auth_version" . ]]"
-        SWIFT_CONTAINER = "[[ var "swift_container" . ]]"
+        OS_AUTH_URL              = "[[ var "swift_auth_url" . ]]"
+        OS_USERNAME              = "[[ var "swift_username" . ]]"
+        OS_PASSWORD              = "[[ var "swift_password" . ]]"
+        OS_TENANT_NAME           = "[[ var "swift_tenant_name" . ]]"
+        OS_REGION_NAME           = "[[ var "swift_region" . ]]"
+        OS_AUTH_VERSION          = "[[ var "swift_auth_version" . ]]"
+        SWIFT_CONTAINER          = "[[ var "swift_container" . ]]"
         [[ end ]]
       }
 
       template {
-        destination   = "local/patch-hosts.sh"
-        change_mode   = "script"
+        destination = "local/patch-hosts.sh"
+        change_mode = "script"
         change_script {
           command       = "/bin/sh"
           args          = ["-c", "grep -vE ' (db|queue|rserve|web)$' /etc/hosts > /alloc/hosts.tmp 2>/dev/null; cat /alloc/hosts.tmp > /etc/hosts; sh /local/patch-hosts.sh"]
@@ -264,7 +264,7 @@ EOT
         }
         left_delimiter  = "{{"
         right_delimiter = "}}"
-        data = <<-EOT
+        data            = <<-EOT
 #!/bin/sh
 {{ range service "openstudio-db" -}}
 echo "{{ .Address }} db" >> /etc/hosts
@@ -314,9 +314,9 @@ EOT
       }
 
       config {
-        image       = "[[ var "vector_image" . ]]"
-        force_pull  = false
-        args  = ["--config", "local/vector.toml"]
+        image      = "[[ var "vector_image" . ]]"
+        force_pull = false
+        args       = ["--config", "local/vector.toml"]
       }
 
       template {

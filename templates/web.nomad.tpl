@@ -77,9 +77,9 @@ job "[[ var "job_name" . ]]-web" {
       driver = "docker"
 
       config {
-        image   = "[[ var "verification_image" . ]]"
+        image        = "[[ var "verification_image" . ]]"
         network_mode = "host"
-        command = "sh"
+        command      = "sh"
         args = [
           "-ec",
           "until wget -qO- \"http://[[ var "consul_address" . ]]/v1/health/service/openstudio-db?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-db\"'; do sleep 2; done; until wget -qO- \"http://[[ var "consul_address" . ]]/v1/health/service/openstudio-redis?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-redis\"'; do sleep 2; done; until wget -qO- \"http://[[ var "consul_address" . ]]/v1/health/service/openstudio-rserve?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-rserve\"'; do sleep 2; done",
@@ -137,27 +137,27 @@ EOT
       [[ end ]]
 
       env {
-        MONGO_USER      = "[[ var "mongo_user" . ]]"
-        QUEUES          = "analysis_wrappers"
+        MONGO_USER = "[[ var "mongo_user" . ]]"
+        QUEUES     = "analysis_wrappers"
         [[ if gt (var "web_mongoid_pool_size" .) 0 ]]
-        MONGOID_POOL    = "[[ var "web_mongoid_pool_size" . ]]"
+        MONGOID_POOL = "[[ var "web_mongoid_pool_size" . ]]"
         [[ end ]]
         [[ if gt (var "web_max_requests" .) 0 ]]
-        MAX_REQUESTS    = "[[ var "web_max_requests" . ]]"
+        MAX_REQUESTS = "[[ var "web_max_requests" . ]]"
         [[ else ]]
-        MAX_REQUESTS    = "[[ printf "%.0f" (ceil (mulf (var "worker_max_replicas" .) (var "web_max_requests_multiplier" .))) ]]"
+        MAX_REQUESTS = "[[ printf "%.0f" (ceil (mulf (var "worker_max_replicas" .) (var "web_max_requests_multiplier" .))) ]]"
         [[ end ]]
         [[ if gt (var "web_max_pool" .) 0 ]]
-        MAX_POOL        = "[[ var "web_max_pool" . ]]"
+        MAX_POOL = "[[ var "web_max_pool" . ]]"
         [[ else ]]
-        MAX_POOL        = "[[ printf "%.0f" (ceil (divf (mulf (var "web_memory" .) 0.75) (var "web_passenger_memory_per_process" .))) ]]"
+        MAX_POOL = "[[ printf "%.0f" (ceil (divf (mulf (var "web_memory" .) 0.75) (var "web_passenger_memory_per_process" .))) ]]"
         [[ end ]]
         OS_SERVER_NUMBER_OF_WORKERS = "[[ var "worker_process_count" . ]]"
         [[ if var "os_server_sampling_backend" . ]]
         OS_SERVER_SAMPLING_BACKEND = "[[ var "os_server_sampling_backend" . ]]"
         [[ end ]]
         [[ if var "web_redis_url" . ]]
-        REDIS_URL       = "[[ var "web_redis_url" . ]]"
+        REDIS_URL = "[[ var "web_redis_url" . ]]"
         [[ end ]]
         [[ if not (var "vault_integration_enabled" .) ]]
         MONGO_PASSWORD  = "[[ var "mongo_password" . ]]"
@@ -166,13 +166,13 @@ EOT
         [[ end ]]
         [[ if var "swift_artifact_storage_enabled" . ]]
         ARTIFACT_STORAGE_BACKEND = "swift"
-        OS_AUTH_URL     = "[[ var "swift_auth_url" . ]]"
-        OS_USERNAME     = "[[ var "swift_username" . ]]"
-        OS_PASSWORD     = "[[ var "swift_password" . ]]"
-        OS_TENANT_NAME  = "[[ var "swift_tenant_name" . ]]"
-        OS_REGION_NAME  = "[[ var "swift_region" . ]]"
-        OS_AUTH_VERSION = "[[ var "swift_auth_version" . ]]"
-        SWIFT_CONTAINER = "[[ var "swift_container" . ]]"
+        OS_AUTH_URL              = "[[ var "swift_auth_url" . ]]"
+        OS_USERNAME              = "[[ var "swift_username" . ]]"
+        OS_PASSWORD              = "[[ var "swift_password" . ]]"
+        OS_TENANT_NAME           = "[[ var "swift_tenant_name" . ]]"
+        OS_REGION_NAME           = "[[ var "swift_region" . ]]"
+        OS_AUTH_VERSION          = "[[ var "swift_auth_version" . ]]"
+        SWIFT_CONTAINER          = "[[ var "swift_container" . ]]"
         [[ end ]]
         [[ if ne (var "batch_engine" .) "internal" ]]
         # ── External batch dispatcher flags ──────────────────────────────────
@@ -201,11 +201,11 @@ EOT
       # scoped to submit/dispatch/read jobs in the batch namespace.
       # The agent exposes the token at ${NOMAD_TOKEN} automatically.
       identity {
-        name        = "nomad-batch-dispatcher"
-        aud         = ["nomad.io"]
-        ttl         = "[[ var "nomad_batch_identity_ttl" . ]]"
-        env         = true
-        file        = false
+        name = "nomad-batch-dispatcher"
+        aud  = ["nomad.io"]
+        ttl  = "[[ var "nomad_batch_identity_ttl" . ]]"
+        env  = true
+        file = false
       }
       [[ end ]]
 
@@ -218,8 +218,8 @@ EOT
       # initial race where rserve registers after the template first rendered),
       # idempotently strip old entries then re-apply the fresh ones.
       template {
-        destination   = "local/patch-hosts.sh"
-        change_mode   = "script"
+        destination = "local/patch-hosts.sh"
+        change_mode = "script"
         change_script {
           command       = "/bin/sh"
           args          = ["-c", "grep -vE ' (db|queue|rserve)$' /etc/hosts > /alloc/hosts.tmp 2>/dev/null; cat /alloc/hosts.tmp > /etc/hosts; sh /local/patch-hosts.sh"]
@@ -228,7 +228,7 @@ EOT
         }
         left_delimiter  = "{{"
         right_delimiter = "}}"
-        data = <<-EOT
+        data            = <<-EOT
 #!/bin/sh
 {{ range service "openstudio-db" -}}
 echo "{{ .Address }} db" >> /etc/hosts
@@ -243,15 +243,15 @@ EOT
       }
 
       config {
-        image           = "[[ var "web_image" . ]]"
-        ports           = ["http"]
+        image = "[[ var "web_image" . ]]"
+        ports = ["http"]
         ulimit {
           nofile = "[[ var "docker_ulimit_nofile" . ]]"
         }
         readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
         cap_drop        = [[ var "docker_cap_drop" . | toJson ]]
         [[ if var "web_extra_hosts" . ]]
-        extra_hosts     = [[ var "web_extra_hosts" . | toJson ]]
+        extra_hosts = [[ var "web_extra_hosts" . | toJson ]]
         [[ end ]]
         [[ if ne (var "web_command" .) "" ]]
         command = "[[ var "web_command" . ]]"
@@ -332,9 +332,9 @@ EOT
       }
 
       config {
-        image       = "[[ var "vector_image" . ]]"
-        force_pull  = false
-        args  = ["--config", "local/vector.toml"]
+        image      = "[[ var "vector_image" . ]]"
+        force_pull = false
+        args       = ["--config", "local/vector.toml"]
       }
 
       template {
@@ -406,12 +406,12 @@ EOH
       [[ end ]]
 
       config {
-        image   = "[[ var "poststop_cleanup_image" . ]]"
+        image = "[[ var "poststop_cleanup_image" . ]]"
         # Run as root so we can mkdir and chmod on the NFS mount.
         # CHOWN + FOWNER are re-added after the global cap_drop = ["ALL"].
         cap_drop = ["ALL"]
         cap_add  = ["CHOWN", "FOWNER"]
-        command = "sh"
+        command  = "sh"
         args = [
           "-c",
           <<-EOF
@@ -440,9 +440,9 @@ EOF
       driver = "docker"
 
       config {
-        image   = "[[ var "verification_image" . ]]"
+        image        = "[[ var "verification_image" . ]]"
         network_mode = "host"
-        command = "sh"
+        command      = "sh"
         args = [
           "-ec",
           "until wget -qO- \"http://[[ var "consul_address" . ]]/v1/health/service/openstudio-db?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-db\"'; do sleep 2; done; until wget -qO- \"http://[[ var "consul_address" . ]]/v1/health/service/openstudio-redis?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-redis\"'; do sleep 2; done; until wget -qO- \"http://[[ var "consul_address" . ]]/v1/health/service/openstudio-rserve?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-rserve\"'; do sleep 2; done",
@@ -500,20 +500,20 @@ EOT
       [[ end ]]
 
       env {
-        MONGO_USER      = "[[ var "mongo_user" . ]]"
-        QUEUES          = "[[ var "web_background_queues" . ]]"
-        COUNT           = "[[ var "web_background_worker_count" . ]]"
+        MONGO_USER = "[[ var "mongo_user" . ]]"
+        QUEUES     = "[[ var "web_background_queues" . ]]"
+        COUNT      = "[[ var "web_background_worker_count" . ]]"
         [[ if gt (var "web_background_mongoid_pool_size" .) 0 ]]
-        MONGOID_POOL    = "[[ var "web_background_mongoid_pool_size" . ]]"
+        MONGOID_POOL = "[[ var "web_background_mongoid_pool_size" . ]]"
         [[ else ]]
-        MONGOID_POOL    = "[[ add (var "web_background_worker_count" .) 2 ]]"
+        MONGOID_POOL = "[[ add (var "web_background_worker_count" .) 2 ]]"
         [[ end ]]
         OS_SERVER_NUMBER_OF_WORKERS = "[[ var "worker_process_count" . ]]"
         [[ if var "os_server_sampling_backend" . ]]
         OS_SERVER_SAMPLING_BACKEND = "[[ var "os_server_sampling_backend" . ]]"
         [[ end ]]
         [[ if var "web_redis_url" . ]]
-        REDIS_URL       = "[[ var "web_redis_url" . ]]"
+        REDIS_URL = "[[ var "web_redis_url" . ]]"
         [[ end ]]
         [[ if not (var "vault_integration_enabled" .) ]]
         MONGO_PASSWORD  = "[[ var "mongo_password" . ]]"
@@ -523,8 +523,8 @@ EOT
       }
 
       template {
-        destination   = "local/patch-hosts.sh"
-        change_mode   = "script"
+        destination = "local/patch-hosts.sh"
+        change_mode = "script"
         change_script {
           command       = "/bin/sh"
           args          = ["-c", "grep -vE ' (db|queue|rserve)$' /etc/hosts > /alloc/hosts.tmp 2>/dev/null; cat /alloc/hosts.tmp > /etc/hosts; sh /local/patch-hosts.sh"]
@@ -533,7 +533,7 @@ EOT
         }
         left_delimiter  = "{{"
         right_delimiter = "}}"
-        data = <<-EOT
+        data            = <<-EOT
 #!/bin/sh
 {{ range service "openstudio-db" -}}
 echo "{{ .Address }} db" >> /etc/hosts
@@ -548,14 +548,14 @@ EOT
       }
 
       config {
-        image           = "[[ var "web_background_image" . ]]"
+        image = "[[ var "web_background_image" . ]]"
         ulimit {
           nofile = "[[ var "docker_ulimit_nofile" . ]]"
         }
         readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
         cap_drop        = [[ var "docker_cap_drop" . | toJson ]]
         [[ if var "web_extra_hosts" . ]]
-        extra_hosts     = [[ var "web_extra_hosts" . | toJson ]]
+        extra_hosts = [[ var "web_extra_hosts" . | toJson ]]
         [[ end ]]
         [[ if ne (var "web_background_command" .) "" ]]
         command = "[[ var "web_background_command" . ]]"
@@ -609,8 +609,8 @@ EOT
       }
 
       resources {
-        cpu        = [[ var "web_background_cpu" . ]]
-        memory     = [[ var "web_background_memory" . ]]
+        cpu                              = [[ var "web_background_cpu" . ]]
+        memory                           = [[ var "web_background_memory" . ]]
         [[ if gt (var "web_background_memory_max" .) 0 ]]memory_max = [[ var "web_background_memory_max" . ]][[ end ]]
       }
     }
@@ -625,9 +625,9 @@ EOT
       }
 
       config {
-        image       = "[[ var "vector_image" . ]]"
-        force_pull  = false
-        args  = ["--config", "local/vector.toml"]
+        image      = "[[ var "vector_image" . ]]"
+        force_pull = false
+        args       = ["--config", "local/vector.toml"]
       }
 
       template {

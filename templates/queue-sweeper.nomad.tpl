@@ -31,9 +31,9 @@ job "[[ var "job_name" . ]]-queue-sweeper" {
       driver = "docker"
 
       config {
-        image    = "[[ var "queue_sweeper_image" . ]]"
-        command  = "/bin/sh"
-        args     = ["/local/sweep.sh"]
+        image           = "[[ var "queue_sweeper_image" . ]]"
+        command         = "/bin/sh"
+        args            = ["/local/sweep.sh"]
         readonly_rootfs = false
       }
 

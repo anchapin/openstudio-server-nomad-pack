@@ -72,9 +72,9 @@ job "[[ var "job_name" . ]]-redis" {
       [[ end ]]
 
       config {
-        image           = "[[ var "redis_image" . ]]"
-        ports           = ["redis"]
-        args            = [
+        image = "[[ var "redis_image" . ]]"
+        ports = ["redis"]
+        args = [
           "--maxclients", "[[ var "redis_config_maxclients" . ]]",
           "--tcp-backlog", "[[ var "redis_config_tcp_backlog" . ]]",
           "--timeout", "[[ var "redis_config_timeout_seconds" . ]]",
@@ -125,8 +125,8 @@ job "[[ var "job_name" . ]]-redis" {
       }
 
       resources {
-        cpu    = [[ var "redis_cpu" . ]]
-        memory = [[ var "redis_memory" . ]]
+        cpu                             = [[ var "redis_cpu" . ]]
+        memory                          = [[ var "redis_memory" . ]]
         [[ if gt (var "redis_memory_max" .) 0 ]]memory_max = [[ var "redis_memory_max" . ]][[ end ]]
       }
 
@@ -170,9 +170,9 @@ EOT
       }
 
       config {
-        image       = "[[ var "vector_image" . ]]"
-        force_pull  = false
-        args  = ["--config", "local/vector.toml"]
+        image      = "[[ var "vector_image" . ]]"
+        force_pull = false
+        args       = ["--config", "local/vector.toml"]
       }
 
       template {
