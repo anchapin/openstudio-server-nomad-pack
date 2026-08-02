@@ -270,6 +270,32 @@ job "[[ var "job_name" . ]]-system-hooks" {
       }
     }
 
+    [[ if var "enable_vector_collection" . ]]
+    task "pull-vector" {
+      driver = "docker"
+
+      kill_timeout = "[[ var "prepull_kill_timeout" . ]]"
+
+      config {
+        image   = "[[ var "vector_image" . ]]"
+        command = "sh"
+        args    = ["-c", "echo pulled vector image"]
+        logging {
+          type = "[[ var "log_driver_type" . ]]"
+          config {
+            max-size = "[[ var "log_max_size" . ]]"
+            max-file = "[[ var "log_max_files" . ]]"
+          }
+        }
+      }
+
+      resources {
+        cpu    = 100
+        memory = 64
+      }
+    }
+    [[ end ]]
+
     task "image-cache-ready-core" {
       driver = "docker"
 
