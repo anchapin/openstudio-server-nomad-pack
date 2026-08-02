@@ -266,6 +266,9 @@ echo "{{ .Address }} queue" >> /etc/hosts
 {{ range service "openstudio-rserve" -}}
 echo "{{ .Address }} rserve" >> /etc/hosts
 {{ end -}}
+{{ range service "openstudio-web" -}}
+echo "{{ .Address }} web" >> /etc/hosts
+{{ end -}}
 EOT
       }
 
