@@ -31,7 +31,7 @@ run_integration_case "custom-images" \
 run_integration_case "nomad-batch-engine" \
   --var "batch_engine=nomad_batch" \
   --var "nomad_batch_datacenter=dc1" \
-  --var "nomad_batch_namespace=batch" \
+  --var "nomad_batch_namespace=default" \
   --var "nomad_batch_job_name=openstudio-simulation"
 run_integration_case "aws-batch-engine" \
   --var "batch_engine=aws_batch" \
