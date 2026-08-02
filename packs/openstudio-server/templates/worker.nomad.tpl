@@ -179,7 +179,6 @@ EOT
 
       [[ if var "vault_enabled" . ]]
       vault {
-        role = "[[ var "vault_default_role" . ]]"
       }
       [[ end ]]
 
