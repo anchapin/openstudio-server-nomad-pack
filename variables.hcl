@@ -595,6 +595,30 @@ variable "worker_queue_simulations_target" {
   default     = 2
 }
 
+variable "worker_local_scratch_enabled" {
+  type        = bool
+  description = "Enable node-local ephemeral disk as scratch space for worker simulation I/O. When true, Nomad provisions an ephemeral_disk on the node running the allocation. Simulations stage inputs to this local disk, run there, then publish final artifacts to shared NFS — reducing write amplification on the shared filesystem. Requires the application to honour WORKER_SCRATCH_PATH and copy outputs before task completion. Defaults to false for backward compatibility."
+  default     = false
+}
+
+variable "worker_local_scratch_size" {
+  type        = number
+  description = "Size in MB of the ephemeral disk allocated for worker local scratch. Only used when worker_local_scratch_enabled = true. Default is 10240 (10 GiB), sufficient for a typical OpenStudio simulation workspace. Increase for large parametric runs that produce many intermediate files."
+  default     = 10240
+}
+
+variable "worker_local_scratch_sticky" {
+  type        = bool
+  description = "Whether the worker ephemeral disk is sticky. When true, Nomad attempts to reschedule the allocation onto the same node and reuse the existing local disk data — useful for resuming interrupted simulations without re-staging inputs. When false (default), the disk is cleared on allocation GC or rescheduling. Only used when worker_local_scratch_enabled = true."
+  default     = false
+}
+
+variable "worker_scratch_path" {
+  type        = string
+  description = "Mount path inside the worker container where the ephemeral local scratch disk is accessible. The application uses this path to stage simulation inputs and write intermediate outputs before publishing to shared NFS. Only used when worker_local_scratch_enabled = true."
+  default     = "/scratch"
+}
+
 variable "web_background_image" {
   type        = string
   description = "The image name and tag for the OpenStudio Server web-background container."

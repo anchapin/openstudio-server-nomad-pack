@@ -101,6 +101,13 @@ job "[[ var "job_name" . ]]-worker" {
     }
     [[ end ]]
     [[ end ]]
+    [[ if var "worker_local_scratch_enabled" . ]]
+    ephemeral_disk {
+      size    = [[ var "worker_local_scratch_size" . ]]
+      sticky  = [[ var "worker_local_scratch_sticky" . ]]
+      migrate = true
+    }
+    [[ end ]]
     [[ if var "enable_arch_constraint" . ]]
     [[ template "openstudio_server.arch_constraint" . ]]
     [[ end ]]
@@ -220,6 +227,9 @@ EOT
         MONGO_USER = "[[ var "mongo_user" . ]]"
         QUEUES = "[[ var "worker_queues" . ]]"
         COUNT  = "[[ var "worker_process_count" . ]]"
+        [[ if var "worker_local_scratch_enabled" . ]]
+        WORKER_SCRATCH_PATH = "[[ var "worker_scratch_path" . ]]"
+        [[ end ]]
         [[ if var "web_redis_url" . ]]
         REDIS_URL = "[[ var "web_redis_url" . ]]"
         [[ end ]]
