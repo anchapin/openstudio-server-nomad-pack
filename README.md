@@ -112,6 +112,18 @@ vagrant ssh vault -c "VAULT_ADDR=http://127.0.0.1:8200 VAULT_TOKEN=root vault st
 vagrant destroy -f
 ```
 
+## Repository cleanup
+
+Use the cleanup helper to remove transient files and keep generated variable docs consolidated from `variables.hcl`:
+
+```bash
+# Preview changes only
+./scripts/cleanup-repo.sh
+
+# Apply cleanup + refresh docs/variables.md and docs/variables.generated.md
+./scripts/cleanup-repo.sh --apply
+```
+
 ## CI Validation
 
 GitHub Actions validation includes:
