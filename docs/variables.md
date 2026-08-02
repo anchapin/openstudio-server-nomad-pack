@@ -256,6 +256,22 @@
 | `swift_container` | `string` | `"openstudio-artifacts"` | Swift container name where analysis artifacts are stored (SWIFT_CONTAINER). The container must exist before deploying — see docs/swift-artifact-backend.md. |
 | `swift_region` | `string` | `""` | OpenStack region name (OS_REGION_NAME). Leave empty to use the default region. |
 | `swift_auth_version` | `string` | `"3"` | Keystone API version used for Swift authentication (OS_AUTH_VERSION). Accepted values: '2', '3' (default). |
+| `batch_engine` | `string` | `"internal"` | Selects the compute backend for OpenStudio simulation workers. 'internal' (default) runs workers as Nomad service jobs on this cluster. 'nomad_batch' dispatches parameterized Nomad batch jobs, allowing the web dispatcher to submit simulations to a separate Nomad namespace or datacenter. 'aws_batch' routes submissions to an external AWS Batch queue. When set to anything other than 'internal', the worker and rserve service jobs are omitted from the deployment (scale-to-zero). |
+| `nomad_batch_datacenter` | `string` | `""` | Nomad datacenter to target for nomad_batch job submissions. Only used when batch_engine = 'nomad_batch'. Defaults to the first datacenter in the 'datacenters' list when left empty. |
+| `nomad_batch_namespace` | `string` | `""` | Nomad namespace in which parameterized batch jobs are dispatched. Only used when batch_engine = 'nomad_batch'. Defaults to nomad_namespace when left empty. |
+| `nomad_batch_job_name` | `string` | `"openstudio-simulation"` | Name of the parameterized Nomad batch job that the web dispatcher will dispatch for each simulation run. Only used when batch_engine = 'nomad_batch'. |
+| `nomad_batch_worker_image` | `string` | `""` | Container image used by the Nomad batch worker task. Defaults to worker_image when left empty. |
+| `nomad_batch_cpu` | `number` | `4000` | CPU MHz allocated to each Nomad batch simulation task. |
+| `nomad_batch_memory` | `number` | `8192` | Memory (MB) allocated to each Nomad batch simulation task. |
+| `nomad_batch_worker_command` | `string` | `"/usr/local/bin/start-workers"` | Entrypoint command for the Nomad batch worker container. |
+| `nomad_batch_worker_args` | `list(string)` | `[]` | Arguments passed to nomad_batch_worker_command. |
+| `nomad_batch_constraints` | `list(object({` | `[]` | Placement constraints for the Nomad batch worker group. |
+| `nomad_batch_kill_timeout` | `string` | `"5200s"` | Kill timeout for the Nomad batch worker task. Should be >= the longest expected simulation runtime. |
+| `nomad_batch_identity_ttl` | `string` | `"1h"` | TTL for the Nomad Workload Identity token issued to the web task for API dispatch. Only used when batch_engine = 'nomad_batch'. |
+| `aws_region` | `string` | `"us-east-1"` | AWS region where the Batch compute environment is located. Only used when batch_engine = 'aws_batch'. |
+| `aws_batch_job_queue` | `string` | `""` | ARN or name of the AWS Batch job queue to which simulations are submitted. Only used when batch_engine = 'aws_batch'. |
+| `aws_batch_job_definition` | `string` | `""` | ARN or name of the AWS Batch job definition used for simulation jobs. Only used when batch_engine = 'aws_batch'. |
+| `aws_batch_vault_aws_role` | `string` | `"openstudio-aws-batch"` | Vault AWS secrets engine role name used to generate short-lived IAM credentials for the web dispatcher. Only used when batch_engine = 'aws_batch' and vault_enabled = true. |
 
 ## Job Priority
 

@@ -28,5 +28,15 @@ run_integration_case "custom-images" \
   --var "web_image=nrel/openstudio-server:3.7.0" \
   --var "worker_image=nrel/openstudio-server:3.7.0" \
   --var "rserve_image=nrel/rserve:3.7.0"
+run_integration_case "nomad-batch-engine" \
+  --var "batch_engine=nomad_batch" \
+  --var "nomad_batch_datacenter=dc1" \
+  --var "nomad_batch_namespace=batch" \
+  --var "nomad_batch_job_name=openstudio-simulation"
+run_integration_case "aws-batch-engine" \
+  --var "batch_engine=aws_batch" \
+  --var "aws_region=us-east-1" \
+  --var "aws_batch_job_queue=openstudio-queue" \
+  --var "aws_batch_job_definition=openstudio-worker"
 
 echo "Nomad pack integration scenarios completed successfully."

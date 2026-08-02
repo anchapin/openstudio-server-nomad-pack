@@ -1,3 +1,11 @@
+[[- /*
+  rserve.nomad.tpl
+  Only rendered when batch_engine = "internal" (the default).
+  When batch_engine is set to "nomad_batch" or "aws_batch", Rserve is not
+  needed for remote worker dispatch; the external runner environment provides
+  its own R execution context.
+*/ -]]
+[[ if eq (var "batch_engine" .) "internal" ]]
 job "[[ var "job_name" . ]]-rserve" {
   region      = "[[ var "region" . ]]"
   datacenters = [[ var "datacenters" . | toJson ]]
@@ -204,3 +212,5 @@ EOT
     }
   }
 }
+
+[[ end ]]

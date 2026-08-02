@@ -4,6 +4,10 @@
 # Grants the ability to run, stop, inspect jobs, and tail allocation logs.
 # Intended for cluster operators managing OpenStudio Server deployments.
 #
+# Also covers the batch-dispatcher capability required when batch_engine is
+# set to "nomad_batch" — operators can submit and dispatch parameterized
+# simulation batch jobs from the web container Workload Identity.
+#
 # Namespace defaults to "default" to match the pack default. If your
 # deployment uses a different namespace, change the label below or use:
 #   bash scripts/apply-acl-policies.sh --namespace <your-namespace>

@@ -174,7 +174,40 @@ EOT
         OS_AUTH_VERSION = "[[ var "swift_auth_version" . ]]"
         SWIFT_CONTAINER = "[[ var "swift_container" . ]]"
         [[ end ]]
+        [[ if ne (var "batch_engine" .) "internal" ]]
+        # ── External batch dispatcher flags ──────────────────────────────────
+        # The Ruby app reads OS_EXTERNAL_BATCH to enable its batch dispatcher
+        # code path, and BATCH_PROVIDER to select the backend adapter.
+        OS_EXTERNAL_BATCH = "true"
+        BATCH_PROVIDER    = "[[ var "batch_engine" . ]]"
+        [[ if eq (var "batch_engine" .) "nomad_batch" ]]
+        # Nomad Batch provider settings passed to the dispatcher.
+        # NOMAD_ADDR is automatically injected by the Nomad agent.
+        # NOMAD_TOKEN is provided by the Workload Identity block below.
+        NOMAD_BATCH_JOB_NAME  = "[[ var "job_name" . ]]-[[ var "nomad_batch_job_name" . ]]"
+        NOMAD_BATCH_NAMESPACE = "[[ if ne (var "nomad_batch_namespace" .) "" ]][[ var "nomad_batch_namespace" . ]][[ else ]][[ var "nomad_namespace" . ]][[ end ]]"
+        [[ end ]]
+        [[ if eq (var "batch_engine" .) "aws_batch" ]]
+        # AWS Batch provider settings.
+        AWS_DEFAULT_REGION       = "[[ var "aws_region" . ]]"
+        AWS_BATCH_JOB_QUEUE      = "[[ var "aws_batch_job_queue" . ]]"
+        AWS_BATCH_JOB_DEFINITION = "[[ var "aws_batch_job_definition" . ]]"
+        [[ end ]]
+        [[ end ]]
       }
+
+      [[ if eq (var "batch_engine" .) "nomad_batch" ]]
+      # Nomad Workload Identity — grants the web task a short-lived token
+      # scoped to submit/dispatch/read jobs in the batch namespace.
+      # The agent exposes the token at ${NOMAD_TOKEN} automatically.
+      identity {
+        name        = "nomad-batch-dispatcher"
+        aud         = ["nomad.io"]
+        ttl         = "[[ var "nomad_batch_identity_ttl" . ]]"
+        env         = true
+        file        = false
+      }
+      [[ end ]]
 
       # Consul template to resolve 'db', 'queue', and 'rserve' hostnames used by the
       # OpenStudio Server startup scripts (which were written for Docker Compose

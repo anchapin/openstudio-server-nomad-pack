@@ -1562,3 +1562,111 @@ variable "swift_auth_version" {
   description = "Keystone API version used for Swift authentication (OS_AUTH_VERSION). Accepted values: '2', '3' (default)."
   default     = "3"
 }
+
+# ---------------------------------------------------------------------------
+# External Batch Runner
+# ---------------------------------------------------------------------------
+
+variable "batch_engine" {
+  type        = string
+  description = "Selects the compute backend for OpenStudio simulation workers. 'internal' (default) runs workers as Nomad service jobs on this cluster. 'nomad_batch' dispatches parameterized Nomad batch jobs, allowing the web dispatcher to submit simulations to a separate Nomad namespace or datacenter. 'aws_batch' routes submissions to an external AWS Batch queue. When set to anything other than 'internal', the worker and rserve service jobs are omitted from the deployment (scale-to-zero)."
+  default     = "internal"
+}
+
+# -- Nomad Batch provider settings ------------------------------------------
+
+variable "nomad_batch_datacenter" {
+  type        = string
+  description = "Nomad datacenter to target for nomad_batch job submissions. Only used when batch_engine = 'nomad_batch'. Defaults to the first datacenter in the 'datacenters' list when left empty."
+  default     = ""
+}
+
+variable "nomad_batch_namespace" {
+  type        = string
+  description = "Nomad namespace in which parameterized batch jobs are dispatched. Only used when batch_engine = 'nomad_batch'. Defaults to nomad_namespace when left empty."
+  default     = ""
+}
+
+variable "nomad_batch_job_name" {
+  type        = string
+  description = "Name of the parameterized Nomad batch job that the web dispatcher will dispatch for each simulation run. Only used when batch_engine = 'nomad_batch'."
+  default     = "openstudio-simulation"
+}
+
+variable "nomad_batch_worker_image" {
+  type        = string
+  description = "Container image used by the Nomad batch worker task. Defaults to worker_image when left empty."
+  default     = ""
+}
+
+variable "nomad_batch_cpu" {
+  type        = number
+  description = "CPU MHz allocated to each Nomad batch simulation task."
+  default     = 4000
+}
+
+variable "nomad_batch_memory" {
+  type        = number
+  description = "Memory (MB) allocated to each Nomad batch simulation task."
+  default     = 8192
+}
+
+variable "nomad_batch_worker_command" {
+  type        = string
+  description = "Entrypoint command for the Nomad batch worker container."
+  default     = "/usr/local/bin/start-workers"
+}
+
+variable "nomad_batch_worker_args" {
+  type        = list(string)
+  description = "Arguments passed to nomad_batch_worker_command."
+  default     = []
+}
+
+variable "nomad_batch_constraints" {
+  type = list(object({
+    attribute = string
+    operator  = string
+    value     = string
+  }))
+  description = "Placement constraints for the Nomad batch worker group."
+  default     = []
+}
+
+variable "nomad_batch_kill_timeout" {
+  type        = string
+  description = "Kill timeout for the Nomad batch worker task. Should be >= the longest expected simulation runtime."
+  default     = "5200s"
+}
+
+variable "nomad_batch_identity_ttl" {
+  type        = string
+  description = "TTL for the Nomad Workload Identity token issued to the web task for API dispatch. Only used when batch_engine = 'nomad_batch'."
+  default     = "1h"
+}
+
+# -- AWS Batch provider settings --------------------------------------------
+
+variable "aws_region" {
+  type        = string
+  description = "AWS region where the Batch compute environment is located. Only used when batch_engine = 'aws_batch'."
+  default     = "us-east-1"
+}
+
+variable "aws_batch_job_queue" {
+  type        = string
+  description = "ARN or name of the AWS Batch job queue to which simulations are submitted. Only used when batch_engine = 'aws_batch'."
+  default     = ""
+}
+
+variable "aws_batch_job_definition" {
+  type        = string
+  description = "ARN or name of the AWS Batch job definition used for simulation jobs. Only used when batch_engine = 'aws_batch'."
+  default     = ""
+}
+
+variable "aws_batch_vault_aws_role" {
+  type        = string
+  description = "Vault AWS secrets engine role name used to generate short-lived IAM credentials for the web dispatcher. Only used when batch_engine = 'aws_batch' and vault_enabled = true."
+  default     = "openstudio-aws-batch"
+}
