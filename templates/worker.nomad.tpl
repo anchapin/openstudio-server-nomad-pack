@@ -1,3 +1,10 @@
+[[- /*
+  worker.nomad.tpl
+  Only rendered when batch_engine = "internal" (the default).
+  When batch_engine is set to "nomad_batch" or "aws_batch", simulation work is
+  dispatched externally and local worker allocations are omitted.
+*/ -]]
+[[ if eq (var "batch_engine" .) "internal" ]]
 job "[[ var "job_name" . ]]-worker" {
   region      = "[[ var "region" . ]]"
   datacenters = [[ var "datacenters" . | toJson ]]
@@ -328,3 +335,5 @@ EOH
     [[ end ]]
   }
 }
+
+[[ end ]]

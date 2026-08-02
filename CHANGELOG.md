@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added `batch_engine` variable (`"internal"` | `"nomad_batch"` | `"aws_batch"`) to select the simulation compute backend; defaults to `"internal"` for full backward compatibility.
+- Added Nomad Batch provider variables: `nomad_batch_datacenter`, `nomad_batch_namespace`, `nomad_batch_job_name`, `nomad_batch_worker_image`, `nomad_batch_cpu`, `nomad_batch_memory`, `nomad_batch_worker_command`, `nomad_batch_worker_args`, `nomad_batch_constraints`, `nomad_batch_kill_timeout`, `nomad_batch_identity_ttl`.
+- Added AWS Batch provider variables: `aws_region`, `aws_batch_job_queue`, `aws_batch_job_definition`, `aws_batch_vault_aws_role`.
+- Added `templates/nomad-batch-worker.nomad.tpl` — a parameterized Nomad batch job (`type = "batch"`) deployed when `batch_engine = "nomad_batch"`. The web dispatcher dispatches one allocation per simulation via `POST /v1/job/<name>/dispatch`.
+- Added `OS_EXTERNAL_BATCH`, `BATCH_PROVIDER`, `NOMAD_BATCH_JOB_NAME`, `NOMAD_BATCH_NAMESPACE`, `AWS_DEFAULT_REGION`, `AWS_BATCH_JOB_QUEUE`, and `AWS_BATCH_JOB_DEFINITION` env vars injected into the web task when `batch_engine != "internal"`.
+- Added Nomad Workload Identity `identity` block to the web task when `batch_engine = "nomad_batch"`, providing a scoped short-lived `NOMAD_TOKEN` for API dispatch without static credentials.
+- Added `policies/batch-dispatcher.hcl` — minimal ACL policy for the web Workload Identity (submit-job, dispatch-job, read-job, list-jobs only).
+- Added `nomad-batch-engine` and `aws-batch-engine` scenarios to `scripts/test_nomad_pack_integration.sh`.
+
+### Changed
+- `templates/worker.nomad.tpl` — wrapped job definition in `[[ if eq (var "batch_engine" .) "internal" ]]` guard; worker service job is omitted when using an external batch engine.
+- `templates/rserve.nomad.tpl` — wrapped job definition in `[[ if eq (var "batch_engine" .) "internal" ]]` guard; Rserve service job is omitted when using an external batch engine.
+- `policies/operator.hcl` — updated comment to reference batch-dispatcher use case.
+
+### Added
 - Added `user-overrides.hcl` template at the repository root — a modeler-facing file containing only the variables energy modelers need to set (image version, worker count, port, job name), with rich inline comments.
 - Added `examples/quickstart/simple.hcl` — a minimal, clean var-file for first-time modeler deployments.
 - Added `docs/modelers/quickstart.md` — 3-step quickstart guide for energy modelers.
