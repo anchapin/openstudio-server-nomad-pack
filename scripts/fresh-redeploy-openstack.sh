@@ -914,25 +914,28 @@ job "${wipe_job}" {
     }
 
     task "wipe" {
-      driver = "docker"
+      # Use exec driver (no Docker image required) to avoid Docker Hub rate
+      # limits (429) on nodes that don't have a cached image. exec is enabled
+      # on all Nomad clients in this cluster and has no registry dependency.
+      driver = "exec"
       config {
-        image      = "busybox:1.36"
-        force_pull = false
-        command = "sh"
+        command = "/bin/sh"
         args = [
           "-ec",
-          "mkdir -p ${nfs_volume_mount_path} && find ${nfs_volume_mount_path} -mindepth 1 -maxdepth 1 -exec rm -rf {} +"
+          "find /local/nfs -mindepth 1 -maxdepth 1 -exec rm -rf {} +"
         ]
       }
+      # Run as UID 1000 — NFS root_squash maps container root to nobody (65534);
+      # app files are owned by 1000 so this UID can delete them.
       user = "1000:1000"
       volume_mount {
         volume      = "nfs-shared"
-        destination = "${nfs_volume_mount_path}"
+        destination = "/local/nfs"
         read_only   = false
       }
       resources {
         cpu    = 100
-        memory = 128
+        memory = 64
       }
     }
   }
