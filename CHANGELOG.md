@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated `docs/storage.md` with an "OpenStack Provisioning" section referencing the new script and guide (#355)
 - Added `docs/adr-001-storage-architecture.md`: Architecture Decision Record comparing Manila NFS, Swift object storage, and Cinder-backed dedicated NFS tier for high-scale OpenStack deployments; selects Swift as primary and Cinder NFS as fallback (#354).
 - Updated `docs/storage.md` with an Architecture Decision section at the top linking to ADR-001.
+- Added `scripts/benchmark-storage-saturation.sh`: fio-based benchmark script simulating worker I/O patterns (4 KB random writes + 1 MB sequential reads) across four load tiers (250/500/1000/2000 workers); captures iostat, vmstat iowait, sar NFS client stats, nfsstat retransmissions, and writes structured `summary.json` per tier; includes `--analyze` mode to identify the saturation point (#353).
+- Added `docs/storage-benchmark-methodology.md`: reproducible benchmark procedure covering prerequisites, load-tier definitions, metrics-to-capture table (NFS client ops/s, rtt_ms, retrans; iowait%, disk_util%, net throughput; storage-server side metrics), saturation indicator thresholds (iowait >40%, retrans >0, NFS RTT >20 ms), illustrative example results table, step-by-step script usage, and guidance on feeding results into the autoscaling ramp policy (#353).
 
 - Added `rserve_count` variable to allow configuring Rserve replica count (default: 1) (#360)
 - Added `docs/openstack-staged-rollout-runbook.md` with staged worker ramp procedure, gate criteria (latency, iowait%, queue lag, failure rate), abort/rollback steps, evidence collection checklist, and final recommended OpenStack defaults (#365)
