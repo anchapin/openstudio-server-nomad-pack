@@ -48,6 +48,7 @@ nomad-pack render . -var "web_image=nrel/openstudio-server:3.8.0"
 
 # Run all CI workflows locally (requires act + Docker)
 act push -W .github/workflows/pack-validation.yml
+act pull_request -W .github/workflows/pack-validation.yml  # simulates PR trigger
 act push
 ```
 
@@ -161,7 +162,7 @@ Both can be active simultaneously. When neither is enabled, credentials are supp
 |---|---|---|
 | `pack-validation.yml` | push/PR to `develop` or `main`, `workflow_dispatch` | fmt, render, validate, `examples/test-batch.nomad` job spec validation, Vagrantfile syntax, script syntax, version-bump tests, `variables.md` diff, backup/restore default-doc consistency, README links to `docs/variables.md`, `compatibility.md` version gate, Nomad dev-agent plan for all example var-files, registry sync, integration test script |
 | `acl-policy-validation.yml` | push/PR on `policies/**` | `nomad fmt -check policies/` |
-| `integration-test.yml` | PR to `develop` (path-filtered) | template render + e2e stack test |
+| `integration-test.yml` | PR to `develop` on `templates/**`, `variables.hcl`, `packs/**`, `scripts/**`, `examples/**`, `metadata.hcl` | template render + e2e stack test using `examples/e2e-test.hcl` |
 | `release.yml` | push of tag matching `v*` | reads version from `metadata.hcl`, publishes GitHub Release |
 | `release-version-bump.yml` | push to `main` | auto-bumps patch version, syncs `packs/openstudio-server/metadata.hcl`, commits both files, creates and pushes `v*` git tag |
 
@@ -196,6 +197,8 @@ After editing `variables.hcl`:
 
 The README **does not** maintain a variable table — the `## Configuration Variables` section links to `docs/variables.md` only. Never paste a variable table into `README.md`; a CI step enforces the link exists.
 
+> **Note:** `docs/variables.generated.md` is a CI scratch file used by the `Check variables.md is up-to-date` workflow step (it generates to this path and diffs against `docs/variables.md`). It is committed to the repo but should not be edited manually — regenerate with `./scripts/generate-vars-doc.sh docs/variables.generated.md`.
+
 ### Image alignment
 
 When bumping OpenStudio Server version, update all four together:
@@ -211,6 +214,7 @@ When bumping OpenStudio Server version, update all four together:
 - Conventional Commits: `feat:`, `fix:`, `docs:`, `chore:`, `ci:`
 - Add changelog entry under `[Unreleased]` in `CHANGELOG.md` per PR
 - Release prep: move unreleased entries to versioned section + add row to `docs/compatibility.md`
+- **`compatibility.md` version gate:** for PRs to `main`, CI requires the **upcoming** release version (`current pack.version` + patch) to exist in the table — add this row before opening the `develop → main` PR
 
 Release automation on `main`:
 1. **`release-version-bump.yml`** — auto-bumps patch in `metadata.hcl`, syncs `packs/openstudio-server/metadata.hcl`, commits both files, pushes `v*` tag
@@ -294,6 +298,22 @@ The web service registers Consul tags for Traefik's Consul Catalog provider. Set
 
 `batch-verification.nomad.tpl` (enabled by `enable_batch_verification = true`) uses `busybox` to ping/TCP-connect each service in `verification_targets`. Structured log output: `batch_verification_result component=... status=pass|fail` and `batch_verification_summary total=... passed=... failed=...`.
 
+### `infra-setup.nomad`
+
+`infra-setup.nomad` (repo root, **not** a pack template) is a standalone Nomad system job used for one-time cluster configuration. It runs on every client node and:
+
+1. Adds the Consul stanza to the Nomad client config so services register with the central Consul server
+2. Configures Docker `data-root` to local storage for reliable layer extraction
+3. Reloads Nomad client and Docker to apply the changes
+
+```bash
+export NOMAD_ADDR=http://localhost:4646
+nomad run infra-setup.nomad   # apply on all nodes
+nomad stop -purge infra-setup # teardown when done
+```
+
+**Required before deploying on a fresh OpenStack cluster** (`make os-run` handles this automatically). The `make os-teardown` target also purges it.
+
 ### `outputs.tpl`
 
 Rendered by `nomad-pack run` on successful deployment — prints Consul service UI URLs and the Traefik web URL. When adding a new service, add its Consul URL to `outputs.tpl` as well.
@@ -358,6 +378,13 @@ vagrant ssh vault -c "VAULT_ADDR=http://127.0.0.1:8200 VAULT_TOKEN=root vault st
 | `openstack-stabilization-runbook.md` | Remediation steps for OpenStack-specific allocation failures |
 | `openstack-storage-provisioning.md` | CSI/NFS volume provisioning on OpenStack Nomad clusters |
 | `rserve-horizontal-scaling.md` | Rserve multi-replica design and constraints |
+| `rserve-multi-replica.md` | Multi-replica Rserve routing (load balancing when `rserve_count > 1`) |
+| `autoscaling-storage-ramp-policy.md` | Ramp guardrails and iowait threshold gates for worker scale-out |
+| `swift-artifact-backend.md` | Swift container ACL setup and env var reference |
+| `traefik-openstack-decision.md` | Decision record: use Octavia LBaaS instead of Traefik in production OpenStack |
+| `scale-program-summary.md` | Summary of Epic #352 scale-to-max program (13 sub-issues, PRs #366–#378) |
+| `storage-benchmark-methodology.md` | Methodology behind `scripts/benchmark-storage-saturation.sh` |
+| `openstack-remaining-issues-plan.md` | Current OpenStack stabilization state and recovery plan |
 | `adr-001-storage-architecture.md` | Architecture decision record: storage backend selection |
 | `worker-local-scratch.md` | Per-worker ephemeral scratch volume pattern |
 
@@ -449,6 +476,22 @@ The script reads image variables from the var-file, pulls each from Docker Hub, 
 
 # Fix Consul agent failures across all nodes
 ./scripts/fix-consul-all-nodes.sh
+
+# Full OpenStack deploy (SSH tunnel + Consul bootstrap + Nomad client infra + pack)
+./scripts/deploy-openstack.sh
+
+# Tear down and redeploy fresh on OpenStack (useful after storage/config changes)
+./scripts/fresh-redeploy-openstack.sh
+
+# Idempotent OpenStack storage provisioning (CSI volumes + NFS host volumes)
+./scripts/provision-openstack-storage.sh
+
+# Deploy hostpath CSI node/controller role plugins (required before CSI volumes work)
+./scripts/deploy-hostpath-csi-role-plugins.sh
+
+# Apply all Nomad ACL policies (substitutes namespace, then applies)
+bash scripts/apply-acl-policies.sh --namespace default
+bash scripts/apply-acl-policies.sh --dry-run  # preview only
 ```
 
 `clear-stale-queuing-locks.sh` exits `0` (no stale keys), `1` (error), or `2` (stale keys found in `--dry-run` mode — useful as an alert gate in CI or cron).
