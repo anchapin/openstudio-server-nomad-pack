@@ -59,28 +59,24 @@ job "[[ var "job_name" . ]]-worker" {
         [[ if var "worker_autoscaling_queue_enabled" . ]]
         check "queue-requeued-depth" {
           source = "prometheus"
-          query  = [[ var "worker_queue_requeued_query" . | toJson ]]
+          query  = [[ printf "ceil(clamp_min(max_over_time((%s)[%s]) / %v, 0))" (var "worker_queue_requeued_query" .) (var "worker_queue_query_window" .) (var "worker_queue_requeued_target" .) | toJson ]]
 
           config {
             prometheus_address = "[[ var "autoscaler_prometheus_address" . ]]"
           }
 
-          strategy "target-value" {
-            target = [[ var "worker_queue_requeued_target" . ]]
-          }
+          strategy "pass-through" {}
         }
 
         check "queue-simulations-depth" {
           source = "prometheus"
-          query  = [[ var "worker_queue_simulations_query" . | toJson ]]
+          query  = [[ printf "ceil(clamp_min(max_over_time((%s)[%s]) / %v, 0))" (var "worker_queue_simulations_query" .) (var "worker_queue_query_window" .) (var "worker_queue_simulations_target" .) | toJson ]]
 
           config {
             prometheus_address = "[[ var "autoscaler_prometheus_address" . ]]"
           }
 
-          strategy "target-value" {
-            target = [[ var "worker_queue_simulations_target" . ]]
-          }
+          strategy "pass-through" {}
         }
         [[ end ]]
       }
