@@ -42,6 +42,14 @@ jobs:
 
       - name: Setup Nomad Pack
         uses: hashicorp/setup-nomad-pack@36154659711632399739eb3b34d2e71dd54ed473  # 0.10.0
+        with:
+          # Pin the CLI version: the action's `version` input defaults to
+          # "latest" (a moving target). The fmt gate behavior (including the
+          # `[[/* */]]` comment handling) was validated against v0.4.2.
+          version: 0.4.2
+
+      - name: Print Nomad Pack version
+        run: nomad-pack version
 
       - name: Render and validate templates
         run: |
@@ -63,6 +71,14 @@ jobs:
 
       - name: Setup Nomad Pack
         uses: hashicorp/setup-nomad-pack@36154659711632399739eb3b34d2e71dd54ed473  # 0.10.0
+        with:
+          # Pin the CLI version: the action's `version` input defaults to
+          # "latest" (a moving target). The fmt gate behavior (including the
+          # `[[/* */]]` comment handling) was validated against v0.4.2.
+          version: 0.4.2
+
+      - name: Print Nomad Pack version
+        run: nomad-pack version
 
       - name: Install Consul
         run: |
