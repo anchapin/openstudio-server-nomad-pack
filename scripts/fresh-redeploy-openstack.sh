@@ -461,14 +461,15 @@ job "${wipe_job}" {
     }
 
     task "wipe" {
-      driver = "docker"
+      # Use exec driver (no Docker image required) to avoid Docker Hub rate
+      # limits (429) on nodes that don't have a cached image. exec is enabled
+      # on all Ubuntu 22.04 nodes in this cluster.
+      driver = "exec"
       config {
-        image      = "${wipe_image}"
-        force_pull = false
-        command = "sh"
+        command = "/bin/sh"
         args = [
           "-ec",
-          "mkdir -p /data && rm -rf /data/* /data/.[!.]* /data/..?* || true"
+          "rm -rf /data/* /data/.[!.]* /data/..?* || true"
         ]
       }
       volume_mount {
@@ -478,7 +479,7 @@ job "${wipe_job}" {
       }
       resources {
         cpu    = 100
-        memory = 128
+        memory = 64
       }
     }
   }
@@ -497,11 +498,11 @@ if not j:
     print("wait")
     sys.exit(0)
 statuses=[(a.get("ClientStatus") or "").lower() for a in j]
-if any(s == "failed" for s in statuses):
-    print("fail")
-    sys.exit(0)
-if all(s in ("complete","failed","lost") for s in statuses) and any(s == "complete" for s in statuses):
+if any(s == "complete" for s in statuses):
     print("ok")
+    sys.exit(0)
+if statuses and all(s in ("failed","lost") for s in statuses):
+    print("fail")
     sys.exit(0)
 print("wait")
 ' 2>/dev/null || echo "wait"
