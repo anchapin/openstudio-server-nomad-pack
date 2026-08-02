@@ -86,8 +86,8 @@ variable "traefik_request_timeout" {
 
 variable "traefik_max_request_body_size" {
   type        = string
-  description = "Maximum request body size allowed by the Traefik buffering middleware on the web service. Set to 0 to disable the limit. Supports Traefik size notation (e.g. '500MB', '1GB'). Only applies when deploy_traefik = true."
-  default     = "500MB"
+  description = "Maximum request body size allowed by the Traefik buffering middleware on the web service, in bytes (integer). Set to 0 to disable the limit. Must be a plain integer — Traefik does not accept size strings like '500MB' in this tag. Default is 524288000 (500 MiB). Only applies when deploy_traefik = true."
+  default     = "524288000"
 }
 
 variable "traefik_read_timeout" {
