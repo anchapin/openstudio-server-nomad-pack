@@ -7,7 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
+### Added
+- Added `user-overrides.hcl` template at the repository root — a modeler-facing file containing only the variables energy modelers need to set (image version, worker count, port, job name), with rich inline comments.
+- Added `examples/quickstart/simple.hcl` — a minimal, clean var-file for first-time modeler deployments.
+- Added `docs/modelers/quickstart.md` — 3-step quickstart guide for energy modelers.
+- Added `docs/modelers/submitting-osw-jobs.md` — guide for submitting OSW files, PAT projects, and REST API calls.
+- Added `docs/modelers/README.md` and `docs/infrastructure/README.md` index pages routing users to the right documentation.
+- Added `examples/README.md` routing energy modelers to `quickstart/` and admins to `advanced/`.
+
+### Changed
+- Reorganized `examples/` into `examples/quickstart/` (modeler-facing) and `examples/advanced/` (admin/HA/OpenStack).
+- Reorganized `docs/` into `docs/modelers/` (energy modeler guides) and `docs/infrastructure/` (admin/ops guides).
+- Refactored `README.md` as a traffic controller with prominent separate sections for energy modelers and infrastructure admins.
+- Updated all CI workflow path references (`pack-validation.yml`, `integration-test.yml`), scripts, and `Makefile` to reflect the new `examples/quickstart/` and `examples/advanced/` paths.
+
+
 
 - Fixed worker `patch-hosts.sh` missing `web` hostname entry: the Consul-template that generates `/etc/hosts` for worker containers only injected entries for `db`, `queue`, and `rserve`, but omitted `openstudio-web`. Every simulation subprocess uploads reports and marks the data point complete via `http://web:80/data_points/.../upload_file`; with no `/etc/hosts` entry for `web`, every upload failed silently and every data point was marked `datapoint failure`. Added `{{ range service "openstudio-web" }}echo "{{ .Address }} web"{{ end }}` to the worker template. Docker Compose was unaffected because the overlay network provides built-in DNS for all service names.
 
@@ -17,6 +31,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed `worker_queue_requeued_query` default and `openstack.hcl` value: the `+1` trick (`sum(...) + 1`) was intended to prevent a missing-series error but silently breaks when the Redis key doesn't exist — Prometheus propagates empty through arithmetic, so `sum(empty) + 1` returns empty, not 1. This caused the autoscaler to oscillate between scale-up (when Redis had the key) and scale-down (when it didn't), creating thousands of short-lived allocations that were immediately stopped. Replaced with `(sum(...) or vector(0))` which consistently returns 0 when idle, enabling stable scale-to-zero behavior.
 
 - Fixed `openstack-production.hcl` not enabling queue-depth autoscaling: the file only set `worker_autoscaling_cpu_enabled = true` but omitted `worker_autoscaling_queue_enabled`, `prometheus_enabled`, and `nomad_autoscaler_enabled`. With CPU-only scaling, workers only scale when CPU is high on *already-running* workers, not when the simulation queue is large — causing the autoscaler to leave deep queues (300+ simulations) underserved. Enabled all three flags, set `worker_queue_simulations_target = 15` and `worker_queue_requeued_target = 15` (1 worker per 15 queued jobs), and tightened scale-up cooldown from 30m to 5m so a burst queue ramps quickly to `worker_max_replicas`.
+- Fixed OpenStack worker scaling stabilization defaults to avoid cooldown lockouts after deploy: aligned `worker_count` with `worker_min_replicas` (2), reduced `worker_autoscaling_scale_down_cooldown` to `5m`, restored queue-depth targets to `15/15`, and lowered the default `worker_max_replicas` guardrail to `200` in `examples/openstack-production.hcl`; updated OpenStack rollout and autoscaling ramp docs with the same guidance.
+- Tuned OpenStack high-queue autoscaling profile from live cluster trials: set `worker_max_replicas=160`, `worker_queue_simulations_target=20`, `worker_queue_requeued_target=20`, `worker_autoscaling_scale_up_cooldown=2m`, and `worker_autoscaling_scale_down_cooldown=10m` after iterative load observations (40→60→80→100→120→140→160 workers) to improve ramp speed while preserving allocation stability.
+- Tuned analyses-queue throughput via `web-background` scaling in live cluster tests: increasing `web_background_count` from `1` to `2` (with `web_background_worker_count=56` per replica) drained `resque:queue:analyses` from 140 to 0 in ~4 minutes with no allocation failures or restarts, so `examples/openstack-production.hcl` now defaults to `web_background_count=2`.
+- Reverted `web_background_count` default back to `1` in `examples/openstack-production.hcl` and runbook guidance after upstream application guidance that horizontal web-background replicas may trigger race conditions in analysis lifecycle processing.
 
 ### Added
 

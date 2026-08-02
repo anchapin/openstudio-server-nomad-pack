@@ -54,8 +54,8 @@ web_memory_max = 61440
 ingress_domain = "10.60.126.125"
 
 # ---------- Web-background ----------
-# This pack pins web-background to a singleton allocation in the template.
-# Throughput is controlled by web_background_worker_count, not replicas.
+# Keep singleton: upstream app guidance is web-background_count must remain 1
+# to avoid race conditions in analysis lifecycle processing.
 web_background_count  = 1
 web_background_cpu    = 16000  # MHz
 web_background_memory = 16384  # MB
@@ -87,8 +87,9 @@ worker_process_count = 2    # 2 processes × 3 000 MHz ≈ 6 000 MHz per allocat
 worker_command = "/bin/sh"
 worker_args    = ["-c", "sh /local/patch-hosts.sh && exec /usr/local/bin/start-workers"]
 
-# Seed count; autoscaler owns actual count. 2 prevents cold-start lag.
-worker_count = 4
+# Seed count; keep this equal to worker_min_replicas to avoid an immediate
+# startup scale-down event that can put the policy into cooldown.
+worker_count = 2
 
 # 90 min kill timeout — covers longest observed OpenStack analysis runtime.
 # Must be ≥ your longest simulation; shorter values cause data loss on drains.
@@ -118,22 +119,21 @@ worker_autoscaling_enabled       = true
 worker_autoscaling_cpu_enabled   = false
 worker_autoscaling_queue_enabled = true   # Scale on Redis queue depth via Prometheus
 worker_min_replicas              = 2
-worker_max_replicas              = 10000  # Stage 4 target; adjust to cluster size
+worker_max_replicas              = 10000    # Live-tested cap: fast ramp without allocation failures
 
 # 60 % CPU target: conservative threshold to trigger scale-out before iowait spikes.
 worker_cpu_target_utilization = 60
 
-# Queue-depth targets: 1 worker per 15 queued simulations.
-# At 300 queued jobs: 300 ÷ 15 = 20 workers (hits worker_max_replicas).
-# Tune lower (e.g. 10) for faster ramp, higher (e.g. 20) to be more conservative.
-worker_queue_simulations_target = 2
-worker_queue_requeued_target    = 1
+# Queue-depth targets: roughly 1 worker per 20 queued jobs.
+# Lower target => more aggressive scale-out. Raise if storage pressure appears.
+worker_queue_simulations_target = 20
+worker_queue_requeued_target    = 20
 
-# Scale-up cooldown: 5 min allows fast ramp-up when the queue is deep.
-# Scale-down cooldown: keep 20 min to avoid thrashing between simulation batches.
+# Scale-up cooldown: 2 min keeps queue bursts from waiting on long cooldown windows.
+# Scale-down cooldown: 10 min reduces oscillation after burst drains.
 # The global autoscaler_cooldown is overridden per-direction below.
-worker_autoscaling_scale_up_cooldown   = "10m"
-worker_autoscaling_scale_down_cooldown = "20m"
+worker_autoscaling_scale_up_cooldown   = "2m"
+worker_autoscaling_scale_down_cooldown = "10m"
 
 # Legacy global cooldown (used by CPU check and as fallback); kept for reference.
 autoscaler_cooldown = "30m"

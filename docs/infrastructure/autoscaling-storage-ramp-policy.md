@@ -29,8 +29,13 @@ cooldown window.
 
 ### Core Principle
 
-Scale up in steps of **≤ 5 workers** per cooldown window, and use a **longer scale-down
-cooldown** to avoid thrashing when the queue briefly empties between batches.
+Avoid startup cooldown traps and bound ramp velocity:
+- Keep `worker_count` equal to `worker_min_replicas` so deployment does not trigger an
+  immediate downscale that blocks later scale-up.
+- Use queue targets that represent **queued jobs per worker** (for OpenStack defaults,
+  `15`/`15`), then tune from observed queue drain and iowait.
+- Increase `worker_max_replicas` in staged increments after soak evidence instead of
+  starting with an unbounded ceiling.
 
 ### Pack Variables
 
@@ -119,8 +124,8 @@ metrics:
 
 | Check | Variable | Recommended Target |
 |---|---|---|
-| Requeued depth | `worker_queue_requeued_target` | `2–5` (workers per requeued job) |
-| Total simulations depth | `worker_queue_simulations_target` | `5–10` (workers per simulation in queue) |
+| Requeued depth | `worker_queue_requeued_target` | `10–20` queued jobs per worker |
+| Total simulations depth | `worker_queue_simulations_target` | `10–20` queued jobs per worker |
 
 ### Cooldown Tuning Guidance
 

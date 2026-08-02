@@ -104,7 +104,7 @@ if $ANALYZE; then
     nfs_rtt=$(jq -r '.nfs_rtt_ms'  "$summary")
     retrans=$(jq -r '.nfs_retrans' "$summary")
 
-    # Saturation heuristics (see docs/storage-benchmark-methodology.md)
+    # Saturation heuristics (see docs/infrastructure/storage-benchmark-methodology.md)
     saturated="no"
     if (( $(echo "$iowait > 40" | bc -l) )) || \
        (( $(echo "$retrans > 0" | bc -l) )) || \

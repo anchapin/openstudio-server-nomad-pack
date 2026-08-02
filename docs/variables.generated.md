@@ -18,6 +18,10 @@
 | `traefik_https_port` | `number` | `443` | Traefik HTTPS entrypoint port. |
 | `traefik_dashboard_port` | `number` | `8080` | Traefik dashboard port. |
 | `traefik_api_insecure` | `bool` | `false` | Enable the Traefik insecure API/dashboard (--api.insecure=true). Set to true only for local development. In production, keep this false and protect the dashboard with authentication and TLS. |
+| `traefik_request_timeout` | `string` | `"300s"` | Traefik forwarding (response) timeout for the web service. Controls how long Traefik waits for the backend to send a response. Increase for long-running analysis submissions. Only applies when deploy_traefik = true. |
+| `traefik_max_request_body_size` | `string` | `"524288000"` | Maximum request body size allowed by the Traefik buffering middleware on the web service, in bytes (integer). Set to 0 to disable the limit. Must be a plain integer — Traefik does not accept size strings like '500MB' in this tag. Default is 524288000 (500 MiB). Only applies when deploy_traefik = true. |
+| `traefik_read_timeout` | `string` | `"300s"` | Traefik entrypoint read timeout (time to read the full request from the client). Only applies when deploy_traefik = true. |
+| `traefik_write_timeout` | `string` | `"300s"` | Traefik entrypoint write timeout (time to write the full response to the client). Only applies when deploy_traefik = true. |
 | `nomad_namespace` | `string` | `"default"` | The Nomad namespace in which all pack jobs are registered. Use 'default' for the built-in namespace. |
 | `region` | `string` | `"global"` | The Nomad region where the job will be deployed. |
 | `datacenters` | `list(string)` | `["dc1"]` | A list of datacenters in the region which are eligible for task placement. |
@@ -85,6 +89,9 @@
 | `autoscaler_nomad_address` | `string` | `"http://nomad.service.consul:4646"` | Address of the Nomad server for the Nomad Autoscaler to connect to. Use the private IP when Consul DNS is not available (e.g. 'http://192.168.100.87:4646'). |
 | `autoscaler_prometheus_address` | `string` | `"http://openstudio-prometheus.service.consul:9090"` | Address of the Prometheus server used by the Nomad Autoscaler APM plugin to evaluate scaling checks. |
 | `autoscaler_cooldown` | `string` | `"10m"` | Cooldown duration between worker autoscaling actions (e.g. '5m', '10m', '60m'). Reduced from the Helm chart stabilizationWindowSeconds of 3600 (60m) to 10m so idle workers are reclaimed faster after the queue drains. Increase if you see oscillation (rapid scale-up/scale-down cycles). |
+| `worker_autoscaling_scale_up_cooldown` | `string` | `"10m"` | Cooldown between scale-up events for the worker group. Longer values prevent storage shock on shared NFS by limiting how quickly new workers are added during a burst. Recommended minimum 10m for NFS-backed deployments. Only applies when worker_autoscaling_enabled = true. |
+| `worker_autoscaling_scale_down_cooldown` | `string` | `"20m"` | Cooldown between scale-down events for the worker group. A longer scale-down window (default 20m) avoids thrashing when the queue briefly empties between simulation batches. Only applies when worker_autoscaling_enabled = true. |
+| `worker_autoscaling_evaluation_interval` | `string` | `"30s"` | How often the Nomad Autoscaler evaluates worker scaling policies. Lower values increase responsiveness but also increase Nomad API load. 30s is a safe default for most deployments. Only applies when worker_autoscaling_enabled = true. |
 | `autoscaler_constraints` | `any` | `[]` | Placement constraints for the optional Nomad Autoscaler group. |
 | `autoscaler_affinities` | `any` | `[]` | Placement affinities for the optional Nomad Autoscaler group. |
 | `autoscaler_spreads` | `any` | `[]` | Spread rules for the optional Nomad Autoscaler group. |
@@ -96,10 +103,14 @@
 | `prometheus_affinities` | `any` | `[]` | Placement affinities for the optional Prometheus group. |
 | `prometheus_spreads` | `any` | `[]` | Spread rules for the optional Prometheus group. |
 | `redis_exporter_image` | `string` | `"oliver006/redis_exporter:v1.62.0"` | Redis exporter image used by the optional in-pack Prometheus job. |
-| `worker_queue_requeued_query` | `string` | `"sum(redis_key_size{key=\"resque:queue:requeued\"}) + 1"` | Prometheus query for requeued backlog depth. The +1 keeps the series non-zero when the queue is empty so the autoscaler doesn't treat a missing series as an error. |
+| `worker_queue_requeued_query` | `string` | `"(sum(redis_key_size{key=\"resque:queue:requeued\"}) or vector(0))"` | Prometheus query for requeued backlog depth. Uses 'or vector(0)' so the series always resolves to 0 (not empty/error) when the queue key does not yet exist in Redis, which allows scale-to-zero when both queues are idle. |
 | `worker_queue_requeued_target` | `number` | `1` | Target queue depth for requeued jobs per worker allocation. |
 | `worker_queue_simulations_query` | `string` | `"(sum(redis_key_size{key=\"resque:queue:simulations\"}) or vector(0))"` | Prometheus query for simulations backlog depth. or vector(0) ensures the series always resolves even when the queue key doesn't exist yet in Redis. |
 | `worker_queue_simulations_target` | `number` | `2` | Target queue depth for simulation jobs per worker allocation. |
+| `worker_local_scratch_enabled` | `bool` | `false` | Enable node-local ephemeral disk as scratch space for worker simulation I/O. When true, Nomad provisions an ephemeral_disk on the node running the allocation. Simulations stage inputs to this local disk, run there, then publish final artifacts to shared NFS — reducing write amplification on the shared filesystem. Requires the application to honour WORKER_SCRATCH_PATH and copy outputs before task completion. Defaults to false for backward compatibility. |
+| `worker_local_scratch_size` | `number` | `10240` | Size in MB of the ephemeral disk allocated for worker local scratch. Only used when worker_local_scratch_enabled = true. Default is 10240 (10 GiB), sufficient for a typical OpenStudio simulation workspace. Increase for large parametric runs that produce many intermediate files. |
+| `worker_local_scratch_sticky` | `bool` | `false` | Whether the worker ephemeral disk is sticky. When true, Nomad attempts to reschedule the allocation onto the same node and reuse the existing local disk data — useful for resuming interrupted simulations without re-staging inputs. When false (default), the disk is cleared on allocation GC or rescheduling. Only used when worker_local_scratch_enabled = true. |
+| `worker_scratch_path` | `string` | `"/scratch"` | Mount path inside the worker container where the ephemeral local scratch disk is accessible. The application uses this path to stage simulation inputs and write intermediate outputs before publishing to shared NFS. Only used when worker_local_scratch_enabled = true. |
 | `web_background_image` | `string` | `"nrel/openstudio-server:179-flock"` | The image name and tag for the OpenStudio Server web-background container. |
 | `web_background_command` | `string` | `"/usr/local/bin/start-web-background"` | Command run by the web-background task. Defaults to the image's start-web-background script, which launches Resque workers for background analysis lifecycle queues. |
 | `web_background_queues` | `string` | `"background,analyses"` | Resque QUEUES env var for the web-background task. Controls which queue(s) the start-web-background Resque workers process. Keep both 'background' and 'analyses': the 'analyses' queue handles analysis initialization/cleanup (including directory setup before zip extraction), and 'background' handles general async tasks. The 'analysis_wrappers' queue is consumed by the web task. Omitting 'analyses' causes the 'Destination already exists' error on re-initialization. Separate multiple queues with commas. NOTE: Use QUEUES (not QUEUE) — the application's resque:setup task explicitly resets QUEUE to prevent environment leaks. |
@@ -151,6 +162,7 @@
 | `rserve_memory` | `number` | `2048` | Memory (MB) allocated to the Rserve task. |
 | `rserve_health_check_interval` | `string` | `"10s"` | Interval between Consul health checks for the Rserve service. |
 | `rserve_health_check_timeout` | `string` | `"2s"` | Timeout for Consul health checks for the Rserve service. |
+| `rserve_count` | `number` | `1` |  |
 | `enable_consul_connect` | `bool` | `false` | Enable Consul Connect sidecar proxies for mTLS service-to-service communication. |
 | `log_driver_type` | `string` | `"json-file"` | The logging driver to use for the containers. |
 | `log_max_size` | `string` | `"10m"` | The maximum size of log files before rotation. |
@@ -235,6 +247,14 @@
 | `test_busybox_image_tag` | `string` | `"stable"` | Tag for the busybox image used in TCP check tasks. |
 | `compute_node_class` | `string` | `"compute"` | Nomad node class label for CPU-intensive compute nodes. Used by the openstudio_server.compute_node_constraint helper macro. |
 | `system_node_class` | `string` | `"system"` | Nomad node class label for infrastructure/system nodes. Used by the openstudio_server.system_node_constraint helper macro. |
+| `swift_artifact_storage_enabled` | `bool` | `false` | When true, injects OpenStack Swift credentials and ARTIFACT_STORAGE_BACKEND=swift env vars into web and worker tasks, enabling the application to store analysis artifacts in an object-storage container instead of shared NFS. Requires the application to support the ARTIFACT_STORAGE_BACKEND env var. Defaults to false (NFS/shared-filesystem mode). |
+| `swift_auth_url` | `string` | `""` | OpenStack Keystone authentication endpoint URL (OS_AUTH_URL). Required when swift_artifact_storage_enabled = true. Example: https://keystone.example.com:5000/v3 |
+| `swift_username` | `string` | `""` | OpenStack username for Swift authentication (OS_USERNAME). Required when swift_artifact_storage_enabled = true. |
+| `swift_password` | `string` | `""` | OpenStack password for Swift authentication (OS_PASSWORD). Sensitive — use Vault integration in production (vault_integration_enabled = true) rather than passing this in plaintext. |
+| `swift_tenant_name` | `string` | `""` | OpenStack project/tenant name (OS_TENANT_NAME / OS_PROJECT_NAME). Required when swift_artifact_storage_enabled = true. |
+| `swift_container` | `string` | `"openstudio-artifacts"` | Swift container name where analysis artifacts are stored (SWIFT_CONTAINER). The container must exist before deploying — see docs/swift-artifact-backend.md. |
+| `swift_region` | `string` | `""` | OpenStack region name (OS_REGION_NAME). Leave empty to use the default region. |
+| `swift_auth_version` | `string` | `"3"` | Keystone API version used for Swift authentication (OS_AUTH_VERSION). Accepted values: '2', '3' (default). |
 
 ## Job Priority
 

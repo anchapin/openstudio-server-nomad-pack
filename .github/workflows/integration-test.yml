@@ -24,7 +24,7 @@ on:
 env:
   NOMAD_VERSION: "1.7.7"
   CONSUL_VERSION: "1.17.1"
-  E2E_VAR_FILE: "examples/e2e-test.hcl"
+  E2E_VAR_FILE: "examples/advanced/e2e-test.hcl"
 
 jobs:
   integration-test:
@@ -45,7 +45,7 @@ jobs:
 
       - name: Render and validate templates
         run: |
-          nomad-pack render . --var-file examples/minimal-dev.hcl
+          nomad-pack render . --var-file examples/quickstart/minimal-dev.hcl
           echo "Template rendering succeeded"
 
   e2e-test:
@@ -259,7 +259,7 @@ jobs:
           echo ""
 
           # HARD assertion in e2e stub-image mode: openstudio-* registrations must appear.
-          # This e2e job deploys examples/e2e-test.hcl, which uses lightweight stub images
+          # This e2e job deploys examples/advanced/e2e-test.hcl, which uses lightweight stub images
           # specifically so service-registration checks are deterministic and CI-gating.
           # Full-image behavior is still covered by longer-running cluster-level suites.
           timeout_seconds="${CONSUL_APP_SERVICE_TIMEOUT_SECONDS}"
@@ -300,7 +300,7 @@ jobs:
         env:
           NOMAD_ADDR: http://127.0.0.1:4646
         run: |
-          nomad job run examples/test-batch.nomad
+          nomad job run examples/advanced/test-batch.nomad
 
           # Poll the HTTP API for job status — more reliable than parsing CLI JSON output
           # across Nomad versions (CLI -json structure changed in v2.x).

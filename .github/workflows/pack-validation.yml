@@ -149,7 +149,7 @@ jobs:
           NOMAD_ADDR: http://127.0.0.1:4646
         run: |
           set +e
-          nomad-pack plan --var-file examples/minimal-dev.hcl . --name openstudio-server-minimal-dev
+          nomad-pack plan --var-file examples/quickstart/minimal-dev.hcl . --name openstudio-server-minimal-dev
           code=$?
           set -e
           [ "$code" -le 1 ] || exit "$code"
@@ -160,7 +160,7 @@ jobs:
         run: |
           set +e
           nomad-pack plan \
-            --var-file examples/production-ha.hcl \
+            --var-file examples/advanced/production-ha.hcl \
             --var "region=global" \
             --var "vault_enabled=false" \
             --var "vault_integration_enabled=false" \
@@ -176,7 +176,7 @@ jobs:
           NOMAD_ADDR: http://127.0.0.1:4646
         run: |
           set +e
-          nomad-pack plan --var-file examples/airgapped.hcl . --name openstudio-server-airgapped
+          nomad-pack plan --var-file examples/advanced/airgapped.hcl . --name openstudio-server-airgapped
           code=$?
           set -e
           [ "$code" -le 1 ] || exit "$code"
@@ -194,7 +194,7 @@ jobs:
       - name: Validate test-batch job spec
         env:
           NOMAD_ADDR: http://127.0.0.1:4646
-        run: nomad job validate examples/test-batch.nomad
+        run: nomad job validate examples/advanced/test-batch.nomad
 
       - name: Check packs/ registry scaffold is in sync with root
         run: |

@@ -3,7 +3,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-VAR_FILE="${OS_VAR_FILE:-${REPO_ROOT}/examples/openstack.hcl}"
+VAR_FILE="${OS_VAR_FILE:-${REPO_ROOT}/examples/advanced/openstack.hcl}"
 JOB_NAME="${OS_JOB_NAME:-openstudio-server}"
 NOMAD_ADDR="${NOMAD_ADDR:-http://127.0.0.1:4646}"
 NOMAD_NAMESPACE="${NOMAD_NAMESPACE:-default}"
@@ -469,7 +469,7 @@ job "${wipe_job}" {
         command = "/bin/sh"
         args = [
           "-ec",
-          "rm -rf /data/* /data/.[!.]* /data/..?* || true"
+          "rm -rf /data/* /data/.[!.]* /data/..?* || true; chmod 777 /data"
         ]
       }
       volume_mount {

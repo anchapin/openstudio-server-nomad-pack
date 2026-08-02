@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VAR_FILE="examples/openstack.hcl"
+VAR_FILE="examples/advanced/openstack.hcl"
 NOMAD_ADDR="${NOMAD_ADDR:-http://127.0.0.1:4646}"
 NOMAD_NAMESPACE="${NOMAD_NAMESPACE:-default}"
 CREATE_MISSING_CSI=false
