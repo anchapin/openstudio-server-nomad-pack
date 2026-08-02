@@ -223,11 +223,20 @@ restore_enabled       = true
 # ---------- Queue sweeper ----------
 # Automatically clears orphaned resque:analysis:*:queuing locks from Redis.
 # These locks stall all analyses in the queue until cleared.
-# Also see: scripts/detect-stalled-datapoints.sh (run via cron every 15 min)
-# for the complementary in-flight simulation stall detector.
 enable_queue_sweeper                 = true
 queue_sweeper_cron                   = "*/2 * * * *"
 queue_sweeper_max_lock_age_seconds   = 120
+
+# ---------- Stall watchdog ----------
+# Detects data points frozen in "started" status (hung EnergyPlus processes
+# holding Resque slots with no updated_at progress).  Stops worker allocs so
+# Nomad reschedules fresh workers and coordinators re-queue stalled DPs.
+# Complements queue-sweeper — both failure modes must be covered.
+enable_stall_watchdog            = true
+stall_watchdog_cron              = "*/15 * * * *"
+stall_watchdog_max_stall_seconds = 3600   # 60 min — above longest normal sim
+stall_watchdog_restart_allocs    = true
+stall_watchdog_nomad_address     = "http://192.168.100.87:4646"
 
 # ---------- Image pre-pull ----------
 # Pre-pulls all images on every compute node to eliminate cold-start delays.

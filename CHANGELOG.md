@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `scripts/detect-stalled-datapoints.sh` — detects data points frozen in `started` status with no `updated_at` progress. Complements queue-sweeper (which handles Redis lock stalls) for the distinct failure mode where EnergyPlus hangs silently without crashing Resque. Supports `--restart-allocs` for automatic recovery. Exit code `2` = stalled DPs found (suitable as alert gate in cron/CI).
 - Added `resque:failed` to redis-exporter `--check-keys` so the Resque failed queue depth is available as a Prometheus metric.
 - Added `enable_queue_sweeper = true` with `queue_sweeper_cron = "*/2 * * * *"` and `queue_sweeper_max_lock_age_seconds = 120` to `examples/advanced/openstack-production.hcl`.
+- Added `templates/stall-watchdog.nomad.tpl` — a periodic batch Nomad job (`enable_stall_watchdog`, default `false`) that runs every 15 minutes, detects data points frozen in `started` status via the OpenStudio Server API, and optionally stops stalled worker allocations (`stall_watchdog_restart_allocs = true`) so Nomad reschedules fresh workers. Implemented in Python using only stdlib (`urllib`, `json`, `datetime`) to avoid extra dependencies. Emits structured log lines (`stall_watchdog_*`) compatible with Vector log collection.
+- Added `enable_stall_watchdog`, `stall_watchdog_cron`, `stall_watchdog_max_stall_seconds`, `stall_watchdog_restart_allocs`, `stall_watchdog_nomad_address`, `stall_watchdog_worker_job`, `stall_watchdog_image`, `stall_watchdog_cpu`, and `stall_watchdog_memory` variables.
+- Enabled `enable_stall_watchdog = true` with `stall_watchdog_nomad_address = "http://192.168.100.87:4646"` in `examples/advanced/openstack-production.hcl`.
 
 ### Added
 - Added `batch_engine` variable (`"internal"` | `"nomad_batch"` | `"aws_batch"`) to select the simulation compute backend; defaults to `"internal"` for full backward compatibility.

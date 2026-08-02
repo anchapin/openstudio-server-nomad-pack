@@ -12,6 +12,12 @@ variable "app_version" {
   default     = "3.11.0"
 }
 
+variable "deployment_marker" {
+  type        = string
+  description = "Label written to the `deployment_marker` key in each job's meta block to identify which deployment/environment this Nomad Pack render belongs to. Previously hardcoded to a specific environment; now configurable."
+  default     = "openstudio-server"
+}
+
 variable "worker_min_replicas" {
   type        = number
   description = "Minimum number of worker replicas when autoscaling is enabled. Set to 0 to allow scale-to-zero when the queue is empty. The Helm chart default of 2 is intentionally changed here to prevent idle worker accumulation."
@@ -1364,6 +1370,61 @@ variable "queue_sweeper_memory" {
   type        = number
   description = "Memory (MiB) reserved for the queue-sweeper task."
   default     = 64
+}
+
+# ── Stall watchdog ──────────────────────────────────────────────────────────
+variable "enable_stall_watchdog" {
+  type        = bool
+  description = "Enable a periodic batch job that detects data points frozen in 'started' status with no updated_at progress. Complements the queue-sweeper (which handles Redis queuing locks) for the distinct failure mode where EnergyPlus hangs silently inside a worker without crashing Resque. When stalled DPs are found and stall_watchdog_restart_allocs = true, the job stops all running worker allocations so Nomad reschedules fresh workers and the analysis coordinators can re-queue the stalled data points."
+  default     = false
+}
+
+variable "stall_watchdog_cron" {
+  type        = string
+  description = "Cron schedule for the stall-watchdog periodic job (UTC). Default: every 15 minutes."
+  default     = "*/15 * * * *"
+}
+
+variable "stall_watchdog_max_stall_seconds" {
+  type        = number
+  description = "Seconds a data point may remain in 'started' status with no updated_at change before it is considered stalled. Must be greater than your longest legitimate simulation run time. Default 3600 (60 min), which is conservative above the typical 45-75 min EnergyPlus monthly run."
+  default     = 3600
+}
+
+variable "stall_watchdog_restart_allocs" {
+  type        = bool
+  description = "When true and stalled DPs are detected, the watchdog stops all running worker allocations. Nomad reschedules fresh allocations automatically, clearing the hung Resque slots and allowing analysis coordinators to re-queue stalled data points. Set to false for alert-only mode (exits 2 on stall, visible in Nomad logs)."
+  default     = true
+}
+
+variable "stall_watchdog_nomad_address" {
+  type        = string
+  description = "Nomad server API address reachable from within a task container. Used by the stall watchdog to stop stalled worker allocations. Defaults to http://localhost:4646 with network_mode=host; override in multi-region or NAT environments."
+  default     = "http://localhost:4646"
+}
+
+variable "stall_watchdog_worker_job" {
+  type        = string
+  description = "Nomad job ID of the worker job to restart when stalled DPs are detected. Defaults to '<job_name>-worker' which is the standard worker job name rendered by this pack."
+  default     = ""
+}
+
+variable "stall_watchdog_image" {
+  type        = string
+  description = "Docker image for the stall-watchdog task. Must include Python 3 (for urllib/json/datetime). python:3.12-alpine satisfies this requirement."
+  default     = "python:3.12-alpine"
+}
+
+variable "stall_watchdog_cpu" {
+  type        = number
+  description = "CPU MHz reserved for the stall-watchdog task."
+  default     = 100
+}
+
+variable "stall_watchdog_memory" {
+  type        = number
+  description = "Memory (MiB) reserved for the stall-watchdog task."
+  default     = 128
 }
 
 # Vault KV secrets integration variables (vault_integration_enabled mechanism)
