@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed `worker_autoscaling_scale_down_cooldown` being silently ignored: replaced flawed per-check `cooldown` overrides with the correct `cooldown_on_scale_up` field at the policy level (supported since Nomad Autoscaler 0.4.0; deployment uses 0.5.0). Policy-level `cooldown` now governs scale-down (`20m` default) and `cooldown_on_scale_up` governs scale-up (`10m` default).
+- Fixed `fresh-redeploy-openstack.sh` bootstrap cooldown override being a no-op: the script was overriding `autoscaler_cooldown`, which is not rendered in any template. It now correctly overrides `worker_autoscaling_scale_up_cooldown` during bootstrap (Phase 2) and restores the var-file value in Phase 3.
+
 ### Added
 
 - Added optional Swift/object-storage artifact backend: `swift_artifact_storage_enabled` master switch and seven supporting variables (`swift_auth_url`, `swift_username`, `swift_password`, `swift_tenant_name`, `swift_container`, `swift_region`, `swift_auth_version`). When enabled, OpenStack Swift credentials and `ARTIFACT_STORAGE_BACKEND=swift` are injected as env vars into web and worker tasks, decoupling heavy artifact writes from shared NFS. See `docs/swift-artifact-backend.md` for migration and rollback guidance. (#357)

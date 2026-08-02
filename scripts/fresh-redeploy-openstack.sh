@@ -136,6 +136,7 @@ worker_runtime_image="$(_extract_var worker_runtime_image "")"
 worker_count="$(_extract_var worker_count 1)"
 worker_max_replicas="$(_extract_var worker_max_replicas 10)"
 autoscaler_cooldown="$(_extract_var autoscaler_cooldown 60m)"
+worker_autoscaling_scale_up_cooldown="$(_extract_var worker_autoscaling_scale_up_cooldown 10m)"
 db_image="$(_extract_var db_image mongo:4.2)"
 redis_image="$(_extract_var redis_image redis:6.2-alpine)"
 redis_node_class="$(_extract_var redis_node_class "")"
@@ -1031,12 +1032,12 @@ if (( effective_bootstrap_max > worker_max_replicas )); then
 fi
 RUN_ARGS+=(--var "worker_count=${worker_count}")
 RUN_ARGS+=(--var "worker_max_replicas=${effective_bootstrap_max}")
-RUN_ARGS+=(--var "autoscaler_cooldown=${BOOTSTRAP_AUTOSCALER_COOLDOWN}")
+RUN_ARGS+=(--var "worker_autoscaling_scale_up_cooldown=${BOOTSTRAP_AUTOSCALER_COOLDOWN}")
 run_pack_with_guard "${RUN_ARGS[@]}"
 
 wait_for_core_services
 
-if [[ "${effective_bootstrap_max}" != "${worker_max_replicas}" || "${BOOTSTRAP_AUTOSCALER_COOLDOWN}" != "${autoscaler_cooldown}" ]]; then
+if [[ "${effective_bootstrap_max}" != "${worker_max_replicas}" || "${BOOTSTRAP_AUTOSCALER_COOLDOWN}" != "${worker_autoscaling_scale_up_cooldown}" ]]; then
   echo ""
   echo "==> Phase 3/3: restore full worker autoscaling bounds"
   FINAL_ARGS=(--var-file "${VAR_FILE}" --name "${JOB_NAME}")
@@ -1049,7 +1050,7 @@ if [[ "${effective_bootstrap_max}" != "${worker_max_replicas}" || "${BOOTSTRAP_A
   fi
   FINAL_ARGS+=(--var "worker_count=${worker_count}")
   FINAL_ARGS+=(--var "worker_max_replicas=${worker_max_replicas}")
-  FINAL_ARGS+=(--var "autoscaler_cooldown=${autoscaler_cooldown}")
+  FINAL_ARGS+=(--var "worker_autoscaling_scale_up_cooldown=${worker_autoscaling_scale_up_cooldown}")
   run_pack_with_guard "${FINAL_ARGS[@]}"
 fi
 
