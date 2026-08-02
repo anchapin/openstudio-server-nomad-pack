@@ -7,6 +7,7 @@
 | --- | --- | --- | --- |
 | `job_name` | `string` | `"openstudio-server"` | The name of the Nomad job. |
 | `app_version` | `string # Keep this in sync with the image tag used in web_image, worker_image, # web_background_image, and rserve_image whenever versions are bumped.` | `"3.11.0"` | Application version tag injected as APP_VERSION into all OpenStudio Server containers. Must match the image tag used in web_image, worker_image, web_background_image, and rserve_image to avoid version mismatch. |
+| `deployment_marker` | `string` | `"openstudio-server"` | Label written to the `deployment_marker` key in each job's meta block to identify which deployment/environment this Nomad Pack render belongs to. Previously hardcoded to a specific environment; now configurable. |
 | `worker_min_replicas` | `number` | `0` | Minimum number of worker replicas when autoscaling is enabled. Set to 0 to allow scale-to-zero when the queue is empty. The Helm chart default of 2 is intentionally changed here to prevent idle worker accumulation. |
 | `worker_max_replicas` | `number` | `20` | Maximum number of worker replicas. Aligned with Helm chart worker-hpa.yaml maxReplicas: 20. |
 | `vault_integration_enabled` | `bool` | `false` | Enable Vault KV v2 secrets injection via Nomad template stanzas (`secrets/env`). Typically enabled together with vault_enabled so tasks use explicit Vault roles. |
@@ -224,6 +225,15 @@
 | `queue_sweeper_image` | `string` | `"redis:6.2-alpine"` | Docker image used for the queue-sweeper task. Must include redis-cli. |
 | `queue_sweeper_cpu` | `number` | `50` | CPU MHz reserved for the queue-sweeper task. |
 | `queue_sweeper_memory` | `number` | `64` | Memory (MiB) reserved for the queue-sweeper task. |
+| `enable_stall_watchdog` | `bool` | `false` | Enable a periodic batch job that detects data points frozen in 'started' status with no updated_at progress. Complements the queue-sweeper (which handles Redis queuing locks) for the distinct failure mode where EnergyPlus hangs silently inside a worker without crashing Resque. When stalled DPs are found and stall_watchdog_restart_allocs = true, the job stops all running worker allocations so Nomad reschedules fresh workers and the analysis coordinators can re-queue the stalled data points. |
+| `stall_watchdog_cron` | `string` | `"*/15 * * * *"` | Cron schedule for the stall-watchdog periodic job (UTC). Default: every 15 minutes. |
+| `stall_watchdog_max_stall_seconds` | `number` | `3600` | Seconds a data point may remain in 'started' status with no updated_at change before it is considered stalled. Must be greater than your longest legitimate simulation run time. Default 3600 (60 min), which is conservative above the typical 45-75 min EnergyPlus monthly run. |
+| `stall_watchdog_restart_allocs` | `bool` | `true` | When true and stalled DPs are detected, the watchdog stops all running worker allocations. Nomad reschedules fresh allocations automatically, clearing the hung Resque slots and allowing analysis coordinators to re-queue stalled data points. Set to false for alert-only mode (exits 2 on stall, visible in Nomad logs). |
+| `stall_watchdog_nomad_address` | `string` | `"http://localhost:4646"` | Nomad server API address reachable from within a task container. Used by the stall watchdog to stop stalled worker allocations. Defaults to http://localhost:4646 with network_mode=host; override in multi-region or NAT environments. |
+| `stall_watchdog_worker_job` | `string` | `""` | Nomad job ID of the worker job to restart when stalled DPs are detected. Defaults to '<job_name>-worker' which is the standard worker job name rendered by this pack. |
+| `stall_watchdog_image` | `string` | `"python:3.12-alpine"` | Docker image for the stall-watchdog task. Must include Python 3 (for urllib/json/datetime). python:3.12-alpine satisfies this requirement. |
+| `stall_watchdog_cpu` | `number` | `100` | CPU MHz reserved for the stall-watchdog task. |
+| `stall_watchdog_memory` | `number` | `128` | Memory (MiB) reserved for the stall-watchdog task. |
 | `vault_policy` | `string` | `"openstudio-server"` | Fallback Vault policy attached to task tokens when vault_integration_enabled is true and vault_enabled is false. |
 | `vault_kv_mongodb_path` | `string` | `"secret/data/openstudio/mongodb"` | Vault KV v2 path for MongoDB credentials (must contain a 'password' key). |
 | `vault_kv_redis_path` | `string` | `"secret/data/openstudio/redis"` | Vault KV v2 path for Redis credentials (must contain a 'password' key). |
