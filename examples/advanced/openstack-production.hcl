@@ -124,10 +124,12 @@ worker_max_replicas              = 10000    # Live-tested cap: fast ramp without
 # 60 % CPU target: conservative threshold to trigger scale-out before iowait spikes.
 worker_cpu_target_utilization = 60
 
-# Queue-depth targets: roughly 1 worker per 20 queued jobs.
+# Queue-depth targets:
+# - simulations: ~1 worker per 20 queued jobs (throughput-oriented)
+# - requeued:    ~1 worker per queued retry job (recovery-oriented)
 # Lower target => more aggressive scale-out. Raise if storage pressure appears.
 worker_queue_simulations_target = 20
-worker_queue_requeued_target    = 20
+worker_queue_requeued_target    = 1
 
 # Scale-up cooldown: 2 min keeps queue bursts from waiting on long cooldown windows.
 # Scale-down cooldown: 10 min reduces oscillation after burst drains.
