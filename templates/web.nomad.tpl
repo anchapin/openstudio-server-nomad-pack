@@ -171,13 +171,6 @@ EOT
       # OpenStudio Server startup scripts (which were written for Docker Compose
       # where MongoDB is 'db:27017', Redis is 'queue:6379', and Rserve is 'rserve:6311').
       # The generated script is executed via web_command/web_args overrides.
-      #
-      # Multi-replica Rserve routing: `shuffle` randomises the list of healthy Rserve
-      # service instances on every Consul template re-render. `with index ... 0` picks
-      # one entry from that shuffled list, providing round-robin-style load distribution
-      # across replicas. Only instances that pass their Consul health check are included;
-      # unhealthy allocations are automatically excluded, so a single replica failure
-      # does not stall the optimization workflow.
       template {
         destination   = "local/patch-hosts.sh"
         change_mode   = "noop"
@@ -191,10 +184,8 @@ echo "{{ .Address }} db" >> /etc/hosts
 {{ range service "openstudio-redis" -}}
 echo "{{ .Address }} queue" >> /etc/hosts
 {{ end -}}
-{{ range $i, $s := shuffle (service "openstudio-rserve") -}}
-{{ if eq $i 0 -}}
-echo "{{ $s.Address }} rserve" >> /etc/hosts
-{{ end -}}
+{{ range service "openstudio-rserve" -}}
+echo "{{ .Address }} rserve" >> /etc/hosts
 {{ end -}}
 EOT
       }
