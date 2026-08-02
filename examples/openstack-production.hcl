@@ -125,6 +125,7 @@ worker_update_progress_deadline = "20m"
 db_cpu    = 2000   # MHz
 db_memory = 4096   # MB — working set fits in RAM for typical project sizes
 
+db_static_port    = 27017
 db_storage_type   = "csi"
 db_volume_source  = "openstudio-mongodb"
 db_csi_plugin_id  = "hostpath-web-plugin0"
@@ -133,6 +134,7 @@ db_csi_plugin_id  = "hostpath-web-plugin0"
 redis_cpu    = 500    # MHz
 redis_memory = 1024   # MB
 
+redis_static_port    = 6379
 redis_storage_type   = "csi"
 redis_volume_source  = "openstudio-redis"
 redis_csi_plugin_id  = "hostpath-web-plugin0"
@@ -148,6 +150,7 @@ nfs_volume_source         = "openstudio-nfs"
 nfs_volume_mount_path     = "/mnt/openstudio"
 
 # ---------- Rserve ----------
+rserve_static_port = 6311
 rserve_cpu    = 1000   # MHz
 rserve_memory = 2048   # MB
 
@@ -160,7 +163,7 @@ log_max_files = 5
 # variables.hcl; listed here explicitly for visibility.
 docker_user            = ""
 docker_readonly_rootfs = false
-docker_cap_drop        = ["ALL"]
+docker_cap_drop        = []
 # MongoDB and Redis run as 999:999 (image default). The CSI wipe script sets
 # chmod 777 on /data so uid 999 can create subdirectories on first boot.
 db_docker_user    = "999:999"
