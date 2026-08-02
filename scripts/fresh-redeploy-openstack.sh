@@ -925,9 +925,12 @@ job "${wipe_job}" {
           "find /local/nfs -mindepth 1 -maxdepth 1 -exec rm -rf {} +"
         ]
       }
-      # Run as UID 1000 — NFS root_squash maps container root to nobody (65534);
-      # app files are owned by 1000 so this UID can delete them.
-      user = "1000:1000"
+      # Run as UID 1000 (numeric) — exec driver requires LookupId not username:group.
+      # UID 1000 matches app file ownership and passes through NFS root_squash unchanged.
+      # Requires UID 1000 to exist in /etc/passwd on the Nomad client node. If it does
+      # not exist (check: id 1000), configure the NFS export with no_root_squash instead
+      # and remove this user field so the task runs as root.
+      user = "1000"
       volume_mount {
         volume      = "nfs-shared"
         destination = "/local/nfs"
