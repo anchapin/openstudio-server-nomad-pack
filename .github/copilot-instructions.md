@@ -486,6 +486,16 @@ The script reads image variables from the var-file, pulls each from Docker Hub, 
 ./scripts/clear-stale-queuing-locks.sh --max-age 300          # custom idle threshold
 ./scripts/clear-stale-queuing-locks.sh --nomad-addr http://... # target cluster
 
+# Detect data points stuck in "started" state (hung EnergyPlus processes holding
+# Resque worker slots with no updated_at progress for longer than --max-stall seconds)
+./scripts/detect-stalled-datapoints.sh --dry-run                     # report only
+./scripts/detect-stalled-datapoints.sh --max-stall 3600              # 60-min threshold (default)
+./scripts/detect-stalled-datapoints.sh --restart-allocs              # detect + auto-restart worker allocs
+./scripts/detect-stalled-datapoints.sh \
+  --max-stall 3600 --restart-allocs \
+  --nomad-addr http://10.60.126.125:4646 \
+  --web-url http://10.60.126.125                                      # full production invocation
+
 # Attach a persistent Docker volume to a running allocation (storage rescue)
 ./scripts/attach-docker-volume.sh
 
@@ -513,6 +523,8 @@ bash scripts/apply-acl-policies.sh --dry-run  # preview only
 ```
 
 `clear-stale-queuing-locks.sh` exits `0` (no stale keys), `1` (error), or `2` (stale keys found in `--dry-run` mode — useful as an alert gate in CI or cron).
+
+`detect-stalled-datapoints.sh` exits `0` (no stalled DPs), `1` (error), or `2` (stalled DPs found). It detects data points stuck in `started` status with no `updated_at` progress — a distinct failure mode from queuing locks where EnergyPlus hangs silently without crashing Resque. Run with `--restart-allocs` to auto-recover. Recommended cron schedule: every 15 minutes with `--max-stall 3600`. Without `--restart-allocs`, exit code `2` is suitable as a PagerDuty/alert gate.
 
 ### Worker local scratch
 
