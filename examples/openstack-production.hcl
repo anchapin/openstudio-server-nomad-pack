@@ -61,7 +61,7 @@ worker_count = 2
 
 # 90 min kill timeout — covers longest observed OpenStack analysis runtime.
 # Must be ≥ your longest simulation; shorter values cause data loss on drains.
-worker_kill_timeout = 5400
+worker_kill_timeout = "5400s"
 
 # Autoscaling — CPU + queue-depth strategies (both active simultaneously).
 # Prerequisites: Prometheus (prometheus_enabled) and Autoscaler daemon
