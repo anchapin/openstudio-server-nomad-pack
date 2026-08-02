@@ -152,7 +152,6 @@
 | `web_rserve_colocation_node` | `string` | `""` | Optional hard node name pin applied to both the web and rserve task groups. Set to a Nomad node name (for example, \"nomad-client-172\") to force web and rserve onto the same host when shared local paths must be identical. Leave empty to disable explicit co-location pinning. |
 | `dev_shared_data_path` | `string` | `""` | Host path to bind-mount as the shared data volume at nfs_volume_mount_path (e.g. /mnt/openstudio) in the web, web-background, and worker tasks. Intended for single-node development where a full NFS setup is impractical. When set, a Docker bind mount is added to each task so all three containers share the same host directory, replicating the Docker Compose osdata named volume behaviour. Leave empty (default) in production; use nfs_shared_volume_enabled instead. NOTE: On macOS with Docker Desktop, use dev_shared_volume_name instead to avoid VirtioFS write-consistency issues. |
 | `dev_shared_volume_name` | `string` | `""` | Docker named volume to mount at nfs_volume_mount_path in the web, web-background, and worker tasks. Preferred over dev_shared_data_path on macOS/Docker Desktop: named volumes live in the Docker VM filesystem and bypass VirtioFS, avoiding write-consistency issues (CRC corruption) that occur with macOS host bind mounts. Pre-create with 'docker volume create <name>' before deploying. Leave empty (default) when using dev_shared_data_path or nfs_shared_volume_enabled. |
-| `rserve_count` | `number` | `1` | The number of rserve task group allocations. |
 | `rserve_image` | `string` | `"nrel/openstudio-rserve:179-flock"` | The Rserve image name and tag. |
 | `rserve_command` | `string` | `""` | Optional command override for the Rserve task. Leave empty to use the image default entrypoint. |
 | `rserve_args` | `list(string)` | `[]` | Optional args passed to rserve_command when set. |
@@ -160,6 +159,7 @@
 | `rserve_memory` | `number` | `2048` | Memory (MB) allocated to the Rserve task. |
 | `rserve_health_check_interval` | `string` | `"10s"` | Interval between Consul health checks for the Rserve service. |
 | `rserve_health_check_timeout` | `string` | `"2s"` | Timeout for Consul health checks for the Rserve service. |
+| `rserve_count` | `number` | `1` |  |
 | `enable_consul_connect` | `bool` | `false` | Enable Consul Connect sidecar proxies for mTLS service-to-service communication. |
 | `log_driver_type` | `string` | `"json-file"` | The logging driver to use for the containers. |
 | `log_max_size` | `string` | `"10m"` | The maximum size of log files before rotation. |
