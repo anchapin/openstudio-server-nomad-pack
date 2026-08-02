@@ -46,20 +46,25 @@ nomad_autoscaler_image = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/hashic
 # See docs/operations-guide.md §'Web Replica Constraint'.
 web_count    = 1
 web_priority = 80
-web_cpu      = 1000   # MHz — sufficient for Passenger + request routing
-web_memory   = 2048   # MB  — covers Passenger workers + upload buffer
+web_cpu      = 6000   # MHz — sufficient for Passenger + request routing
+web_memory   = 51200  # MB  — covers Passenger workers + upload buffer
+web_memory_max = 61440
 
 # Traefik Host rule — must match the IP/hostname used to reach the cluster.
 ingress_domain = "10.60.126.125"
 
 # ---------- Web-background ----------
-web_background_count  = 2
-web_background_cpu    = 2000   # MHz
-web_background_memory = 2048   # MB
+# This pack pins web-background to a singleton allocation in the template.
+# Throughput is controlled by web_background_worker_count, not replicas.
+web_background_count  = 1
+web_background_cpu    = 16000  # MHz
+web_background_memory = 16384  # MB
+web_background_memory_max = 32768
 
-web_background_autoscaling_enabled = true
-web_background_min_replicas        = 1
-web_background_max_replicas        = 4
+web_background_autoscaling_enabled = false
+web_background_worker_count        = 56
+# Prioritize analysis lifecycle work before generic background jobs.
+web_background_queues              = "analyses,background"
 
 # patch-hosts.sh injects openstudio-db/redis/rserve Consul service IPs as
 # 'db', 'queue', 'rserve' into /etc/hosts before the app starts.
@@ -67,21 +72,23 @@ web_background_max_replicas        = 4
 web_command = "/bin/sh"
 web_args    = ["-c", "sh /local/patch-hosts.sh && exec /usr/local/bin/start-server"]
 web_background_command = "/bin/sh"
-web_background_args    = ["-c", "sh /local/patch-hosts.sh && exec /usr/local/bin/start-workers"]
+# start-web-background has COUNT=6 hardcoded; bypass it and call rake directly
+# so our COUNT=web_background_worker_count env var is honoured.
+web_background_args    = ["-c", "sh /local/patch-hosts.sh && cd /opt/openstudio/server && exec bundle exec rake environment resque:workers"]
 
 # ---------- Worker ----------
 # Tuned values from staged rollout (see rollout runbook for rationale).
 # 8-vCPU / 16 GB node: 2 allocations fit at 3 000 MHz / 6 144 MB each.
 worker_priority      = 50
-worker_cpu           = 3000   # MHz — leaves headroom for OS + Docker on 8-vCPU nodes
-worker_memory        = 6144   # MB  — ~38 % of 16 GB; allows 2 allocations per node
-worker_memory_max    = 8192   # MB  — burst to full node memory before OOM
+worker_cpu           = 1500   # MHz — leaves headroom for OS + Docker on 8-vCPU nodes
+worker_memory        = 1750   # MB  — ~38 % of 16 GB; allows 2 allocations per node
+worker_memory_max    = 4000   # MB  — burst to full node memory before OOM
 worker_process_count = 2    # 2 processes × 3 000 MHz ≈ 6 000 MHz per allocation
 worker_command = "/bin/sh"
 worker_args    = ["-c", "sh /local/patch-hosts.sh && exec /usr/local/bin/start-workers"]
 
 # Seed count; autoscaler owns actual count. 2 prevents cold-start lag.
-worker_count = 2
+worker_count = 4
 
 # 90 min kill timeout — covers longest observed OpenStack analysis runtime.
 # Must be ≥ your longest simulation; shorter values cause data loss on drains.
@@ -108,10 +115,10 @@ prometheus_constraints = [
 ]
 
 worker_autoscaling_enabled       = true
-worker_autoscaling_cpu_enabled   = true
+worker_autoscaling_cpu_enabled   = false
 worker_autoscaling_queue_enabled = true   # Scale on Redis queue depth via Prometheus
 worker_min_replicas              = 2
-worker_max_replicas              = 20     # Stage 4 target; adjust to cluster size
+worker_max_replicas              = 10000  # Stage 4 target; adjust to cluster size
 
 # 60 % CPU target: conservative threshold to trigger scale-out before iowait spikes.
 worker_cpu_target_utilization = 60
@@ -119,13 +126,13 @@ worker_cpu_target_utilization = 60
 # Queue-depth targets: 1 worker per 15 queued simulations.
 # At 300 queued jobs: 300 ÷ 15 = 20 workers (hits worker_max_replicas).
 # Tune lower (e.g. 10) for faster ramp, higher (e.g. 20) to be more conservative.
-worker_queue_simulations_target = 15
-worker_queue_requeued_target    = 15
+worker_queue_simulations_target = 2
+worker_queue_requeued_target    = 1
 
 # Scale-up cooldown: 5 min allows fast ramp-up when the queue is deep.
 # Scale-down cooldown: keep 20 min to avoid thrashing between simulation batches.
 # The global autoscaler_cooldown is overridden per-direction below.
-worker_autoscaling_scale_up_cooldown   = "5m"
+worker_autoscaling_scale_up_cooldown   = "10m"
 worker_autoscaling_scale_down_cooldown = "20m"
 
 # Legacy global cooldown (used by CPU check and as fallback); kept for reference.
@@ -139,8 +146,9 @@ worker_update_progress_deadline = "20m"
 
 # ---------- MongoDB ----------
 # 2 000 MHz / 4 096 MB covers observed query load during Stage 3 soak.
-db_cpu    = 2000   # MHz
-db_memory = 4096   # MB — working set fits in RAM for typical project sizes
+db_cpu    = 4000   # MHz
+db_memory = 22528  # MB — working set fits in RAM for typical project sizes
+db_memory_max = 45056
 
 db_static_port    = 27017
 db_storage_type   = "csi"
@@ -148,8 +156,9 @@ db_volume_source  = "openstudio-mongodb"
 db_csi_plugin_id  = "hostpath-web-plugin0"
 
 # ---------- Redis ----------
-redis_cpu    = 500    # MHz
-redis_memory = 1024   # MB
+redis_cpu    = 8000   # MHz
+redis_memory = 16384  # MB
+redis_memory_max = 24576
 
 redis_static_port    = 6379
 redis_storage_type   = "csi"
@@ -168,8 +177,8 @@ nfs_volume_mount_path     = "/mnt/openstudio"
 
 # ---------- Rserve ----------
 rserve_static_port = 6311
-rserve_cpu    = 1000   # MHz
-rserve_memory = 2048   # MB
+rserve_cpu    = 2000   # MHz
+rserve_memory = 4096   # MB
 
 # ---------- Logging ----------
 log_max_size  = "50m"

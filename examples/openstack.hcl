@@ -394,7 +394,9 @@ web_command = "/bin/sh"
 web_args    = ["-c", "sh /local/patch-hosts.sh && exec /usr/local/bin/start-server"]
 
 web_background_command = "/bin/sh"
-web_background_args    = ["-c", "sh /local/patch-hosts.sh && exec /usr/local/bin/start-web-background"]
+# start-web-background has COUNT=6 hardcoded; bypass it and call rake directly
+# so our COUNT=web_background_worker_count env var is honoured.
+web_background_args    = ["-c", "sh /local/patch-hosts.sh && cd /opt/openstudio/server && exec bundle exec rake environment resque:workers"]
 
 worker_command = "/bin/sh"
 worker_args    = ["-c", "sh /local/patch-hosts.sh && exec /usr/local/bin/start-workers"]
