@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added `prometheus_alert_rules_enabled` variable (default `true`) to embed Prometheus alert rules into the in-pack Prometheus job when `prometheus_enabled = true`. Adds three rules: `OpenStudioSimulationsQueueBacklog` (simulations queue non-empty > 30 min), `OpenStudioRequeuedQueueBacklog` (requeued queue non-empty > 20 min), and `OpenStudioFailedJobs` (Resque failed queue non-empty > 5 min).
+- Added `prometheus_alert_simulations_queue_minutes`, `prometheus_alert_requeued_queue_minutes`, and `prometheus_alert_failed_jobs_minutes` variables to tune alert thresholds.
+- Added `scripts/detect-stalled-datapoints.sh` — detects data points frozen in `started` status with no `updated_at` progress. Complements queue-sweeper (which handles Redis lock stalls) for the distinct failure mode where EnergyPlus hangs silently without crashing Resque. Supports `--restart-allocs` for automatic recovery. Exit code `2` = stalled DPs found (suitable as alert gate in cron/CI).
+- Added `resque:failed` to redis-exporter `--check-keys` so the Resque failed queue depth is available as a Prometheus metric.
+- Added `enable_queue_sweeper = true` with `queue_sweeper_cron = "*/2 * * * *"` and `queue_sweeper_max_lock_age_seconds = 120` to `examples/advanced/openstack-production.hcl`.
+
+### Added
 - Added `batch_engine` variable (`"internal"` | `"nomad_batch"` | `"aws_batch"`) to select the simulation compute backend; defaults to `"internal"` for full backward compatibility.
 - Added Nomad Batch provider variables: `nomad_batch_datacenter`, `nomad_batch_namespace`, `nomad_batch_job_name`, `nomad_batch_worker_image`, `nomad_batch_cpu`, `nomad_batch_memory`, `nomad_batch_worker_command`, `nomad_batch_worker_args`, `nomad_batch_constraints`, `nomad_batch_kill_timeout`, `nomad_batch_identity_ttl`.
 - Added AWS Batch provider variables: `aws_region`, `aws_batch_job_queue`, `aws_batch_job_definition`, `aws_batch_vault_aws_role`.

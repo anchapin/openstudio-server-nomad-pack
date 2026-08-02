@@ -589,6 +589,30 @@ variable "redis_exporter_image" {
   default     = "oliver006/redis_exporter:v1.62.0"
 }
 
+variable "prometheus_alert_rules_enabled" {
+  type        = bool
+  description = "Embed Prometheus alert rules into the in-pack Prometheus job. When true, adds alert rules for queue backlog stalls (simulations/requeued queues stuck > threshold), high failure counts, and no-worker-activity conditions. Requires prometheus_enabled = true. Rules fire as pending/firing states visible in the Prometheus /alerts UI; wire up an Alertmanager for notifications."
+  default     = true
+}
+
+variable "prometheus_alert_simulations_queue_minutes" {
+  type        = number
+  description = "Minutes the simulations queue must remain non-empty before the OpenStudioSimulationsQueueBacklog alert fires. Jobs in this queue should drain quickly under normal load; a sustained backlog indicates workers are down or not consuming."
+  default     = 30
+}
+
+variable "prometheus_alert_requeued_queue_minutes" {
+  type        = number
+  description = "Minutes the requeued queue must remain non-empty before the OpenStudioRequeuedQueueBacklog alert fires. The requeued queue holds retry jobs; a sustained backlog indicates all workers are occupied or hung on in-flight retries."
+  default     = 20
+}
+
+variable "prometheus_alert_failed_jobs_minutes" {
+  type        = number
+  description = "Minutes the Resque failed queue must remain non-empty before the OpenStudioFailedJobs alert fires. Any failure is notable; a brief grace period avoids noise from transient restarts."
+  default     = 5
+}
+
 variable "worker_queue_requeued_query" {
   type        = string
   description = "Prometheus query for requeued backlog depth. Uses 'or vector(0)' so the series always resolves to 0 (not empty/error) when the queue key does not yet exist in Redis, which allows scale-to-zero when both queues are idle. This query should return raw queue depth; worker count math is applied in the worker template via a pass-through strategy."

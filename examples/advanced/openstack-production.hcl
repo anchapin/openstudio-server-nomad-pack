@@ -220,6 +220,15 @@ backup_volume_source  = "openstudio-backups"
 backup_retention_days = 14
 restore_enabled       = true
 
+# ---------- Queue sweeper ----------
+# Automatically clears orphaned resque:analysis:*:queuing locks from Redis.
+# These locks stall all analyses in the queue until cleared.
+# Also see: scripts/detect-stalled-datapoints.sh (run via cron every 15 min)
+# for the complementary in-flight simulation stall detector.
+enable_queue_sweeper                 = true
+queue_sweeper_cron                   = "*/2 * * * *"
+queue_sweeper_max_lock_age_seconds   = 120
+
 # ---------- Image pre-pull ----------
 # Pre-pulls all images on every compute node to eliminate cold-start delays.
 # prepull_kill_timeout must be ≥ 600 s (10 min) — shorter values evict the cache.
