@@ -957,11 +957,14 @@ if not j:
     print("wait")
     sys.exit(0)
 statuses=[(a.get("ClientStatus") or "").lower() for a in j]
-if any(s == "failed" for s in statuses):
-    print("fail")
-    sys.exit(0)
-if all(s in ("complete","failed","lost") for s in statuses) and any(s == "complete" for s in statuses):
+# A complete alloc means success; Nomad may have rescheduled once after an
+# initial alloc failure (e.g. exec user lookup on a different node image).
+if any(s == "complete" for s in statuses):
     print("ok")
+    sys.exit(0)
+# All allocs failed/lost with no complete -> genuinely failed
+if statuses and all(s in ("failed","lost") for s in statuses):
+    print("fail")
     sys.exit(0)
 print("wait")
 ' 2>/dev/null || echo "wait"
