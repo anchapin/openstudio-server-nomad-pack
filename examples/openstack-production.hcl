@@ -49,6 +49,9 @@ web_priority = 80
 web_cpu      = 1000   # MHz — sufficient for Passenger + request routing
 web_memory   = 2048   # MB  — covers Passenger workers + upload buffer
 
+# Traefik Host rule — must match the IP/hostname used to reach the cluster.
+ingress_domain = "10.60.126.125"
+
 # ---------- Web-background ----------
 web_background_count  = 2
 web_background_cpu    = 2000   # MHz
