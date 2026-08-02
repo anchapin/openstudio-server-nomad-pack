@@ -24,11 +24,16 @@ region      = "global"   # OpenStack region; update to match your deployment
 datacenters = ["dc1"]       # Update to match your Nomad datacenter name(s)
 
 # ---------- Images ----------
-# All four image tags must be kept in alignment; bump together on version upgrades.
-web_image            = "nrel/openstudio-server:3.11.0"
-web_background_image = "nrel/openstudio-server:3.11.0"
-worker_image         = "nrel/openstudio-server:3.11.0"
-rserve_image         = "nrel/openstudio-rserve:3.11.0"
+# All images pulled from the internal Pulp registry to avoid Docker Hub rate limits.
+web_image            = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/nrel/openstudio-server:179-flock"
+web_background_image = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/nrel/openstudio-server:179-flock"
+worker_image         = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/nrel/openstudio-server:179-flock"
+worker_runtime_image = "openstudio-worker:local"
+rserve_image         = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/nrel/openstudio-rserve:179-flock"
+db_image             = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/nrel/mongo:8.0.12"
+redis_image          = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/nrel/redis:6.0.9"
+verification_image   = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/registry.k8s.io/e2e-test-images/busybox:1.29-2"
+poststop_cleanup_image = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/registry.k8s.io/e2e-test-images/busybox:1.29-2"
 
 # ---------- Web ----------
 # web_count MUST remain 1 — NFS does not provide distributed file-locking.
@@ -177,17 +182,3 @@ prepull_kill_timeout   = "600s"
 # worker_local_scratch_size    = 10240   # 10 GiB per allocation
 # worker_local_scratch_sticky  = false   # clear on GC; set true to resume across restarts
 # worker_scratch_path          = "/scratch"
-
-# ---------- Image pull / sidecar overrides ----------
-# Disable Vector log-forwarding sidecar — the web node (which hosts stateful
-# CSI jobs) has exhausted its Docker Hub anonymous pull quota. Vector is a
-# prestart sidecar and blocks the main task from starting when it 429s.
-# Native Nomad log collection still works; re-enable when a Docker Hub auth
-# token is configured on the cluster or after the rate limit window resets.
-enable_vector_collection = false
-
-# Poststop cleanup uses alpine:3.20 which also 429s on the web node.
-# Switch to busybox which is cached from wait-for-deps on worker nodes.
-# For the web node itself, set to empty path list so the poststop task
-# has nothing to do even if the image pull fails.
-poststop_cleanup_image = "busybox:1.36"
