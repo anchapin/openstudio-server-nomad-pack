@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `docs/swift-artifact-backend.md` covering Swift setup, migration from NFS, rollback procedure, and compatibility requirements.
 - Added `worker_local_scratch_enabled`, `worker_local_scratch_size`, `worker_local_scratch_sticky`, and `worker_scratch_path` variables to enable node-local ephemeral disk for worker tasks; when enabled, a conditional `ephemeral_disk` stanza and `WORKER_SCRATCH_PATH` env var are injected into `worker.nomad.tpl` so simulations can stage I/O locally and publish only final artifacts to shared NFS, reducing write amplification at scale (#356)
 - Added `docs/worker-local-scratch.md` covering write amplification rationale, Nomad `ephemeral_disk` lifecycle, application responsibilities, recommended OpenStack configuration, cleanup/retry-safe patterns, and interaction with the planned Swift storage backend (#356)
+- Added `scripts/provision-openstack-storage.sh`: idempotent OpenStack storage provisioner covering Manila NFS share creation, IP-based ACL rules, NFS export-path retrieval, quota checks, optional Cinder volume provisioning, NFS mount readiness validation, and `--dry-run` mode (#355)
+- Added `docs/openstack-storage-provisioning.md`: full operator guide for provisioning Manila NFS and Cinder block volumes on OpenStack, including mounting NFS on Nomad client nodes, registering Nomad host volumes, wiring storage identifiers into pack var-files, CSI volume registration, and troubleshooting (#355)
+- Updated `docs/storage.md` with an "OpenStack Provisioning" section referencing the new script and guide (#355)
+
 - Added `rserve_count` variable to allow configuring Rserve replica count (default: 1) (#360)
 - Added `docs/openstack-staged-rollout-runbook.md` with staged worker ramp procedure, gate criteria (latency, iowait%, queue lag, failure rate), abort/rollback steps, evidence collection checklist, and final recommended OpenStack defaults (#365)
 - Added `examples/openstack-production.hcl` with finalized tuned defaults for OpenStack-hosted Nomad clusters and inline rollback guidance (#365)

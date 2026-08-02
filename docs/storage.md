@@ -20,6 +20,7 @@ This guide covers everything you need to set up persistent storage for MongoDB a
 5. [NFS Shared Volume (web and worker)](#5-nfs-shared-volume-web-and-worker)
 6. [Volume Permissions and Ownership](#6-volume-permissions-and-ownership)
 7. [Teardown and Cleanup](#7-teardown-and-cleanup)
+8. [OpenStack Provisioning](#8-openstack-provisioning)
 
 ---
 
@@ -657,6 +658,46 @@ That guide covers:
 - Benchmark methodology using `fio`, `nfsstat`, and `iostat`
 - Guardrails: when to downgrade to the Conservative profile
 - Step-by-step `/etc/fstab`, systemd mount unit, and `client.hcl` integration
+---
+
+## 8. OpenStack Provisioning
+
+When deploying on an OpenStack cloud, storage resources must be provisioned **before**
+`nomad-pack run`. The pack supports two OpenStack storage backends:
+
+| Storage | OpenStack service | Pack variable |
+|---------|-------------------|---------------|
+| Shared NFS filesystem (web + worker) | Manila | `nfs_shared_volume_enabled = true` |
+| MongoDB block volume | Cinder | `db_storage_type = "csi"` |
+
+### Automated script
+
+An idempotent provisioning script handles quota checks, Manila share creation, NFS ACL rules,
+export-path retrieval, and optional Cinder volume creation:
+
+```bash
+# Dry-run (prints all commands without executing)
+./scripts/provision-openstack-storage.sh --dry-run
+
+# Provision with your Nomad client subnet CIDR
+./scripts/provision-openstack-storage.sh --cidr 10.0.1.0/24
+
+# Full option reference
+./scripts/provision-openstack-storage.sh --help
+```
+
+### Full operator guide
+
+See **[docs/openstack-storage-provisioning.md](./openstack-storage-provisioning.md)** for:
+
+- Prerequisites (OpenStack CLI, authentication, network planning)
+- Step-by-step manual CLI workflow
+- Mounting NFS on Nomad client nodes
+- Registering host volumes in the Nomad client config
+- Wiring storage identifiers into the pack var-file
+- CSI path for Cinder block volumes
+- ACL and export readiness validation
+- Troubleshooting common errors
 
 ---
 
@@ -667,3 +708,4 @@ That guide covers:
 - [NFS Tuning Guide](./nfs-tuning-guide.md) — high-concurrency mount profiles and benchmarks
 - [Getting Started: Single-Node Walkthrough](./getting-started-single-node.md)
 - [Kubernetes-to-Nomad Migration](./migration-k8s-to-nomad.md) — for migrating existing volume data
+- [OpenStack Storage Provisioning](./openstack-storage-provisioning.md) — Manila NFS + Cinder on OpenStack
