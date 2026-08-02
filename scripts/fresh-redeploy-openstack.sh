@@ -429,7 +429,10 @@ wipe_csi_volume_data() {
   local wipe_image
   wipe_image="${preferred_image:-${CSI_WIPE_JOB_IMAGE}}"
   if [[ -z "${wipe_image}" ]]; then
-    wipe_image="alpine:3.20"
+    # busybox:1.36 is pre-cached on every node (used by wait-for-deps tasks).
+    # Avoids Docker Hub rate-limit errors (429) that occur when pulling alpine
+    # on nodes that don't have it cached.
+    wipe_image="busybox:1.36"
   fi
   attempt=1
   while (( attempt <= CSI_WIPE_MAX_ATTEMPTS )); do
@@ -460,7 +463,8 @@ job "${wipe_job}" {
     task "wipe" {
       driver = "docker"
       config {
-        image   = "${wipe_image}"
+        image      = "${wipe_image}"
+        force_pull = false
         command = "sh"
         args = [
           "-ec",
@@ -912,10 +916,8 @@ job "${wipe_job}" {
     task "wipe" {
       driver = "docker"
       config {
-        # Run as UID 1000:1000 — NFS servers typically enable root_squash, which
-        # maps root (UID 0) to nobody (UID 65534). App files are owned by UID 1000,
-        # so running as UID 1000 is required to delete them over NFS.
-        image   = "alpine:3.20"
+        image      = "busybox:1.36"
+        force_pull = false
         command = "sh"
         args = [
           "-ec",
