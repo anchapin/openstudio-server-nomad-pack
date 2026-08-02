@@ -41,8 +41,8 @@ job "[[ var "job_name" . ]]-worker" {
       max     = [[ var "worker_max_replicas" . ]]
 
       policy {
-        cooldown            = "[[ var "autoscaler_cooldown" . ]]"
-        evaluation_interval = "30s"
+        cooldown            = "[[ var "worker_autoscaling_scale_up_cooldown" . ]]"
+        evaluation_interval = "[[ var "worker_autoscaling_evaluation_interval" . ]]"
 
         [[ if var "worker_autoscaling_cpu_enabled" . ]]
         check "cpu-utilization" {
