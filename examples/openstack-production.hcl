@@ -93,6 +93,20 @@ worker_kill_timeout = "5400s"
 prometheus_enabled       = true
 nomad_autoscaler_enabled = true
 
+# Direct IP addresses — Consul DNS (*.service.consul) is unreliable on worker nodes.
+autoscaler_nomad_address      = "http://192.168.100.87:4646"
+autoscaler_prometheus_address = "http://192.168.100.92:9090"
+
+# Pin prometheus to the web/CSI node — the only node with reliable Pulp access
+# for the prometheus and redis_exporter images.
+prometheus_constraints = [
+  {
+    attribute = "$${attr.unique.hostname}"
+    operator  = "="
+    value     = "nomad-client-259"
+  }
+]
+
 worker_autoscaling_enabled       = true
 worker_autoscaling_cpu_enabled   = true
 worker_autoscaling_queue_enabled = true   # Scale on Redis queue depth via Prometheus
