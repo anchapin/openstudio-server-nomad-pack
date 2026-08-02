@@ -17,15 +17,15 @@ job "[[ var "job_name" . ]]-batch-verify" {
       driver = "docker"
 
       config {
-        image = "[[ var "verification_image" . ]]"
+        image   = "[[ var "verification_image" . ]]"
         command = "/bin/sh"
-        args = ["-c", "local/verify-connectivity.sh"]
+        args    = ["-c", "local/verify-connectivity.sh"]
       }
 
       template {
         destination = "local/verify-connectivity.sh"
         perms       = "755"
-        data = <<EOH
+        data        = <<EOH
 #!/bin/sh
 set -eu
 
