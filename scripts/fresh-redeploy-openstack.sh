@@ -853,7 +853,7 @@ fi
 if [[ "${db_storage_type}" == "csi" ]]; then
   delete_csi_volume_if_present "${db_volume_source}"
   create_csi_volume "${db_volume_source}" "${DB_CSI_CAPACITY_MIN}" "${DB_CSI_CAPACITY_MAX}" "${ACTIVE_DB_CSI_PLUGIN_ID}" "${STATEFUL_CSI_NODE_ROLE}"
-  wipe_csi_volume_data "${db_volume_source}" "${db_image}"
+  wipe_csi_volume_data "${db_volume_source}"
 else
   echo "  - db_storage_type=${db_storage_type}; skipping CSI recreation for DB"
 fi
@@ -861,7 +861,7 @@ fi
 if [[ "${redis_storage_type}" == "csi" ]]; then
   delete_csi_volume_if_present "${redis_volume_source}"
   create_csi_volume "${redis_volume_source}" "${REDIS_CSI_CAPACITY_MIN}" "${REDIS_CSI_CAPACITY_MAX}" "${ACTIVE_REDIS_CSI_PLUGIN_ID}" "${STATEFUL_CSI_NODE_ROLE}"
-  wipe_csi_volume_data "${redis_volume_source}" "${redis_image}"
+  wipe_csi_volume_data "${redis_volume_source}"
 else
   echo "  - redis_storage_type=${redis_storage_type}; skipping CSI recreation for Redis"
 fi
