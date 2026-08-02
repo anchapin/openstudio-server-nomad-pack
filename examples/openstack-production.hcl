@@ -34,6 +34,12 @@ db_image             = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/nrel/mon
 redis_image          = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/nrel/redis:6.0.9"
 verification_image   = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/registry.k8s.io/e2e-test-images/busybox:1.29-2"
 poststop_cleanup_image = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/registry.k8s.io/e2e-test-images/busybox:1.29-2"
+vector_image              = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/timberio/vector:0.30.0-alpine"
+# Disabled until the Pulp-mirrored vector image is verified amd64 (exec format error otherwise)
+enable_vector_collection  = false
+prometheus_image       = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/prom/prometheus:v2.53.2"
+redis_exporter_image   = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/oliver006/redis_exporter:v1.62.0"
+nomad_autoscaler_image = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/hashicorp/nomad-autoscaler:0.5.0"
 
 # ---------- Web ----------
 # web_count MUST remain 1 — NFS does not provide distributed file-locking.
@@ -52,6 +58,14 @@ web_background_autoscaling_enabled = true
 web_background_min_replicas        = 1
 web_background_max_replicas        = 4
 
+# patch-hosts.sh injects openstudio-db/redis/rserve Consul service IPs as
+# 'db', 'queue', 'rserve' into /etc/hosts before the app starts.
+# Without this the app startup script can't resolve those hostnames.
+web_command = "/bin/sh"
+web_args    = ["-c", "sh /local/patch-hosts.sh && exec /usr/local/bin/start-server"]
+web_background_command = "/bin/sh"
+web_background_args    = ["-c", "sh /local/patch-hosts.sh && exec /usr/local/bin/start-workers"]
+
 # ---------- Worker ----------
 # Tuned values from staged rollout (see rollout runbook for rationale).
 # 8-vCPU / 16 GB node: 2 allocations fit at 3 000 MHz / 6 144 MB each.
@@ -60,6 +74,8 @@ worker_cpu           = 3000   # MHz — leaves headroom for OS + Docker on 8-vCP
 worker_memory        = 6144   # MB  — ~38 % of 16 GB; allows 2 allocations per node
 worker_memory_max    = 8192   # MB  — burst to full node memory before OOM
 worker_process_count = 2    # 2 processes × 3 000 MHz ≈ 6 000 MHz per allocation
+worker_command = "/bin/sh"
+worker_args    = ["-c", "sh /local/patch-hosts.sh && exec /usr/local/bin/start-workers"]
 
 # Seed count; autoscaler owns actual count. 2 prevents cold-start lag.
 worker_count = 2
@@ -142,9 +158,13 @@ log_max_files = 5
 # ---------- Docker hardening ----------
 # These defaults (non-root, read-only rootfs, drop ALL caps) are inherited from
 # variables.hcl; listed here explicitly for visibility.
-docker_user            = "1000:1000"
-docker_readonly_rootfs = true
+docker_user            = ""
+docker_readonly_rootfs = false
 docker_cap_drop        = ["ALL"]
+# MongoDB and Redis run as 999:999 (image default). The CSI wipe script sets
+# chmod 777 on /data so uid 999 can create subdirectories on first boot.
+db_docker_user    = "999:999"
+redis_docker_user = "999:999"
 
 # ---------- Consul Connect mTLS ----------
 # Enable service-mesh mTLS between all components.
