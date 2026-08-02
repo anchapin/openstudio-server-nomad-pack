@@ -163,7 +163,8 @@ EOT
       }
 
       config {
-        image = "[[ var "vector_image" . ]]"
+        image       = "[[ var "vector_image" . ]]"
+        force_pull  = false
         args  = ["--config", "local/vector.toml"]
       }
 
