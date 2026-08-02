@@ -1,0 +1,75 @@
+# ============================================================================
+# user-overrides.hcl — OpenStudio Server Nomad Pack
+# ============================================================================
+# This file is the ONLY file most energy modelers need to edit.
+# Copy this file, set the values below, and run:
+#
+#   nomad-pack run . -var-file user-overrides.hcl
+#
+# Everything else — cluster networking, storage volumes, autoscaling, Vault,
+# Consul service discovery — has safe defaults and does not need to change
+# for a standard single-node deployment.
+#
+# Lines beginning with "#" are comments. Remove the "#" from a line to
+# activate that setting.
+# ============================================================================
+
+
+# ----------------------------------------------------------------------------
+# REQUIRED: OpenStudio Server Version
+# ----------------------------------------------------------------------------
+# Set all four image variables to the same OpenStudio Server release you want
+# to run. Find available tags at:
+#   https://hub.docker.com/r/nrel/openstudio-server/tags
+#   https://hub.docker.com/r/nrel/openstudio-rserve/tags
+#
+# web_image            = "nrel/openstudio-server:3.8.0"
+# web_background_image = "nrel/openstudio-server:3.8.0"
+# worker_image         = "nrel/openstudio-server:3.8.0"
+# rserve_image         = "nrel/openstudio-rserve:3.8.0"
+
+
+# ----------------------------------------------------------------------------
+# OPTIONAL: Job Name
+# ----------------------------------------------------------------------------
+# A unique name for this deployment. Useful if you want to run multiple
+# independent OpenStudio Server instances on the same cluster.
+#
+# job_name = "openstudio-server"
+
+
+# ----------------------------------------------------------------------------
+# OPTIONAL: Worker Parallelism
+# ----------------------------------------------------------------------------
+# How many parallel simulation workers to run at once.
+# Each worker processes one analysis datapoint at a time.
+# Start with 2–4 for initial testing; scale up once verified.
+#
+# worker_count = 2
+
+
+# ----------------------------------------------------------------------------
+# OPTIONAL: Datacenter
+# ----------------------------------------------------------------------------
+# The Nomad datacenter(s) to deploy into.
+# Leave as default if you are running a single-datacenter Nomad cluster.
+#
+# datacenters = ["dc1"]
+
+
+# ----------------------------------------------------------------------------
+# OPTIONAL: Nomad Namespace
+# ----------------------------------------------------------------------------
+# Isolates this deployment from other jobs in the same Nomad cluster.
+# The namespace must already exist: nomad namespace apply <name>
+#
+# nomad_namespace = "default"
+
+
+# ----------------------------------------------------------------------------
+# OPTIONAL: Web UI Port
+# ----------------------------------------------------------------------------
+# The port number on which the OpenStudio Server web UI is accessible.
+# Change this if port 80 is already in use on your Nomad client node.
+#
+# web_port = 80

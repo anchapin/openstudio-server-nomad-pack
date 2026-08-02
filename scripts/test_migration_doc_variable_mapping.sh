@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DOC_PATH="${1:-docs/migration-k8s-to-nomad.md}"
+DOC_PATH="${1:-docs/infrastructure/migration-k8s-to-nomad.md}"
 
 if [ ! -f "${DOC_PATH}" ]; then
   echo "ERROR: ${DOC_PATH} not found."

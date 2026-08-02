@@ -20,11 +20,11 @@
 #   make os-teardown  Stop pack + infra-setup
 #   make os-tunnel    Open SSH tunnels only (foreground)
 #
-# OpenStack var-file: examples/openstack.hcl
+# OpenStack var-file: examples/advanced/openstack.hcl
 # Deploy script:     scripts/deploy-openstack.sh
 
 COMPOSE_FILE   = docker/docker-compose.yaml
-VAR_FILE       = examples/minimal-dev.hcl
+VAR_FILE       = examples/quickstart/minimal-dev.hcl
 JOB_NAME       = openstudio-server-dev
 
 # Derive web port from var file (falls back to the variable default of 80).

@@ -23,7 +23,7 @@
 #
 # Environment overrides:
 #   NOMAD_ADDR       Override Nomad API address (default: http://localhost:4646)
-#   OS_VAR_FILE      Override var-file (default: examples/openstack.hcl)
+#   OS_VAR_FILE      Override var-file (default: examples/advanced/openstack.hcl)
 #   OS_JOB_NAME      Override job name  (default: openstudio-server)
 #   OS_WORKER_COUNT  Override initial worker count (default: from var-file)
 #   OS_CREATE_MISSING_CSI  Auto-create missing CSI volumes before deploy (default: true)
@@ -51,7 +51,7 @@ CONSUL_VERSION="1.17.3"
 NOMAD_API="${NOMAD_ADDR:-http://127.0.0.1:${TUNNEL_LOCAL_PORT}}"
 CONSUL_API="http://127.0.0.1:${CONSUL_LOCAL_PORT}"
 
-VAR_FILE="${OS_VAR_FILE:-${REPO_ROOT}/examples/openstack.hcl}"
+VAR_FILE="${OS_VAR_FILE:-${REPO_ROOT}/examples/advanced/openstack.hcl}"
 JOB_NAME="${OS_JOB_NAME:-openstudio-server}"
 INFRA_JOB="${REPO_ROOT}/infra-setup.nomad"
 PREFLIGHT_SCRIPT="${REPO_ROOT}/scripts/preflight-storage.sh"

@@ -16,16 +16,16 @@ for script in vagrant/provision/*.sh; do bash -n "$script"; done
 
 # Render templates to stdout and inspect output
 nomad-pack render .
-nomad-pack render -var-file examples/minimal-dev.hcl .
+nomad-pack render -var-file examples/quickstart/minimal-dev.hcl .
 nomad-pack render -var "enable_batch_verification=true" .
 nomad-pack validate .
 
 # Plan/dry-run (requires Nomad agent)
 nomad agent -dev -bind=127.0.0.1 -log-level=ERROR &
 nomad-pack plan . --name openstudio-server
-nomad-pack plan . --name openstudio-server-minimal-dev -var-file examples/minimal-dev.hcl
-nomad-pack plan . --name openstudio-server-production-ha -var-file examples/production-ha.hcl
-nomad-pack plan . --name openstudio-server-airgapped -var-file examples/airgapped.hcl
+nomad-pack plan . --name openstudio-server-minimal-dev -var-file examples/quickstart/minimal-dev.hcl
+nomad-pack plan . --name openstudio-server-production-ha -var-file examples/advanced/production-ha.hcl
+nomad-pack plan . --name openstudio-server-airgapped -var-file examples/advanced/airgapped.hcl
 
 # Integration tests (render + plan across all key scenarios)
 bash scripts/test_nomad_pack_integration.sh
@@ -164,7 +164,7 @@ Both can be active simultaneously. When neither is enabled, credentials are supp
 |---|---|---|
 | `pack-validation.yml` | push/PR to `develop` or `main`, `workflow_dispatch` | fmt, render, validate, `examples/test-batch.nomad` job spec validation, Vagrantfile syntax, script syntax, version-bump tests, `variables.md` diff, backup/restore default-doc consistency, README links to `docs/variables.md`, `compatibility.md` version gate, Nomad dev-agent plan for all example var-files, registry sync, integration test script |
 | `acl-policy-validation.yml` | push/PR on `policies/**` | `nomad fmt -check policies/` |
-| `integration-test.yml` | PR to `develop` on `templates/**`, `variables.hcl`, `packs/**`, `scripts/**`, `examples/**`, `metadata.hcl` | template render + e2e stack test using `examples/e2e-test.hcl` |
+| `integration-test.yml` | PR to `develop` on `templates/**`, `variables.hcl`, `packs/**`, `scripts/**`, `examples/**`, `metadata.hcl` | template render + e2e stack test using `examples/advanced/e2e-test.hcl` |
 | `release.yml` | push of tag matching `v*` | reads version from `metadata.hcl`, publishes GitHub Release |
 | `release-version-bump.yml` | push to `main` | auto-bumps patch version, syncs `packs/openstudio-server/metadata.hcl`, commits both files, creates and pushes `v*` git tag |
 
@@ -404,7 +404,7 @@ vagrant ssh vault -c "VAULT_ADDR=http://127.0.0.1:8200 VAULT_TOKEN=root vault st
 
 ```bash
 make up           # Start Consul + Nomad (macOS: runs Consul natively via brew; Linux: Docker)
-make deploy       # Deploy pack with examples/minimal-dev.hcl
+make deploy       # Deploy pack with examples/quickstart/minimal-dev.hcl
 make open         # Open http://localhost:<web_port> in browser
 make down         # Stop jobs + remove containers + volumes
 make restart      # Full restart (clean infra: down + up)
@@ -433,10 +433,10 @@ Before deploying to any cluster with `host_volume` or `csi` storage, validate vo
 
 ```bash
 # Validates that all required volumes (from the var-file) exist on ready/eligible nodes
-./scripts/preflight-storage.sh --var-file examples/openstack.hcl
+./scripts/preflight-storage.sh --var-file examples/advanced/openstack.hcl
 
 # Auto-create missing CSI volumes (requires a healthy CSI plugin)
-./scripts/preflight-storage.sh --var-file examples/openstack-production.hcl \
+./scripts/preflight-storage.sh --var-file examples/advanced/openstack-production.hcl \
   --create-missing-csi --csi-plugin-id nfs
 ```
 
@@ -459,7 +459,7 @@ make os-logs       # tail web job logs (override: make os-logs JOB=worker)
 make os-redeploy   # stop + redeploy the pack
 ```
 
-The OpenStack staged rollout uses four worker-ramp stages (canary: 2 workers → ramp-25: 5 → ramp-50: 10 → full: 20+). Each stage requires a 30–120 min soak and explicit gate criteria before advancing. See `docs/openstack-staged-rollout-runbook.md`.
+The OpenStack staged rollout uses four worker-ramp stages (canary: 2 workers → ramp-25: 5 → ramp-50: 10 → full: 20+). Each stage requires a 30–120 min soak and explicit gate criteria before advancing. See `docs/infrastructure/openstack-staged-rollout-runbook.md`.
 
 ### Airgapped image mirroring
 
@@ -469,10 +469,10 @@ For air-gapped clusters (no internet access), mirror all referenced images to an
 PULP_REGISTRY=pulp-dev.example.com \
 PULP_PROJECT=pulp-container-project \
 PULP_USERNAME=user PULP_PASSWORD=pass \
-bash scripts/mirror-images-to-pulp.sh --var-file examples/airgapped.hcl
+bash scripts/mirror-images-to-pulp.sh --var-file examples/advanced/airgapped.hcl
 
 # Force re-push even if destination tag exists
-bash scripts/mirror-images-to-pulp.sh --force --var-file examples/airgapped.hcl
+bash scripts/mirror-images-to-pulp.sh --force --var-file examples/advanced/airgapped.hcl
 ```
 
 The script reads image variables from the var-file, pulls each from Docker Hub, retags to `<PULP_REGISTRY>/<PULP_PROJECT>/<image>`, and pushes. Use with `airgapped.hcl` which overrides all image variables to point at the internal registry.
@@ -537,13 +537,13 @@ Key variables: `worker_local_scratch_enabled`, `worker_local_scratch_size` (MB),
 | Large result files (> 1 GB per run) | Swift |
 | Air-gapped / on-prem OpenStack | Swift |
 
-Required variables: `swift_auth_url`, `swift_username`, `swift_password`, `swift_tenant_name`, `swift_container`, `swift_region`. See `docs/swift-artifact-backend.md` for Swift container ACL setup.
+Required variables: `swift_auth_url`, `swift_username`, `swift_password`, `swift_tenant_name`, `swift_container`, `swift_region`. See `docs/infrastructure/swift-artifact-backend.md` for Swift container ACL setup.
 
 ### Storage-aware autoscaling ramp policy
 
 Rapid worker scale-out can cause **storage shock** — NFS I/O saturation from many new workers simultaneously opening simulation files. Symptoms: `iowait` > 40% on NFS client nodes, simulation slowdown, Redis/MongoDB health check timeouts, spurious scale-down by the autoscaler health deadline.
 
-Prevent storage shock by setting conservative `autoscaling_cooldown` and per-evaluation worker add limits in the autoscaler policy. See `docs/autoscaling-storage-ramp-policy.md` for the recommended ramp guardrails and iowait threshold gates.
+Prevent storage shock by setting conservative `autoscaling_cooldown` and per-evaluation worker add limits in the autoscaler policy. See `docs/infrastructure/autoscaling-storage-ramp-policy.md` for the recommended ramp guardrails and iowait threshold gates.
 
 ### NFS volume setup (`examples/volumes/`)
 
@@ -553,7 +553,7 @@ Prevent storage shock by setting conservative `autoscaling_cooldown` and per-eva
 2. **`client.hcl`** stanza — register a `host_volume "openstudio-nfs"` pointing at the mount path
 3. **Pack override snippet** — `nfs_shared_volume_enabled = true`, `nfs_volume_source = "openstudio-nfs"`, `nfs_volume_mount_path = "/mnt/openstudio"`
 
-### Traefik on jump host (`docs/infra/traefik-jump-host.md`)
+### Traefik on jump host (`docs/infrastructure/infra/traefik-jump-host.md`)
 
 For the NREL aurora-179d OpenStack cluster, Traefik v2.11.2 runs as a **systemd service on the jump host** (`10.60.126.125`), not as a Nomad job. It uses the Consul Catalog provider (`exposedByDefault: false`) to discover services and route external HTTP traffic. OpenStudio Server UI: `http://10.60.126.125/`; Traefik dashboard: `http://10.60.126.125:8080/dashboard/`.
 
@@ -565,7 +565,7 @@ Beyond the main integration test, CI runs several focused shell scripts:
 |---|---|
 | `scripts/test_bump_metadata_version.sh` | Version bump helper using `tests/fixtures/metadata.sample.hcl` as isolated fixture |
 | `scripts/test_backup_restore_docs_defaults.sh` | `backup_enabled`/`restore_enabled` defaults in `variables.hcl` match documented defaults in README + AGENTS.md |
-| `scripts/test_migration_doc_variable_mapping.sh` | `docs/migration-k8s-to-nomad.md` references `worker_min_replicas`/`worker_max_replicas` (not the removed `worker_autoscaling_min/max`) |
+| `scripts/test_migration_doc_variable_mapping.sh` | `docs/infrastructure/migration-k8s-to-nomad.md` references `worker_min_replicas`/`worker_max_replicas` (not the removed `worker_autoscaling_min/max`) |
 | `scripts/test_pre_teardown.sh` | `pre-teardown.sh` stop order using a mock `nomad` binary in `tests/fixtures/mockbin-pre-teardown/` |
 | `scripts/test_release_version_bump_workflow.sh` | `release-version-bump.yml` workflow contains the required registry sync step |
 
@@ -600,17 +600,17 @@ The scale-to-max epic addressed three bottlenecks for high-concurrency OpenStack
 
 ### Traefik go/no-go for OpenStack production
 
-**Decision (`docs/traefik-openstack-decision.md`):** set `deploy_traefik = false` for production OpenStack. Use **OpenStack Octavia LBaaS** instead — it terminates TLS via NREL PKI/Barbican, supports HA ACTIVE/STANDBY amphoras, and handles large payloads and long-running connections at the LB layer without touching the Nomad cluster. The in-pack Traefik job is for development/single-node only.
+**Decision (`docs/infrastructure/traefik-openstack-decision.md`):** set `deploy_traefik = false` for production OpenStack. Use **OpenStack Octavia LBaaS** instead — it terminates TLS via NREL PKI/Barbican, supports HA ACTIVE/STANDBY amphoras, and handles large payloads and long-running connections at the LB layer without touching the Nomad cluster. The in-pack Traefik job is for development/single-node only.
 
 ### Recommended OpenStack deployment sequence
 
-1. **Storage preflight** — `scripts/preflight-storage.sh --var-file examples/openstack-production.hcl`
-2. **NFS tuning** — apply mount options from `docs/nfs-tuning-guide.md` (`rsize/wsize=1048576`, `async`)
+1. **Storage preflight** — `scripts/preflight-storage.sh --var-file examples/advanced/openstack-production.hcl`
+2. **NFS tuning** — apply mount options from `docs/infrastructure/nfs-tuning-guide.md` (`rsize/wsize=1048576`, `async`)
 3. **Storage benchmark** — `scripts/benchmark-storage-saturation.sh --tier 250/500/1000/2000` to find safe worker ceiling; set `worker_autoscaling_max` to the tier below first saturation
-4. **Autoscaling ramp** — `worker_min_replicas = 0`, `autoscaler_cooldown = "10m"`, conservative ramp rate per `docs/autoscaling-storage-ramp-policy.md`
+4. **Autoscaling ramp** — `worker_min_replicas = 0`, `autoscaler_cooldown = "10m"`, conservative ramp rate per `docs/infrastructure/autoscaling-storage-ramp-policy.md`
 5. **Worker local-scratch** — enable `worker_local_scratch_enabled = true` and validate artifact publish behavior with a test analysis
 6. **Swift backend** (if available) — `swift_artifact_storage_enabled = true` to eliminate shared-storage write pressure entirely
-7. **Staged rollout** — follow `docs/openstack-staged-rollout-runbook.md` (5→10→20→max workers, gate criteria: p95 latency < 30s, iowait < 20%, queue lag < 2×, failure rate < 2%)
+7. **Staged rollout** — follow `docs/infrastructure/openstack-staged-rollout-runbook.md` (5→10→20→max workers, gate criteria: p95 latency < 30s, iowait < 20%, queue lag < 2×, failure rate < 2%)
 
 ### Known application-level limitations (cannot be fixed in the pack)
 

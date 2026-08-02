@@ -86,8 +86,8 @@ variable "traefik_request_timeout" {
 
 variable "traefik_max_request_body_size" {
   type        = string
-  description = "Maximum request body size allowed by the Traefik buffering middleware on the web service. Set to 0 to disable the limit. Supports Traefik size notation (e.g. '500MB', '1GB'). Only applies when deploy_traefik = true."
-  default     = "500MB"
+  description = "Maximum request body size allowed by the Traefik buffering middleware on the web service, in bytes (integer). Set to 0 to disable the limit. Must be a plain integer — Traefik does not accept size strings like '500MB' in this tag. Default is 524288000 (500 MiB). Only applies when deploy_traefik = true."
+  default     = "524288000"
 }
 
 variable "traefik_read_timeout" {
@@ -591,8 +591,8 @@ variable "redis_exporter_image" {
 
 variable "worker_queue_requeued_query" {
   type        = string
-  description = "Prometheus query for requeued backlog depth. The +1 keeps the series non-zero when the queue is empty so the autoscaler doesn't treat a missing series as an error."
-  default     = "sum(redis_key_size{key=\"resque:queue:requeued\"}) + 1"
+  description = "Prometheus query for requeued backlog depth. Uses 'or vector(0)' so the series always resolves to 0 (not empty/error) when the queue key does not yet exist in Redis, which allows scale-to-zero when both queues are idle."
+  default     = "(sum(redis_key_size{key=\"resque:queue:requeued\"}) or vector(0))"
 }
 
 variable "worker_queue_requeued_target" {

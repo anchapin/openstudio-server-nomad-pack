@@ -24,7 +24,8 @@ job "[[ var "job_name" . ]]-prometheus" {
       driver = "docker"
 
       config {
-        image = "[[ var "redis_exporter_image" . ]]"
+        image       = "[[ var "redis_exporter_image" . ]]"
+        force_pull  = false
         network_mode = "host"
         args  = ["--check-keys=resque:queue:simulations,resque:queue:requeued"]
       }
@@ -64,7 +65,8 @@ EOT
       driver = "docker"
 
       config {
-        image = "[[ var "prometheus_image" . ]]"
+        image       = "[[ var "prometheus_image" . ]]"
+        force_pull  = false
         network_mode = "host"
         args = [
           "--config.file=/local/prometheus.yml",

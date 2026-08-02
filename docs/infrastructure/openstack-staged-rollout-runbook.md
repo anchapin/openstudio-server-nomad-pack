@@ -257,20 +257,26 @@ compute nodes). They are committed in `examples/openstack-production.hcl`.
 
 | Variable | Value | Rationale |
 |---|---|---|
-| `worker_cpu` | `3000` MHz | Leaves headroom for OS + Docker on 8-vCPU nodes |
-| `worker_memory` | `6144` MB | ~38 % of 16 GB; allows 2 allocations per 16 GB node |
-| `worker_memory_max` | `8192` MB | Allows burst to full node memory before OOM |
-| `worker_process_count` | `"2"` | 2 processes × 3 000 MHz ≈ 6 000 MHz per worker allocation |
-| `worker_count` | `2` (seed) | Autoscaler owns actual count; seed prevents cold-start lag |
-| `worker_min_replicas` | `2` | Maintains minimum throughput; absorbs small bursts |
-| `worker_max_replicas` | `20` | Matches Stage 4 target; adjust based on cluster size |
+| `worker_cpu` | `1500` MHz | Keeps headroom on 8-vCPU nodes with two processes per alloc |
+| `worker_memory` | `1750` MB | Keeps worker footprint low enough for dense scheduling |
+| `worker_memory_max` | `4000` MB | Allows burst while retaining memory guardrails |
+| `worker_process_count` | `2` | 2 worker processes per allocation |
+| `worker_count` | `2` (seed) | Must match `worker_min_replicas` to avoid startup cooldown traps |
+| `worker_min_replicas` | `2` | Maintains warm floor for queue pickup |
+| `worker_max_replicas` | `160` | Live-tested high-ingest cap balancing queue drain with stable allocations |
 | `worker_cpu_target_utilization` | `60` | Conservative: avoids iowait spike before autoscaler reacts |
+| `worker_queue_simulations_target` | `20` | Reduces overshoot while still ramping quickly under deep queue backlog |
+| `worker_queue_requeued_target` | `20` | Keeps requeue spikes from forcing premature max-cap jumps |
+| `worker_autoscaling_scale_up_cooldown` | `2m` | Eliminates long cooldown plateaus (e.g., stuck at 14 workers) |
+| `worker_autoscaling_scale_down_cooldown` | `10m` | Prevents rapid oscillation once bursts begin draining |
 | `worker_kill_timeout` | `5400` s (90 min) | Covers longest observed OpenStack analysis runtime |
-| `autoscaler_cooldown` | `30m` | Prevents thrashing on OpenStack where VM spin-up is slower |
-| `db_cpu` | `2000` MHz | MongoDB query load observed during Stage 3 soak |
-| `db_memory` | `4096` MB | Working set fits in RAM for typical project sizes |
-| `web_cpu` | `1000` MHz | Sufficient for Passenger + request routing |
-| `web_memory` | `2048` MB | Covers Passenger workers + upload buffer |
+| `autoscaler_cooldown` | `30m` | Legacy global fallback for non-worker scaling checks |
+| `db_cpu` | `4000` MHz | Keeps MongoDB stable under large queue bursts |
+| `db_memory` | `22528` MB | Holds larger working set in memory on OpenStack nodes |
+| `web_cpu` | `6000` MHz | Supports high-concurrency request routing and uploads |
+| `web_memory` | `51200` MB | Supports Passenger workers plus large upload buffers |
+| `web_background_count` | `1` | Keep singleton to avoid race conditions in app background lifecycle logic |
+| `web_background_worker_count` | `56` | Per-replica Resque worker count used in production tuning |
 
 ### Rollback Guidance
 
@@ -282,4 +288,6 @@ If production behaviour deviates from expected after full rollout:
    `worker_process_count` to `"1"`, then redeploy.
 3. **Queue never drains:** increase `worker_max_replicas` in increments of 5, re-checking
    iowait after each increment.
-4. **Full rollback required:** see §Abort and Rollback Procedure above.
+4. **Workers stay flat despite deep queue:** ensure `worker_count == worker_min_replicas`
+   and reduce `worker_autoscaling_scale_down_cooldown` before changing queue targets.
+5. **Full rollback required:** see §Abort and Rollback Procedure above.

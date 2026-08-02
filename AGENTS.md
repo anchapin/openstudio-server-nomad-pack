@@ -14,7 +14,7 @@ nomad-pack fmt --check .
 
 # Render templates to stdout and inspect output
 nomad-pack render .
-nomad-pack render -var-file examples/minimal-dev.hcl .
+nomad-pack render -var-file examples/quickstart/minimal-dev.hcl .
 nomad-pack render -var "enable_batch_verification=true" .
 
 # Validate rendered job specs against a live Nomad cluster
@@ -23,9 +23,9 @@ nomad-pack validate .
 # Plan (dry-run) against a running Nomad dev agent
 nomad agent -dev -bind=127.0.0.1 -log-level=ERROR &
 nomad-pack plan . --name openstudio-server
-nomad-pack plan . --name openstudio-server-minimal-dev -var-file examples/minimal-dev.hcl
-nomad-pack plan . --name openstudio-server-production-ha -var-file examples/production-ha.hcl
-nomad-pack plan . --name openstudio-server-airgapped -var-file examples/airgapped.hcl
+nomad-pack plan . --name openstudio-server-minimal-dev -var-file examples/quickstart/minimal-dev.hcl
+nomad-pack plan . --name openstudio-server-production-ha -var-file examples/advanced/production-ha.hcl
+nomad-pack plan . --name openstudio-server-airgapped -var-file examples/advanced/airgapped.hcl
 
 # Run the integration test script (render + plan across key scenarios)
 bash scripts/test_nomad_pack_integration.sh

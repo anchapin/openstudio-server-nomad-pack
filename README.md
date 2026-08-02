@@ -2,28 +2,67 @@
 
 A [Nomad Pack](https://github.com/hashicorp/nomad-pack) for deploying [OpenStudio Server](https://github.com/NREL/openstudio-server) to [HashiCorp Nomad](https://www.nomadproject.io/) clusters. This pack is designed as a lighter-weight alternative to the Kubernetes Helm chart.
 
+---
+
+## 🏢 For Energy Modelers
+
+You want to run building energy simulations. You don't need to understand
+Nomad job specs or load balancing — just set your OpenStudio version and go.
+
+**→ [Quickstart: Deploy in 3 Steps](./docs/modelers/quickstart.md)**  
+**→ [Submit Simulations (OSW, PAT, REST API)](./docs/modelers/submitting-osw-jobs.md)**
+
+The only file you need to edit is [`user-overrides.hcl`](./user-overrides.hcl)
+at the root of this repository.
+
+---
+
+## ⚙️ For Infrastructure Admins
+
+You're managing a Nomad cluster — provisioning storage, configuring Vault,
+tuning autoscaling, or deploying to OpenStack.
+
+**→ [Admin & Infrastructure Docs](./docs/infrastructure/)**
+
+Key starting points:
+
+| Guide | Description |
+|---|---|
+| [Single-Node Walkthrough](./docs/infrastructure/getting-started-single-node.md) | Prerequisites, Nomad + Consul config, host volumes, first deploy |
+| [Operations Guide](./docs/infrastructure/operations-guide.md) | Master index: topology, deployment checklist, links to all guides |
+| [OpenStack Staged Rollout](./docs/infrastructure/openstack-staged-rollout-runbook.md) | 4-stage canary → full ramp with gate criteria |
+| [Vault Setup](./docs/infrastructure/vault-policies.md) | KV v2 paths, policy templates, token TTL guidance |
+| [ACL Policies](./docs/infrastructure/acl-policies.md) | Operator, read-only, and CI/CD role policies |
+| [Storage](./docs/infrastructure/storage.md) | CSI plugins, host volumes, NFS, permissions |
+
+For supported version combinations, see **[docs/compatibility.md](./docs/compatibility.md)**.
+
+---
+
 ## Prerequisites
 
-- **Nomad Cluster**: A running Nomad cluster (v1.4.0+) with the Docker task driver enabled.
-- **Consul**: A Consul cluster integrated with Nomad for service discovery and DNS resolution.
-- **Vault** (Optional): A Vault cluster integrated with Nomad for secrets management.
-- **Nomad Pack**: The `nomad-pack` CLI installed locally.
-- **Traefik** (Optional): A [Traefik](https://doc.traefik.io/traefik/providers/consul-catalog/) instance configured with the Consul Catalog provider is required for HTTP ingress to the web task group. Traefik automatically discovers routes via the Consul service tags added by this pack. Set `ingress_domain` to your desired hostname and enable `ingress_tls_enabled` for HTTPS.
+- **Nomad** ≥ 1.4 with Docker task driver enabled
+- **Consul** integrated with Nomad for service discovery
+- **Nomad Pack** CLI installed
+- **Vault** (optional) for secrets management
+- **Traefik** (optional) for HTTP ingress via Consul service tags
+
+---
 
 ## Getting Started
 
-For a complete step-by-step walkthrough — including prerequisites, Nomad + Consul agent config, host volume setup, deploy commands, service verification, and common errors — see **[docs/getting-started-single-node.md](./docs/getting-started-single-node.md)**.
+Quick deploy (assumes Nomad and Consul are already running):
 
-For supported version combinations across the pack, OpenStudio Server, Nomad, and Consul, see **[docs/compatibility.md](./docs/compatibility.md)**.
+```bash
+# Copy the modeler overrides template and set your OpenStudio version
+cp user-overrides.hcl my-deployment.hcl
+# Edit my-deployment.hcl — uncomment and set the image version lines
 
-Quick start (assumes Nomad and Consul are already running):
+# Deploy
+nomad-pack run . -var-file my-deployment.hcl
+```
 
-1. Ensure your Nomad cluster is running and Consul is active.
-2. Render and run the pack:
-   ```bash
-   nomad-pack render .
-   nomad-pack run .
-   ```
+For a complete walkthrough see **[docs/infrastructure/getting-started-single-node.md](./docs/infrastructure/getting-started-single-node.md)**.
 
 The pack renders a dedicated Nomad job for each service component:
 
@@ -112,6 +151,18 @@ vagrant ssh vault -c "VAULT_ADDR=http://127.0.0.1:8200 VAULT_TOKEN=root vault st
 vagrant destroy -f
 ```
 
+## Repository cleanup
+
+Use the cleanup helper to remove transient files and keep generated variable docs consolidated from `variables.hcl`:
+
+```bash
+# Preview changes only
+./scripts/cleanup-repo.sh
+
+# Apply cleanup + refresh docs/variables.md and docs/variables.generated.md
+./scripts/cleanup-repo.sh --apply
+```
+
 ## CI Validation
 
 GitHub Actions validation includes:
@@ -186,7 +237,7 @@ nfs_volume_source         = "openstudio-nfs"
 nfs_volume_mount_path     = "/mnt/openstudio"
 ```
 
-See **[docs/storage.md](./docs/storage.md#5-nfs-shared-volume-web-and-worker)** for the full setup:
+See **[docs/infrastructure/storage.md](./docs/infrastructure/storage.md#5-nfs-shared-volume-web-and-worker)** for the full setup:
 `/etc/fstab`, `client.hcl` `host_volume`, override values, single-node skip guidance, and advanced
 CSI NFS option.
 
@@ -375,7 +426,7 @@ sed -i 's/namespace "default"/namespace "my-namespace"/g' policies/*.hcl
 
 Or use the helper script: `bash scripts/apply-acl-policies.sh --namespace my-namespace`
 
-For full instructions — including token creation, namespace scoping, and token rotation — see **[docs/acl-policies.md](./docs/acl-policies.md)**.
+For full instructions — including token creation, namespace scoping, and token rotation — see **[docs/infrastructure/acl-policies.md](./docs/infrastructure/acl-policies.md)**.
 
 ## Helm to Nomad Parity & Differences
 
@@ -574,7 +625,7 @@ nomad-pack run \
 
 When `vault_integration_enabled` is `false` (default), the `mongo_password`, `redis_password`, and `app_secret_key_base` variables are injected as plaintext environment variables. This preserves backwards-compatible behaviour for development deployments.
 
-> **Requirements:** Nomad ≥ 1.1 with Vault integration enabled in the Nomad server config, and Vault ≥ 1.9 with KV v2 secrets engine. See [docs/vault-policies.md](./docs/vault-policies.md) for full setup guidance.
+> **Requirements:** Nomad ≥ 1.1 with Vault integration enabled in the Nomad server config, and Vault ≥ 1.9 with KV v2 secrets engine. See [docs/infrastructure/vault-policies.md](./docs/infrastructure/vault-policies.md) for full setup guidance.
 
 ## Vault Role Authorization
 
@@ -584,11 +635,11 @@ When `vault_enabled` is `true`, this pack renders task-level Nomad `vault` block
 - Override specific tasks with `vault_db_role`, `vault_redis_role`, `vault_rserve_role`, and `vault_vector_role`.
 - Optionally set `vault_policies`, `vault_namespace`, `vault_change_mode`, `vault_change_signal`, and `vault_env` to control token behavior.
 
-For full setup instructions — including Vault policy HCL, KV v2 path conventions, Nomad ↔ Vault integration configuration, token TTL guidance, and both legacy and Nomad ≥ 1.7 `vault` block syntax — see **[docs/vault-policies.md](./docs/vault-policies.md)**.
+For full setup instructions — including Vault policy HCL, KV v2 path conventions, Nomad ↔ Vault integration configuration, token TTL guidance, and both legacy and Nomad ≥ 1.7 `vault` block syntax — see **[docs/infrastructure/vault-policies.md](./docs/infrastructure/vault-policies.md)**.
 
 ## Migrating from Kubernetes
 
-Teams running OpenStudio Server on Kubernetes via the [NREL Helm chart](https://github.com/NREL/openstudio-server) can follow the step-by-step guide in **[docs/migration-k8s-to-nomad.md](./docs/migration-k8s-to-nomad.md)**, which covers:
+Teams running OpenStudio Server on Kubernetes via the [NREL Helm chart](https://github.com/NREL/openstudio-server) can follow the step-by-step guide in **[docs/infrastructure/migration-k8s-to-nomad.md](./docs/infrastructure/migration-k8s-to-nomad.md)**, which covers:
 
 - Pre-migration checklist (data backups, Consul service name mapping, network prerequisites)
 - Helm `values.yaml` → Nomad Pack variable mapping table
@@ -600,18 +651,18 @@ Teams running OpenStudio Server on Kubernetes via the [NREL Helm chart](https://
 ## Documentation
 
 All operational guides live in the [`docs/`](./docs/) directory. The
-**[Operations Guide](./docs/operations-guide.md)** is the recommended starting point — it links
+**[Operations Guide](./docs/infrastructure/operations-guide.md)** is the recommended starting point — it links
 every topic with a brief description of what each guide covers.
 
 | Guide | Description |
 |-------|-------------|
-| [Operations Guide](./docs/operations-guide.md) | Master index: topology diagram, deployment checklist, and links to all guides |
-| [Getting Started: Single-Node Walkthrough](./docs/getting-started-single-node.md) | Zero-to-running on a developer laptop (macOS or Linux) |
-| [Storage Preparation](./docs/storage.md) | CSI plugins, host volumes, permissions, and teardown |
+| [Operations Guide](./docs/infrastructure/operations-guide.md) | Master index: topology diagram, deployment checklist, and links to all guides |
+| [Getting Started: Single-Node Walkthrough](./docs/infrastructure/getting-started-single-node.md) | Zero-to-running on a developer laptop (macOS or Linux) |
+| [Storage Preparation](./docs/infrastructure/storage.md) | CSI plugins, host volumes, permissions, and teardown |
 | [Variable Reference](./docs/variables.md) | All pack variables with types, defaults, and override examples |
-| [Nomad ACL Policy Setup](./docs/acl-policies.md) | Operator, read-only, and CI/CD role policies |
-| [Vault Policy Setup](./docs/vault-policies.md) | Vault integration, KV v2 paths, and token TTL guidance |
-| [Kubernetes-to-Nomad Migration](./docs/migration-k8s-to-nomad.md) | Helm chart migration checklist, data migration, rollback |
+| [Nomad ACL Policy Setup](./docs/infrastructure/acl-policies.md) | Operator, read-only, and CI/CD role policies |
+| [Vault Policy Setup](./docs/infrastructure/vault-policies.md) | Vault integration, KV v2 paths, and token TTL guidance |
+| [Kubernetes-to-Nomad Migration](./docs/infrastructure/migration-k8s-to-nomad.md) | Helm chart migration checklist, data migration, rollback |
 
 ## Contributing
 

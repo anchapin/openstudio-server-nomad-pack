@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-VAR_FILE="${OS_VAR_FILE:-${REPO_ROOT}/examples/openstack.hcl}"
+VAR_FILE="${OS_VAR_FILE:-${REPO_ROOT}/examples/advanced/openstack.hcl}"
 PULP_REGISTRY="${PULP_REGISTRY:-}"
 PULP_PROJECT="${PULP_PROJECT:-}"
 PULP_USERNAME="${PULP_USERNAME:-}"
@@ -30,7 +30,7 @@ Examples:
   PULP_REGISTRY=pulp-dev.hpc.nlr.gov \\
   PULP_PROJECT=pulp-container-aurora-179d \\
   PULP_USERNAME=... PULP_PASSWORD=... \\
-  bash scripts/mirror-images-to-pulp.sh --var-file examples/openstack.hcl
+  bash scripts/mirror-images-to-pulp.sh --var-file examples/advanced/openstack.hcl
 EOF
 }
 

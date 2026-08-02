@@ -133,7 +133,6 @@ EOT
 
       [[ if var "vault_enabled" . ]]
       vault {
-        role = "[[ var "vault_default_role" . ]]"
       }
       [[ end ]]
 
@@ -181,9 +180,19 @@ EOT
       # OpenStudio Server startup scripts (which were written for Docker Compose
       # where MongoDB is 'db:27017', Redis is 'queue:6379', and Rserve is 'rserve:6311').
       # The generated script is executed via web_command/web_args overrides.
+      #
+      # change_mode = "script": when Consul service addresses change (including the
+      # initial race where rserve registers after the template first rendered),
+      # idempotently strip old entries then re-apply the fresh ones.
       template {
         destination   = "local/patch-hosts.sh"
-        change_mode   = "noop"
+        change_mode   = "script"
+        change_script {
+          command       = "/bin/sh"
+          args          = ["-c", "grep -vE ' (db|queue|rserve)$' /etc/hosts > /alloc/hosts.tmp 2>/dev/null; cat /alloc/hosts.tmp > /etc/hosts; sh /local/patch-hosts.sh"]
+          timeout       = "30s"
+          fail_on_error = false
+        }
         left_delimiter  = "{{"
         right_delimiter = "}}"
         data = <<-EOT
@@ -290,7 +299,8 @@ EOT
       }
 
       config {
-        image = "[[ var "vector_image" . ]]"
+        image       = "[[ var "vector_image" . ]]"
+        force_pull  = false
         args  = ["--config", "local/vector.toml"]
       }
 
@@ -453,7 +463,6 @@ EOT
 
       [[ if var "vault_enabled" . ]]
       vault {
-        role = "[[ var "vault_default_role" . ]]"
       }
       [[ end ]]
 
@@ -482,7 +491,13 @@ EOT
 
       template {
         destination   = "local/patch-hosts.sh"
-        change_mode   = "noop"
+        change_mode   = "script"
+        change_script {
+          command       = "/bin/sh"
+          args          = ["-c", "grep -vE ' (db|queue|rserve)$' /etc/hosts > /alloc/hosts.tmp 2>/dev/null; cat /alloc/hosts.tmp > /etc/hosts; sh /local/patch-hosts.sh"]
+          timeout       = "30s"
+          fail_on_error = false
+        }
         left_delimiter  = "{{"
         right_delimiter = "}}"
         data = <<-EOT
@@ -577,7 +592,8 @@ EOT
       }
 
       config {
-        image = "[[ var "vector_image" . ]]"
+        image       = "[[ var "vector_image" . ]]"
+        force_pull  = false
         args  = ["--config", "local/vector.toml"]
       }
 

@@ -179,7 +179,6 @@ EOT
 
       [[ if var "vault_enabled" . ]]
       vault {
-        role = "[[ var "vault_default_role" . ]]"
       }
       [[ end ]]
 
@@ -267,6 +266,9 @@ echo "{{ .Address }} queue" >> /etc/hosts
 {{ range service "openstudio-rserve" -}}
 echo "{{ .Address }} rserve" >> /etc/hosts
 {{ end -}}
+{{ range service "openstudio-web" -}}
+echo "{{ .Address }} web" >> /etc/hosts
+{{ end -}}
 EOT
       }
 
@@ -303,7 +305,8 @@ EOT
       }
 
       config {
-        image = "[[ var "vector_image" . ]]"
+        image       = "[[ var "vector_image" . ]]"
+        force_pull  = false
         args  = ["--config", "local/vector.toml"]
       }
 

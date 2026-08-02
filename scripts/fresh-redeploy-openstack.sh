@@ -3,7 +3,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-VAR_FILE="${OS_VAR_FILE:-${REPO_ROOT}/examples/openstack.hcl}"
+VAR_FILE="${OS_VAR_FILE:-${REPO_ROOT}/examples/advanced/openstack.hcl}"
 JOB_NAME="${OS_JOB_NAME:-openstudio-server}"
 NOMAD_ADDR="${NOMAD_ADDR:-http://127.0.0.1:4646}"
 NOMAD_NAMESPACE="${NOMAD_NAMESPACE:-default}"
@@ -429,7 +429,10 @@ wipe_csi_volume_data() {
   local wipe_image
   wipe_image="${preferred_image:-${CSI_WIPE_JOB_IMAGE}}"
   if [[ -z "${wipe_image}" ]]; then
-    wipe_image="alpine:3.20"
+    # busybox:1.36 is pre-cached on every node (used by wait-for-deps tasks).
+    # Avoids Docker Hub rate-limit errors (429) that occur when pulling alpine
+    # on nodes that don't have it cached.
+    wipe_image="busybox:1.36"
   fi
   attempt=1
   while (( attempt <= CSI_WIPE_MAX_ATTEMPTS )); do
@@ -458,13 +461,15 @@ job "${wipe_job}" {
     }
 
     task "wipe" {
-      driver = "docker"
+      # Use exec driver (no Docker image required) to avoid Docker Hub rate
+      # limits (429) on nodes that don't have a cached image. exec is enabled
+      # on all Ubuntu 22.04 nodes in this cluster.
+      driver = "exec"
       config {
-        image   = "${wipe_image}"
-        command = "sh"
+        command = "/bin/sh"
         args = [
           "-ec",
-          "mkdir -p /data && rm -rf /data/* /data/.[!.]* /data/..?* || true"
+          "rm -rf /data/* /data/.[!.]* /data/..?* || true; chmod 777 /data"
         ]
       }
       volume_mount {
@@ -474,7 +479,7 @@ job "${wipe_job}" {
       }
       resources {
         cpu    = 100
-        memory = 128
+        memory = 64
       }
     }
   }
@@ -493,11 +498,11 @@ if not j:
     print("wait")
     sys.exit(0)
 statuses=[(a.get("ClientStatus") or "").lower() for a in j]
-if any(s == "failed" for s in statuses):
-    print("fail")
-    sys.exit(0)
-if all(s in ("complete","failed","lost") for s in statuses) and any(s == "complete" for s in statuses):
+if any(s == "complete" for s in statuses):
     print("ok")
+    sys.exit(0)
+if statuses and all(s in ("failed","lost") for s in statuses):
+    print("fail")
     sys.exit(0)
 print("wait")
 ' 2>/dev/null || echo "wait"
@@ -849,7 +854,7 @@ fi
 if [[ "${db_storage_type}" == "csi" ]]; then
   delete_csi_volume_if_present "${db_volume_source}"
   create_csi_volume "${db_volume_source}" "${DB_CSI_CAPACITY_MIN}" "${DB_CSI_CAPACITY_MAX}" "${ACTIVE_DB_CSI_PLUGIN_ID}" "${STATEFUL_CSI_NODE_ROLE}"
-  wipe_csi_volume_data "${db_volume_source}" "${db_image}"
+  wipe_csi_volume_data "${db_volume_source}"
 else
   echo "  - db_storage_type=${db_storage_type}; skipping CSI recreation for DB"
 fi
@@ -857,7 +862,7 @@ fi
 if [[ "${redis_storage_type}" == "csi" ]]; then
   delete_csi_volume_if_present "${redis_volume_source}"
   create_csi_volume "${redis_volume_source}" "${REDIS_CSI_CAPACITY_MIN}" "${REDIS_CSI_CAPACITY_MAX}" "${ACTIVE_REDIS_CSI_PLUGIN_ID}" "${STATEFUL_CSI_NODE_ROLE}"
-  wipe_csi_volume_data "${redis_volume_source}" "${redis_image}"
+  wipe_csi_volume_data "${redis_volume_source}"
 else
   echo "  - redis_storage_type=${redis_storage_type}; skipping CSI recreation for Redis"
 fi
@@ -910,23 +915,25 @@ job "${wipe_job}" {
     }
 
     task "wipe" {
-      driver = "docker"
+      # Use exec driver (no Docker image required) to avoid Docker Hub rate
+      # limits (429) on nodes that don't have a cached image. exec is enabled
+      # on all Nomad clients in this cluster and has no registry dependency.
+      driver = "exec"
       config {
-        image   = "alpine:3.20"
-        command = "sh"
+        command = "/bin/sh"
         args = [
           "-ec",
-          "mkdir -p ${nfs_volume_mount_path} && find ${nfs_volume_mount_path} -mindepth 1 -maxdepth 1 -exec rm -rf {} +"
+          "find /local/nfs -mindepth 1 -maxdepth 1 -exec rm -rf {} +"
         ]
       }
       volume_mount {
         volume      = "nfs-shared"
-        destination = "${nfs_volume_mount_path}"
+        destination = "/local/nfs"
         read_only   = false
       }
       resources {
         cpu    = 100
-        memory = 128
+        memory = 64
       }
     }
   }
@@ -945,11 +952,14 @@ if not j:
     print("wait")
     sys.exit(0)
 statuses=[(a.get("ClientStatus") or "").lower() for a in j]
-if any(s == "failed" for s in statuses):
-    print("fail")
-    sys.exit(0)
-if all(s in ("complete","failed","lost") for s in statuses) and any(s == "complete" for s in statuses):
+# A complete alloc means success; Nomad may have rescheduled once after an
+# initial alloc failure (e.g. exec user lookup on a different node image).
+if any(s == "complete" for s in statuses):
     print("ok")
+    sys.exit(0)
+# All allocs failed/lost with no complete -> genuinely failed
+if statuses and all(s in ("failed","lost") for s in statuses):
+    print("fail")
     sys.exit(0)
 print("wait")
 ' 2>/dev/null || echo "wait"
@@ -962,6 +972,12 @@ print("wait")
         return 0
         ;;
       fail)
+        # Capture logs before purging so the failure reason is visible
+        alloc_id="$(nomad job allocs -json "${wipe_job}" 2>/dev/null | python3 -c 'import json,sys; j=json.load(sys.stdin); print(j[0]["ID"][:8] if j else "")' 2>/dev/null || true)"
+        if [[ -n "${alloc_id}" ]]; then
+          echo "  NFS wipe alloc ${alloc_id} stderr:" >&2
+          nomad alloc logs -stderr "${alloc_id}" 2>&1 | tail -20 >&2 || true
+        fi
         nomad job stop -purge "${wipe_job}" >/dev/null 2>&1 || true
         echo "✗ NFS wipe job failed (${wipe_job})" >&2
         return 1

@@ -6,7 +6,7 @@ job "[[ var "job_name" . ]]-state-backup" {
   type        = "batch"
 
   periodic {
-    crons            = ["[[ var "backup_cron" . ]]"]
+    cron             = "[[ var "backup_cron" . ]]"
     prohibit_overlap = [[ var "backup_prohibit_overlap" . ]]
   }
 

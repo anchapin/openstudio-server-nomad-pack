@@ -45,9 +45,7 @@ job "[[ var "job_name" . ]]-db" {
       user   = "[[ var "db_docker_user" . ]]"
 
       [[ if var "vault_enabled" . ]]
-      [[ if var "vault_db_role" . ]]
       vault {
-        role = "[[ var "vault_db_role" . ]]"
         [[ if var "vault_policies" . ]]
         policies = [[ var "vault_policies" . | toJson ]]
         [[ end ]]
@@ -60,22 +58,6 @@ job "[[ var "job_name" . ]]-db" {
         [[ end ]]
         env = [[ var "vault_env" . ]]
       }
-      [[ else if var "vault_default_role" . ]]
-      vault {
-        role = "[[ var "vault_default_role" . ]]"
-        [[ if var "vault_policies" . ]]
-        policies = [[ var "vault_policies" . | toJson ]]
-        [[ end ]]
-        [[ if var "vault_namespace" . ]]
-        namespace = "[[ var "vault_namespace" . ]]"
-        [[ end ]]
-        change_mode = "[[ var "vault_change_mode" . ]]"
-        [[ if var "vault_change_signal" . ]]
-        change_signal = "[[ var "vault_change_signal" . ]]"
-        [[ end ]]
-        env = [[ var "vault_env" . ]]
-      }
-      [[ end ]]
       [[ end ]]
 
       [[ if ne (var "db_storage_type" .) "ephemeral" ]]
@@ -181,7 +163,8 @@ EOT
       }
 
       config {
-        image = "[[ var "vector_image" . ]]"
+        image       = "[[ var "vector_image" . ]]"
+        force_pull  = false
         args  = ["--config", "local/vector.toml"]
       }
 

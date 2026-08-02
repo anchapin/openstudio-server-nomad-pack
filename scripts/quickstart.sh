@@ -15,7 +15,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 COMPOSE_FILE="${REPO_ROOT}/docker/docker-compose.yaml"
-VAR_FILE="${REPO_ROOT}/examples/minimal-dev.hcl"
+VAR_FILE="${REPO_ROOT}/examples/quickstart/minimal-dev.hcl"
 JOB_NAME="openstudio-server-dev"
 NOMAD_API="http://127.0.0.1:4646"
 CONSUL_API="http://127.0.0.1:8500"

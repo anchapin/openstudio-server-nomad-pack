@@ -17,7 +17,7 @@
 #   - "openstack" binary on PATH
 #   - Sufficient quota in the target project (shares, gigabytes, volumes)
 #
-# See docs/openstack-storage-provisioning.md for full operator guide.
+# See docs/infrastructure/openstack-storage-provisioning.md for full operator guide.
 
 set -euo pipefail
 
@@ -356,7 +356,7 @@ print_summary() {
   echo "       nfs_shared_volume_enabled = true"
   echo "       db_storage_type           = \"host_volume\"  # or \"csi\""
   echo ""
-  echo "See docs/openstack-storage-provisioning.md for full operator guide."
+  echo "See docs/infrastructure/openstack-storage-provisioning.md for full operator guide."
 }
 
 # ── Main ──────────────────────────────────────────────────────────────────────
