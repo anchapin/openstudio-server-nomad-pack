@@ -1,6 +1,6 @@
 # Copilot Instructions
 
-> **Canonical source of truth:** [`AGENTS.md`](../AGENTS.md). This file is a working guide for Copilot sessions and must stay aligned with `AGENTS.md`, `README.md`, and `CONTRIBUTING.md`.
+> This file is the primary working guide for Copilot sessions. Keep it aligned with `AGENTS.md`, `README.md`, and `CONTRIBUTING.md`. Check `NEXT_SESSION.md` for the current active focus area when starting a new session.
 
 ## Build, test, and lint commands
 
@@ -85,7 +85,9 @@ worker ──► mongodb
 | `state-restore.nomad.tpl` | `<job_name>-state-restore` (on-demand parameterized batch) | `restore_enabled = false` (default) |
 | `batch-verification.nomad.tpl` | `<job_name>-batch-verify` | `enable_batch_verification = true` |
 | `nomad-autoscaler.nomad.tpl` | autoscaler daemon job | `nomad_autoscaler_enabled = true` |
-| `traefik.nomad.tpl` | Traefik ingress job | `traefik_enabled = true` |
+| `traefik.nomad.tpl` | Traefik ingress job | `deploy_traefik = true` |
+| `prometheus.nomad.tpl` | `<job_name>-prometheus` (Prometheus + redis_exporter sidecar) | `prometheus_enabled = false` (default) |
+| `queue-sweeper.nomad.tpl` | `<job_name>-queue-sweeper` (periodic batch, clears stale Redis locks) | `enable_queue_sweeper = false` (default) |
 
 ### Helpers (`templates/_helpers.tpl`)
 
@@ -261,6 +263,14 @@ update {
 
 For the Prometheus queue-depth strategy, Prometheus must be running and scraping queue metrics **before** enabling `worker_autoscaling_enabled = true`. The CPU strategy (`nomad-apm`) requires no external metrics stack.
 
+### In-pack Prometheus (`prometheus.nomad.tpl`)
+
+`prometheus_enabled = true` deploys a Prometheus service job (`<job_name>-prometheus`) that includes a `redis-exporter` sidecar (default image `oliver006/redis_exporter:v1.62.0`). The exporter tracks `resque:queue:simulations` and `resque:queue:requeued` key lengths and exposes them as `openstudio_worker_queue_depth` metrics. The Prometheus instance registers as `openstudio-prometheus` in Consul; the autoscaler's `autoscaler_prometheus_address` defaults to `http://openstudio-prometheus.service.consul:9090`. Enable this before setting `worker_autoscaling_enabled = true` with a Prometheus check strategy.
+
+### Queue-sweeper (`queue-sweeper.nomad.tpl`)
+
+`enable_queue_sweeper = true` deploys a periodic batch job (`<job_name>-queue-sweeper`) that runs on the schedule set by `queue_sweeper_cron` (default: every 2 minutes). It scans Redis for `resque:analysis:*:queuing` keys that have no TTL and have been idle longer than `queue_sweeper_max_lock_age_seconds` (default `120`), then deletes them. This automates the same lock-clearing that `scripts/clear-stale-queuing-locks.sh` does manually. The task uses `readonly_rootfs = false` (required for redis-cli temp files) and resolves Redis via Consul service DNS.
+
 ### Scheduler placement helpers
 
 Per-group constraints, affinities, and spreads are exposed as list-of-object variables (e.g. `db_constraints`, `worker_affinities`, `redis_spreads`). Each object has `attribute`, optional `operator`, `value`, and optional `weight` fields, passed to the `constraints`/`affinities`/`spreads` helpers in `_helpers.tpl`.
@@ -393,13 +403,19 @@ vagrant ssh vault -c "VAULT_ADDR=http://127.0.0.1:8200 VAULT_TOKEN=root vault st
 `docker/docker-compose.yaml` runs Consul and Nomad as Docker containers with `network_mode: host` so task containers share the host network. The Makefile wraps all common operations:
 
 ```bash
-make up       # Start Consul + Nomad (macOS: runs Consul natively via brew; Linux: Docker)
-make deploy   # Deploy pack with examples/minimal-dev.hcl
-make open     # Open http://localhost:8080
-make down     # Stop jobs + remove containers + volumes
-make status   # Show job/node/service status via API
-make web      # Tail web task logs
-make redeploy # stop + deploy
+make up           # Start Consul + Nomad (macOS: runs Consul natively via brew; Linux: Docker)
+make deploy       # Deploy pack with examples/minimal-dev.hcl
+make open         # Open http://localhost:<web_port> in browser
+make down         # Stop jobs + remove containers + volumes
+make restart      # Full restart (clean infra: down + up)
+make status       # Show job/node/service status via API
+make web          # Tail web task alloc logs
+make logs         # Tail Nomad agent logs (Docker only)
+make logs-consul  # Tail Consul agent logs (or /tmp/consul-dev.log on macOS)
+make redeploy     # stop + deploy
+make stop         # Stop and purge all OpenStudio Server jobs
+make ps           # Show running containers
+make check        # Verify prerequisites (docker, nomad-pack, nomad on macOS)
 ```
 
 **macOS caveat:** `make up` runs Consul natively (`consul agent -dev`) because Docker Desktop host networking cannot expose container ports to the Mac loopback reliably. Nomad is also run natively on macOS using `docker/nomad-macos.hcl`. The `make up` target will auto-stop Homebrew-managed MongoDB (`27017`) and Redis (`6379`) if they are running to avoid port conflicts.
@@ -439,6 +455,8 @@ make os-ui         # open SSH tunnels + launch Nomad/Consul UIs in browser
 make os-tunnel     # open SSH tunnels only (foreground)
 make os-stop       # stop pack jobs
 make os-teardown   # stop pack + infra-setup system job
+make os-logs       # tail web job logs (override: make os-logs JOB=worker)
+make os-redeploy   # stop + redeploy the pack
 ```
 
 The OpenStack staged rollout uses four worker-ramp stages (canary: 2 workers → ramp-25: 5 → ramp-50: 10 → full: 20+). Each stage requires a 30–120 min soak and explicit gate criteria before advancing. See `docs/openstack-staged-rollout-runbook.md`.
