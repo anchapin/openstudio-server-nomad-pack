@@ -177,3 +177,17 @@ prepull_kill_timeout   = "600s"
 # worker_local_scratch_size    = 10240   # 10 GiB per allocation
 # worker_local_scratch_sticky  = false   # clear on GC; set true to resume across restarts
 # worker_scratch_path          = "/scratch"
+
+# ---------- Image pull / sidecar overrides ----------
+# Disable Vector log-forwarding sidecar — the web node (which hosts stateful
+# CSI jobs) has exhausted its Docker Hub anonymous pull quota. Vector is a
+# prestart sidecar and blocks the main task from starting when it 429s.
+# Native Nomad log collection still works; re-enable when a Docker Hub auth
+# token is configured on the cluster or after the rate limit window resets.
+enable_vector_collection = false
+
+# Poststop cleanup uses alpine:3.20 which also 429s on the web node.
+# Switch to busybox which is cached from wait-for-deps on worker nodes.
+# For the web node itself, set to empty path list so the poststop task
+# has nothing to do even if the image pull fails.
+poststop_cleanup_image = "busybox:1.36"
