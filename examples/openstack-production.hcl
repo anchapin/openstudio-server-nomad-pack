@@ -10,8 +10,8 @@
 #   - Vault cluster integrated with Nomad (vault_enabled = true below)
 #   - MongoDB and Redis host volumes provisioned on Nomad clients (UID/GID 999:999)
 #   - NFS-backed host volume "openstudio-nfs" mounted on all compute nodes
-#   - Nomad Autoscaler daemon deployed (nomad_autoscaler_enabled = true)
-#   - Prometheus scraping queue metrics at autoscaler_prometheus_address
+#   - Nomad Autoscaler daemon: enabled via nomad_autoscaler_enabled = true (set below)
+#   - Prometheus + redis_exporter: enabled via prometheus_enabled = true (set below)
 #   - Baseline metrics captured before deployment (see rollout runbook)
 #
 # Rollback: re-deploy your prior var-file or see §Abort and Rollback Procedure in
@@ -63,17 +63,34 @@ worker_count = 2
 # Must be ≥ your longest simulation; shorter values cause data loss on drains.
 worker_kill_timeout = 5400
 
-# Autoscaling — CPU strategy (nomad-apm; no external Prometheus required).
-worker_autoscaling_enabled     = true
-worker_autoscaling_cpu_enabled = true
-worker_min_replicas            = 2
-worker_max_replicas            = 20   # Stage 4 target; adjust to cluster size
+# Autoscaling — CPU + queue-depth strategies (both active simultaneously).
+# Prerequisites: Prometheus (prometheus_enabled) and Autoscaler daemon
+# (nomad_autoscaler_enabled) must be deployed for queue-depth scaling to work.
+prometheus_enabled       = true
+nomad_autoscaler_enabled = true
+
+worker_autoscaling_enabled       = true
+worker_autoscaling_cpu_enabled   = true
+worker_autoscaling_queue_enabled = true   # Scale on Redis queue depth via Prometheus
+worker_min_replicas              = 2
+worker_max_replicas              = 20     # Stage 4 target; adjust to cluster size
 
 # 60 % CPU target: conservative threshold to trigger scale-out before iowait spikes.
 worker_cpu_target_utilization = 60
 
-# 30 min cooldown: OpenStack VM provisioning is slower than bare-metal; prevents
-# autoscaler thrashing while new nodes join the cluster.
+# Queue-depth targets: 1 worker per 15 queued simulations.
+# At 300 queued jobs: 300 ÷ 15 = 20 workers (hits worker_max_replicas).
+# Tune lower (e.g. 10) for faster ramp, higher (e.g. 20) to be more conservative.
+worker_queue_simulations_target = 15
+worker_queue_requeued_target    = 15
+
+# Scale-up cooldown: 5 min allows fast ramp-up when the queue is deep.
+# Scale-down cooldown: keep 20 min to avoid thrashing between simulation batches.
+# The global autoscaler_cooldown is overridden per-direction below.
+worker_autoscaling_scale_up_cooldown   = "5m"
+worker_autoscaling_scale_down_cooldown = "20m"
+
+# Legacy global cooldown (used by CPU check and as fallback); kept for reference.
 autoscaler_cooldown = "30m"
 
 # Rolling update — prevents simultaneous eviction of running simulations.
