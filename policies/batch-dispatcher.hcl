@@ -26,7 +26,6 @@
 #     - < policies/batch-dispatcher.hcl
 
 namespace "default" {
-  policy = "deny"
   capabilities = [
     "submit-job",
     "dispatch-job",

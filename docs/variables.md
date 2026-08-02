@@ -6,7 +6,7 @@
 | Variable | Type | Default | Description |
 | --- | --- | --- | --- |
 | `job_name` | `string` | `"openstudio-server"` | The name of the Nomad job. |
-| `app_version` | `string` | `"3.11.0"` | Application version tag injected as APP_VERSION into all OpenStudio Server containers. Must match the image tag used in web_image, worker_image, web_background_image, and rserve_image to avoid version mismatch. |
+| `app_version` | `string # Keep this in sync with the image tag used in web_image, worker_image, # web_background_image, and rserve_image whenever versions are bumped.` | `"3.11.0"` | Application version tag injected as APP_VERSION into all OpenStudio Server containers. Must match the image tag used in web_image, worker_image, web_background_image, and rserve_image to avoid version mismatch. |
 | `worker_min_replicas` | `number` | `0` | Minimum number of worker replicas when autoscaling is enabled. Set to 0 to allow scale-to-zero when the queue is empty. The Helm chart default of 2 is intentionally changed here to prevent idle worker accumulation. |
 | `worker_max_replicas` | `number` | `20` | Maximum number of worker replicas. Aligned with Helm chart worker-hpa.yaml maxReplicas: 20. |
 | `vault_integration_enabled` | `bool` | `false` | Enable Vault KV v2 secrets injection via Nomad template stanzas (`secrets/env`). Typically enabled together with vault_enabled so tasks use explicit Vault roles. |
@@ -265,7 +265,7 @@
 | `nomad_batch_memory` | `number` | `8192` | Memory (MB) allocated to each Nomad batch simulation task. |
 | `nomad_batch_worker_command` | `string` | `"/usr/local/bin/start-workers"` | Entrypoint command for the Nomad batch worker container. |
 | `nomad_batch_worker_args` | `list(string)` | `[]` | Arguments passed to nomad_batch_worker_command. |
-| `nomad_batch_constraints` | `list(object({` | `[]` | Placement constraints for the Nomad batch worker group. |
+| `nomad_batch_constraints` | `list(object({ attribute = string operator = string value = string }))` | `[]` | Placement constraints for the Nomad batch worker group. |
 | `nomad_batch_kill_timeout` | `string` | `"5200s"` | Kill timeout for the Nomad batch worker task. Should be >= the longest expected simulation runtime. |
 | `nomad_batch_identity_ttl` | `string` | `"1h"` | TTL for the Nomad Workload Identity token issued to the web task for API dispatch. Only used when batch_engine = 'nomad_batch'. |
 | `aws_region` | `string` | `"us-east-1"` | AWS region where the Batch compute environment is located. Only used when batch_engine = 'aws_batch'. |

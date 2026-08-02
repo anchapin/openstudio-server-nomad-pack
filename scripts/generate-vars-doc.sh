@@ -78,10 +78,15 @@ variables = []
 for match in block_pattern.finditer(content):
     name, block = match.groups()
 
-    type_match = re.search(r'^\s*type\s*=\s*(.+)$', block, re.MULTILINE)
+    type_match = re.search(r'^\s*type\s*=\s*(.+(?:\n.+)*?)(?=\n\s*(?:description|default|validation)\s*=|\Z)', block, re.MULTILINE)
     desc_match = re.search(r'^\s*description\s*=\s*"(.*)"\s*$', block, re.MULTILINE)
 
-    var_type = type_match.group(1).strip() if type_match else ""
+    if type_match:
+        raw_type = type_match.group(1).strip()
+        # Collapse multi-line types (e.g. list(object({...}))) into a single line
+        var_type = re.sub(r'\s+', ' ', raw_type)
+    else:
+        var_type = ""
     description = desc_match.group(1).strip() if desc_match else ""
     default = normalize_default(extract_default(block))
 
