@@ -20,7 +20,7 @@
 # ---------- Identity ----------
 job_name    = "openstudio-server"
 app_version = "3.11.0"
-region      = "RegionOne"   # OpenStack region; update to match your deployment
+region      = "global"   # OpenStack region; update to match your deployment
 datacenters = ["dc1"]       # Update to match your Nomad datacenter name(s)
 
 # ---------- Images ----------
@@ -54,7 +54,7 @@ worker_priority      = 50
 worker_cpu           = 3000   # MHz — leaves headroom for OS + Docker on 8-vCPU nodes
 worker_memory        = 6144   # MB  — ~38 % of 16 GB; allows 2 allocations per node
 worker_memory_max    = 8192   # MB  — burst to full node memory before OOM
-worker_process_count = "2"    # 2 processes × 3 000 MHz ≈ 6 000 MHz per allocation
+worker_process_count = 2    # 2 processes × 3 000 MHz ≈ 6 000 MHz per allocation
 
 # Seed count; autoscaler owns actual count. 2 prevents cold-start lag.
 worker_count = 2
@@ -141,12 +141,12 @@ docker_cap_drop        = ["ALL"]
 
 # ---------- Consul Connect mTLS ----------
 # Enable service-mesh mTLS between all components.
-enable_consul_connect = true
+enable_consul_connect = false
 
 # ---------- Vault ----------
 # Remove or set to false if Vault is not available in your OpenStack environment.
-vault_integration_enabled = true
-vault_enabled             = true
+vault_integration_enabled = false
+vault_enabled             = false
 vault_default_role        = "openstudio-server"
 vault_db_role             = "openstudio-db"
 vault_redis_role          = "openstudio-redis"
