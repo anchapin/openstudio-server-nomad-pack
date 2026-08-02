@@ -133,6 +133,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed `scripts/pre-teardown.sh` to stop all optional teardown-sensitive jobs when present by adding missing `<JOB_NAME>-state-restore`, `<JOB_NAME>-batch-verify`, and `<JOB_NAME>-test` stop calls; also documented the full stop order in `docs/operations-guide.md` and added `scripts/test_pre_teardown.sh` coverage in CI (#297)
 - Added missing `openstudio-web` and `openstudio-rserve` service URLs to deployment output, including an unconditional OpenStudio Web UI section so operators can find the primary UI even when Traefik is disabled (#294)
 - Increased `web_memory_max` default from `2048` to `4096` and documented that it must exceed `web_memory`, so Nomad web tasks can actually burst beyond their soft memory reservation by default (#295)
+- Made templates fmt-clean and render-stable under nomad-pack v0.4.2: converted `[[- /*` / `*/ -]]` trim-comment markers — which v0.4.2 `fmt -write` rewrites into lexer-invalid output that breaks `nomad-pack render .` with "illegal number syntax" — to plain `[[/* */]]` comments, then formatted all templates and synced the `packs/` registry mirror (#383)
+- Fixed the CI fmt gate being a silent no-op: `nomad-pack fmt -check -recursive .` always exits 0 under v0.4.2 (recursive discovery never descends from the pack root), so unformatted templates went undetected; the gate now runs `nomad-pack fmt --check templates/` and is followed by a render-after-fmt guard step that catches formatter regressions (#383)
+- Pinned `version: 0.4.2` in all `hashicorp/setup-nomad-pack` steps (the action's default `latest` is a moving target) and echoed the CLI version in CI logs (#383)
 
 ## [0.2.67] - 2026-07-29
 
