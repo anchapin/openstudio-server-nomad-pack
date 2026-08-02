@@ -33,7 +33,7 @@ Avoid startup cooldown traps and bound ramp velocity:
 - Keep `worker_count` equal to `worker_min_replicas` so deployment does not trigger an
   immediate downscale that blocks later scale-up.
 - Use queue targets that represent **queued jobs per worker** (for OpenStack defaults,
-  `15`/`15`), then tune from observed queue drain and iowait.
+  `20`/`20`), then tune from observed queue drain and iowait.
 - Increase `worker_max_replicas` in staged increments after soak evidence instead of
   starting with an unbounded ceiling.
 
@@ -44,8 +44,9 @@ Avoid startup cooldown traps and bound ramp velocity:
 | `worker_autoscaling_scale_up_cooldown` | Gap between scale-up events | `15m` | `5m` |
 | `worker_autoscaling_scale_down_cooldown` | Gap between scale-down events | `30m` | `10m` |
 | `worker_autoscaling_evaluation_interval` | How often policies are evaluated | `60s` | `30s` |
-| `worker_autoscaling_min` | Minimum worker count (warm floor) | `2` | `1` |
-| `worker_autoscaling_max` | Hard cap on worker count | `10` | `50` |
+| `worker_min_replicas` | Minimum worker count (warm floor) | `2` | `1` |
+| `worker_max_replicas` | Hard cap on worker count | `10` | `50` |
+| `worker_queue_query_window` | PromQL smoothing window (`max_over_time`) | `2m` | `1m` |
 
 > **Note:** `worker_autoscaling_scale_up_cooldown` replaces the legacy `autoscaler_cooldown`
 > variable for the worker scaling policy. The `autoscaler_cooldown` variable is still read
@@ -56,11 +57,13 @@ Avoid startup cooldown traps and bound ramp velocity:
 
 ```hcl
 worker_autoscaling_enabled              = true
-worker_autoscaling_min                  = 2
-worker_autoscaling_max                  = 10
+worker_count                            = 2
+worker_min_replicas                     = 2
+worker_max_replicas                     = 10
 worker_autoscaling_scale_up_cooldown    = "15m"
 worker_autoscaling_scale_down_cooldown  = "30m"
 worker_autoscaling_evaluation_interval  = "60s"
+worker_queue_query_window               = "2m"
 worker_cpu_target_utilization           = 60
 ```
 
@@ -68,11 +71,13 @@ worker_cpu_target_utilization           = 60
 
 ```hcl
 worker_autoscaling_enabled              = true
-worker_autoscaling_min                  = 1
-worker_autoscaling_max                  = 50
+worker_count                            = 1
+worker_min_replicas                     = 1
+worker_max_replicas                     = 50
 worker_autoscaling_scale_up_cooldown    = "5m"
 worker_autoscaling_scale_down_cooldown  = "10m"
 worker_autoscaling_evaluation_interval  = "30s"
+worker_queue_query_window               = "1m"
 worker_cpu_target_utilization           = 50
 ```
 
@@ -80,7 +85,7 @@ worker_cpu_target_utilization           = 50
 
 ## iowait Threshold Gates
 
-Before raising `worker_autoscaling_max` or shortening `worker_autoscaling_scale_up_cooldown`,
+Before raising `worker_max_replicas` or shortening `worker_autoscaling_scale_up_cooldown`,
 check the iowait percentage on the Nomad client nodes hosting workers.
 
 ### How to Check iowait
@@ -98,7 +103,7 @@ vmstat 5 3            # column "wa"
 |---|---|
 | < 20% | Safe to scale up; current ramp policy is healthy |
 | 20–40% | Monitor; do not shorten cooldown further |
-| 40–60% | **Pause scale-up.** Set `worker_autoscaling_max = <current_count>` to hold |
+| 40–60% | **Pause scale-up.** Set `worker_max_replicas = <current_count>` to hold |
 | > 60% | **Emergency backoff** (see below) |
 
 ### Prometheus Alert (Optional)
@@ -127,6 +132,14 @@ metrics:
 | Requeued depth | `worker_queue_requeued_target` | `10–20` queued jobs per worker |
 | Total simulations depth | `worker_queue_simulations_target` | `10–20` queued jobs per worker |
 
+Queue checks use the Nomad autoscaler `pass-through` strategy. The template computes desired
+workers directly in PromQL:
+
+`desired = ceil(clamp_min(max_over_time(queue_depth[worker_queue_query_window]) / jobs_per_worker, 0))`
+
+This avoids the exponential feedback loop that can occur when `target-value` is applied to a
+raw queue-length metric.
+
 ### Cooldown Tuning Guidance
 
 - **Scale-up cooldown too short** → multiple scale-up events fire before new workers are
@@ -153,7 +166,7 @@ nomad job status <job_name>-worker | grep -i "running\|desired"
 
 # Set max = current running count to prevent further scale-up:
 nomad-pack run . \
-  -var "worker_autoscaling_max=<current_running_count>" \
+  -var "worker_max_replicas=<current_running_count>" \
   --name <job_name>
 ```
 
@@ -170,8 +183,8 @@ watch -n 5 'iostat -c 1 1 | tail -2'
 # Scale workers down one at a time with a 5-minute gap:
 for count in $(seq <current-1> -1 <target_floor>); do
   nomad-pack run . \
-    -var "worker_autoscaling_min=${count}" \
-    -var "worker_autoscaling_max=${count}" \
+    -var "worker_min_replicas=${count}" \
+    -var "worker_max_replicas=${count}" \
     --name <job_name>
   sleep 300
 done
@@ -182,10 +195,12 @@ done
 ```bash
 nomad-pack run . \
   -var "worker_autoscaling_enabled=true" \
-  -var "worker_autoscaling_min=2" \
-  -var "worker_autoscaling_max=10" \
+  -var "worker_count=2" \
+  -var "worker_min_replicas=2" \
+  -var "worker_max_replicas=10" \
   -var "worker_autoscaling_scale_up_cooldown=15m" \
   -var "worker_autoscaling_scale_down_cooldown=30m" \
+  -var "worker_queue_query_window=2m" \
   --name <job_name>
 ```
 
@@ -212,12 +227,14 @@ nomad-pack run . \
 See [`docs/variables.md`](variables.md) for full descriptions of all autoscaling variables:
 
 - `worker_autoscaling_enabled`
-- `worker_autoscaling_min` / `worker_autoscaling_max`
+- `worker_count`
+- `worker_min_replicas` / `worker_max_replicas`
 - `worker_autoscaling_scale_up_cooldown` *(new)*
 - `worker_autoscaling_scale_down_cooldown` *(new)*
 - `worker_autoscaling_evaluation_interval` *(new)*
 - `worker_autoscaling_cpu_enabled` / `worker_cpu_target_utilization`
 - `worker_autoscaling_queue_enabled`
+- `worker_queue_query_window` *(new)*
 - `worker_queue_requeued_target` / `worker_queue_simulations_target`
 - `autoscaler_cooldown` *(legacy global cooldown)*
 - `nomad_autoscaler_enabled`

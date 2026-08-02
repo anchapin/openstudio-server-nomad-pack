@@ -591,26 +591,32 @@ variable "redis_exporter_image" {
 
 variable "worker_queue_requeued_query" {
   type        = string
-  description = "Prometheus query for requeued backlog depth. Uses 'or vector(0)' so the series always resolves to 0 (not empty/error) when the queue key does not yet exist in Redis, which allows scale-to-zero when both queues are idle."
+  description = "Prometheus query for requeued backlog depth. Uses 'or vector(0)' so the series always resolves to 0 (not empty/error) when the queue key does not yet exist in Redis, which allows scale-to-zero when both queues are idle. This query should return raw queue depth; worker count math is applied in the worker template via a pass-through strategy."
   default     = "(sum(redis_key_size{key=\"resque:queue:requeued\"}) or vector(0))"
+}
+
+variable "worker_queue_query_window" {
+  type        = string
+  description = "PromQL lookback window used to smooth queue depth signals for pass-through queue scaling (for example, max_over_time(query[1m])). Increase to dampen metric jitter; decrease for faster reaction."
+  default     = "1m"
 }
 
 variable "worker_queue_requeued_target" {
   type        = number
-  description = "Target queue depth for requeued jobs per worker allocation."
-  default     = 1
+  description = "Queued requeued jobs per worker allocation used to compute desired workers for pass-through queue scaling: ceil(requeued_depth / worker_queue_requeued_target). Higher values slow scale-up and reduce storage shock risk."
+  default     = 20
 }
 
 variable "worker_queue_simulations_query" {
   type        = string
-  description = "Prometheus query for simulations backlog depth. or vector(0) ensures the series always resolves even when the queue key doesn't exist yet in Redis."
+  description = "Prometheus query for simulations backlog depth. or vector(0) ensures the series always resolves even when the queue key doesn't exist yet in Redis. This query should return raw queue depth; worker count math is applied in the worker template via a pass-through strategy."
   default     = "(sum(redis_key_size{key=\"resque:queue:simulations\"}) or vector(0))"
 }
 
 variable "worker_queue_simulations_target" {
   type        = number
-  description = "Target queue depth for simulation jobs per worker allocation."
-  default     = 2
+  description = "Queued simulation jobs per worker allocation used to compute desired workers for pass-through queue scaling: ceil(simulations_depth / worker_queue_simulations_target). Higher values slow scale-up and reduce storage shock risk."
+  default     = 20
 }
 
 variable "worker_local_scratch_enabled" {
