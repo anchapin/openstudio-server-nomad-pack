@@ -912,6 +912,9 @@ job "${wipe_job}" {
     task "wipe" {
       driver = "docker"
       config {
+        # Run as UID 1000:1000 — NFS servers typically enable root_squash, which
+        # maps root (UID 0) to nobody (UID 65534). App files are owned by UID 1000,
+        # so running as UID 1000 is required to delete them over NFS.
         image   = "alpine:3.20"
         command = "sh"
         args = [
@@ -919,6 +922,7 @@ job "${wipe_job}" {
           "mkdir -p ${nfs_volume_mount_path} && find ${nfs_volume_mount_path} -mindepth 1 -maxdepth 1 -exec rm -rf {} +"
         ]
       }
+      user = "1000:1000"
       volume_mount {
         volume      = "nfs-shared"
         destination = "${nfs_volume_mount_path}"
@@ -962,6 +966,12 @@ print("wait")
         return 0
         ;;
       fail)
+        # Capture logs before purging so the failure reason is visible
+        alloc_id="$(nomad job allocs -json "${wipe_job}" 2>/dev/null | python3 -c 'import json,sys; j=json.load(sys.stdin); print(j[0]["ID"][:8] if j else "")' 2>/dev/null || true)"
+        if [[ -n "${alloc_id}" ]]; then
+          echo "  NFS wipe alloc ${alloc_id} stderr:" >&2
+          nomad alloc logs -stderr "${alloc_id}" 2>&1 | tail -20 >&2 || true
+        fi
         nomad job stop -purge "${wipe_job}" >/dev/null 2>&1 || true
         echo "✗ NFS wipe job failed (${wipe_job})" >&2
         return 1
