@@ -142,7 +142,7 @@ MongoDB and Redis each support three modes via `*_storage_type`:
 
 Volume names default to `openstudio-mongodb` and `openstudio-redis`. MongoDB data mounts at `/data/db`; Redis data mounts at `/data`.
 
-MongoDB and Redis both run as UID/GID `999:999` — volume ownership must be set before first deploy.
+MongoDB and Redis both run as UID/GID `999:999` (configurable via `db_docker_user` and `redis_docker_user`) — volume ownership must be set before first deploy. The global `docker_user` (default `1000:1000`) applies to web, worker, and rserve tasks only.
 
 ### Vault integration (two independent mechanisms)
 
@@ -183,7 +183,7 @@ Pack templates use **`[[ ]]`** delimiters (not `{{ }}`):
 
 ### Hard constraints
 
-- **`web_count` must remain `1`**: the web process writes artefacts to local container filesystem with no distributed locking. Multiple replicas cause split-brain.
+- **`web_count` must remain `1`**: the web process writes uploaded analysis artefacts to the local container filesystem (under `/mnt/openstudio` when NFS is mounted) with no distributed file-locking. Requests routed to replica B cannot find files written by replica A. Safe `web_count > 1` requires either Redlock-based distributed locking or fully stateless file handling (S3/MinIO).
 - **`web_priority` (default `80`) must be > `worker_priority` (default `40`)**: prevents the scheduler from evicting the web UI under contention.
 - **`prepull_kill_timeout` must be ≥ 10 minutes** (`600s`): shorter values cause image cache eviction.
 - **`worker_kill_timeout` (default `5200s`) must be ≥ longest expected simulation run time**: shorter values cause data loss on node drains.
@@ -286,6 +286,14 @@ Enabled via `nfs_shared_volume_enabled = true`. Recommended as an OS-level NFS m
 
 The web service registers Consul tags for Traefik's Consul Catalog provider. Set `ingress_domain` to the desired hostname; set `ingress_tls_enabled = true` to add `websecure` entrypoint tags. Traefik must be deployed separately.
 
+### Backup and restore jobs
+
+`state-backup.nomad.tpl` renders a **periodic batch job** that runs `mongodump` and `redis-cli BGSAVE` on the schedule in `backup_cron` (default `0 2 * * * *`). Backups write to `backup_volume_source` and rotate files older than `backup_retention_days` (default `14`). Both jobs are disabled by default (`backup_enabled = false`, `restore_enabled = false`). `state-restore.nomad.tpl` is an on-demand parameterized batch job dispatched manually.
+
+### Batch verification job
+
+`batch-verification.nomad.tpl` (enabled by `enable_batch_verification = true`) uses `busybox` to ping/TCP-connect each service in `verification_targets`. Structured log output: `batch_verification_result component=... status=pass|fail` and `batch_verification_summary total=... passed=... failed=...`.
+
 ### `outputs.tpl`
 
 Rendered by `nomad-pack run` on successful deployment — prints Consul service UI URLs and the Traefik web URL. When adding a new service, add its Consul URL to `outputs.tpl` as well.
@@ -309,6 +317,8 @@ All policies default to the `default` namespace (matching the pack default `noma
 | `production-ha.hcl` | Multi-datacenter, HA resources, Vault, Consul Connect, autoscaling |
 | `airgapped.hcl` | Private registry image overrides, journald logging, no Vault |
 | `e2e-test.hcl` | End-to-end test configuration |
+| `openstack.hcl` | NREL aurora-179d OpenStack cluster (cc.medium 4 vCPU nodes, ~9,000 usable vCPU) |
+| `openstack-production.hcl` | Tuned production overrides for OpenStack — Vault, NFS, autoscaler, staged rollout defaults |
 
 Use `minimal-dev.hcl` as the baseline for new var-files; it is also used for CI plan validation.
 
@@ -337,14 +347,241 @@ vagrant ssh vault -c "VAULT_ADDR=http://127.0.0.1:8200 VAULT_TOKEN=root vault st
 | `getting-started-single-node.md` | Step-by-step single-node deploy guide |
 | `operations-guide.md` | Day-2 operations: scaling, draining, updating |
 | `storage.md` | Host volume, CSI, NFS configuration detail |
+| `nfs-tuning-guide.md` | NFS mount options, rsize/wsize, actimeo tuning |
 | `upgrading.md` | Version upgrade procedures |
 | `migration-k8s-to-nomad.md` | Helm → Nomad Pack migration guide |
 | `vault-policies.md` | Vault policy templates and setup |
 | `acl-policies.md` | Nomad ACL policy reference |
 | `compatibility.md` | Pack ↔ app version compatibility matrix |
 | `variables.md` | Auto-generated variable reference (do not edit manually) |
+| `openstack-staged-rollout-runbook.md` | 4-stage canary → full ramp procedure with gate criteria and rollback |
+| `openstack-stabilization-runbook.md` | Remediation steps for OpenStack-specific allocation failures |
+| `openstack-storage-provisioning.md` | CSI/NFS volume provisioning on OpenStack Nomad clusters |
+| `rserve-horizontal-scaling.md` | Rserve multi-replica design and constraints |
+| `adr-001-storage-architecture.md` | Architecture decision record: storage backend selection |
+| `worker-local-scratch.md` | Per-worker ephemeral scratch volume pattern |
+
+### Local dev environment
+
+`docker/docker-compose.yaml` runs Consul and Nomad as Docker containers with `network_mode: host` so task containers share the host network. The Makefile wraps all common operations:
+
+```bash
+make up       # Start Consul + Nomad (macOS: runs Consul natively via brew; Linux: Docker)
+make deploy   # Deploy pack with examples/minimal-dev.hcl
+make open     # Open http://localhost:8080
+make down     # Stop jobs + remove containers + volumes
+make status   # Show job/node/service status via API
+make web      # Tail web task logs
+make redeploy # stop + deploy
+```
+
+**macOS caveat:** `make up` runs Consul natively (`consul agent -dev`) because Docker Desktop host networking cannot expose container ports to the Mac loopback reliably. Nomad is also run natively on macOS using `docker/nomad-macos.hcl`. The `make up` target will auto-stop Homebrew-managed MongoDB (`27017`) and Redis (`6379`) if they are running to avoid port conflicts.
+
+One-command alternative:
+```bash
+bash scripts/quickstart.sh            # start infra + deploy + verify
+bash scripts/quickstart.sh --teardown # stop + clean
+bash scripts/quickstart.sh --status   # show status
+```
+
+### Pre-deploy storage preflight
+
+Before deploying to any cluster with `host_volume` or `csi` storage, validate volumes are present:
+
+```bash
+# Validates that all required volumes (from the var-file) exist on ready/eligible nodes
+./scripts/preflight-storage.sh --var-file examples/openstack.hcl
+
+# Auto-create missing CSI volumes (requires a healthy CSI plugin)
+./scripts/preflight-storage.sh --var-file examples/openstack-production.hcl \
+  --create-missing-csi --csi-plugin-id nfs
+```
+
+The script reads `db_storage_type`, `redis_storage_type`, and `nfs_shared_volume_enabled` from the var-file and verifies: CSI plugin health (controller count ≥ 1), volume registration, and host volume advertisement by ≥ 1 ready/eligible node.
+
+### OpenStack cluster operations
+
+The Makefile has a full `os-*` target set for the NREL aurora-179d OpenStack deployment:
+
+```bash
+make os-run        # full bootstrap + deploy (Consul → infra-setup → pack)
+make os-bootstrap  # configure all Nomad clients only (no pack deploy)
+make os-deploy     # deploy pack only (after bootstrap)
+make os-status     # show job/node/service status
+make os-ui         # open SSH tunnels + launch Nomad/Consul UIs in browser
+make os-tunnel     # open SSH tunnels only (foreground)
+make os-stop       # stop pack jobs
+make os-teardown   # stop pack + infra-setup system job
+```
+
+The OpenStack staged rollout uses four worker-ramp stages (canary: 2 workers → ramp-25: 5 → ramp-50: 10 → full: 20+). Each stage requires a 30–120 min soak and explicit gate criteria before advancing. See `docs/openstack-staged-rollout-runbook.md`.
+
+### Airgapped image mirroring
+
+For air-gapped clusters (no internet access), mirror all referenced images to an internal Pulp registry before deploying:
+
+```bash
+PULP_REGISTRY=pulp-dev.example.com \
+PULP_PROJECT=pulp-container-project \
+PULP_USERNAME=user PULP_PASSWORD=pass \
+bash scripts/mirror-images-to-pulp.sh --var-file examples/airgapped.hcl
+
+# Force re-push even if destination tag exists
+bash scripts/mirror-images-to-pulp.sh --force --var-file examples/airgapped.hcl
+```
+
+The script reads image variables from the var-file, pulls each from Docker Hub, retags to `<PULP_REGISTRY>/<PULP_PROJECT>/<image>`, and pushes. Use with `airgapped.hcl` which overrides all image variables to point at the internal registry.
+
+### Operational troubleshooting scripts
+
+```bash
+# Detect and optionally delete stale resque:analysis:*:queuing Redis locks
+# (locks with no TTL idle for > 120s that block job dispatch)
+./scripts/clear-stale-queuing-locks.sh --dry-run              # preview only
+./scripts/clear-stale-queuing-locks.sh --max-age 300          # custom idle threshold
+./scripts/clear-stale-queuing-locks.sh --nomad-addr http://... # target cluster
+
+# Attach a persistent Docker volume to a running allocation (storage rescue)
+./scripts/attach-docker-volume.sh
+
+# Bootstrap a fresh Nomad client node (179d OpenStack)
+./scripts/bootstrap-179d-node.sh
+
+# Fix Consul agent failures across all nodes
+./scripts/fix-consul-all-nodes.sh
+```
+
+`clear-stale-queuing-locks.sh` exits `0` (no stale keys), `1` (error), or `2` (stale keys found in `--dry-run` mode — useful as an alert gate in CI or cron).
+
+### Worker local scratch
+
+When `worker_local_scratch_enabled = true`, each worker allocation gets a node-local `ephemeral_disk` (default `10240` MB = 10 GiB) accessible at `worker_scratch_path` (`/scratch` by default, maps to `${NOMAD_ALLOC_DIR}/scratch`). This prevents NFS write amplification: intermediate simulation files go to local disk; only final artifacts are written to shared NFS.
+
+**Application responsibility:** the OpenStudio Server app must detect `WORKER_SCRATCH_PATH`, run the simulation within it, and **copy final artifacts to shared NFS before the task exits**. If the app exits without copying, results are lost — the pack does not migrate scratch data automatically.
+
+Key variables: `worker_local_scratch_enabled`, `worker_local_scratch_size` (MB), `worker_local_scratch_sticky` (when `true`, Nomad tries to reschedule onto the same node to reuse data — useful for resuming interrupted runs).
+
+### Rserve horizontal scaling
+
+`rserve_count` can be set above `1` to handle high-concurrency R call load, but **multi-replica-safe connection-level load balancing is not yet implemented** (tracked in issue **#361**). Keep `rserve_count = 1` until #361 is merged. Each Rserve replica runs a single-threaded R session — parallelism comes from replica count, not threads within a replica. Use `rserve_spreads` to distribute replicas across nodes when scaling.
+
+### Swift object-storage artifact backend
+
+`swift_artifact_storage_enabled = true` injects OpenStack Swift credentials and `ARTIFACT_STORAGE_BACKEND=swift` into web and worker tasks, routing artifact I/O through the Swift API instead of NFS. **The application binary must have Swift support compiled in** — this pack only injects env vars.
+
+| Scenario | Backend |
+|---|---|
+| Single-node dev / CI | NFS (default) |
+| Multi-node, artifacts must survive rescheduling | Swift |
+| Large result files (> 1 GB per run) | Swift |
+| Air-gapped / on-prem OpenStack | Swift |
+
+Required variables: `swift_auth_url`, `swift_username`, `swift_password`, `swift_tenant_name`, `swift_container`, `swift_region`. See `docs/swift-artifact-backend.md` for Swift container ACL setup.
+
+### Storage-aware autoscaling ramp policy
+
+Rapid worker scale-out can cause **storage shock** — NFS I/O saturation from many new workers simultaneously opening simulation files. Symptoms: `iowait` > 40% on NFS client nodes, simulation slowdown, Redis/MongoDB health check timeouts, spurious scale-down by the autoscaler health deadline.
+
+Prevent storage shock by setting conservative `autoscaling_cooldown` and per-evaluation worker add limits in the autoscaler policy. See `docs/autoscaling-storage-ramp-policy.md` for the recommended ramp guardrails and iowait threshold gates.
+
+### NFS volume setup (`examples/volumes/`)
+
+`examples/volumes/openstudio-shared-host-volume.hcl` contains the 3-step reference configuration for NFS shared volume setup:
+
+1. **`/etc/fstab`** — mount the NFS export on every eligible Nomad client (`nfsvers=4,sync,hard,intr`)
+2. **`client.hcl`** stanza — register a `host_volume "openstudio-nfs"` pointing at the mount path
+3. **Pack override snippet** — `nfs_shared_volume_enabled = true`, `nfs_volume_source = "openstudio-nfs"`, `nfs_volume_mount_path = "/mnt/openstudio"`
+
+### Traefik on jump host (`docs/infra/traefik-jump-host.md`)
+
+For the NREL aurora-179d OpenStack cluster, Traefik v2.11.2 runs as a **systemd service on the jump host** (`10.60.126.125`), not as a Nomad job. It uses the Consul Catalog provider (`exposedByDefault: false`) to discover services and route external HTTP traffic. OpenStudio Server UI: `http://10.60.126.125/`; Traefik dashboard: `http://10.60.126.125:8080/dashboard/`.
+
+### Additional CI test scripts
+
+Beyond the main integration test, CI runs several focused shell scripts:
+
+| Script | What it checks |
+|---|---|
+| `scripts/test_bump_metadata_version.sh` | Version bump helper using `tests/fixtures/metadata.sample.hcl` as isolated fixture |
+| `scripts/test_backup_restore_docs_defaults.sh` | `backup_enabled`/`restore_enabled` defaults in `variables.hcl` match documented defaults in README + AGENTS.md |
+| `scripts/test_migration_doc_variable_mapping.sh` | `docs/migration-k8s-to-nomad.md` references `worker_min_replicas`/`worker_max_replicas` (not the removed `worker_autoscaling_min/max`) |
+| `scripts/test_pre_teardown.sh` | `pre-teardown.sh` stop order using a mock `nomad` binary in `tests/fixtures/mockbin-pre-teardown/` |
+| `scripts/test_release_version_bump_workflow.sh` | `release-version-bump.yml` workflow contains the required registry sync step |
+
+Run any single test directly: `./scripts/test_bump_metadata_version.sh`, `./scripts/test_migration_doc_variable_mapping.sh`, etc.
 
 ## Related configs
 
 - `AGENTS.md` — canonical reference with full architecture details
 - `README.md`, `CONTRIBUTING.md`
+
+## Scale-to-max performance program (Epic #352)
+
+The scale-to-max epic addressed three bottlenecks for high-concurrency OpenStack deployments across 13 sub-issues (PRs #366–#378). Understanding these helps explain why certain defaults are set the way they are.
+
+### Three bottlenecks addressed
+
+1. **Shared storage collapse** — NFS/Ceph IOPS saturation under concurrent worker writes → solved by worker local-scratch, Swift artifact backend, and storage-aware autoscaling ramp policy
+2. **Rserve singleton bottleneck** — single Rserve serializes all R analysis calls → `rserve_count` variable added; multi-replica routing (issue #361 / PR #371) still open
+3. **Traefik ingress limits** — default timeouts and body-size limits reject large uploads → tuning variables added; production OpenStack uses Octavia LBaaS instead (see below)
+
+### Variables changed by the scale program
+
+| Variable | New default | Previous | Why |
+|---|---|---|---|
+| `worker_min_replicas` | `0` | `2` | Enables scale-to-zero when queue is empty |
+| `autoscaler_cooldown` | `10m` | `60m` | Faster idle reclaim after queue drains |
+| `traefik_request_timeout` | (tunable) | — | New; handles long simulation-enqueue requests (2–5 min) |
+| `traefik_max_request_body_size` | (tunable) | — | New; analysis ZIPs up to ~500 MB |
+| `redis_config_tcp_keepalive` | `60` | — | Prevents NAT/firewall from dropping idle Resque connections |
+| `redis_memory_max` | `0` (no cap) | — | Allows Redis to burst during mass-enqueue |
+| `web_mongoid_pool_size` | `10` | — | MongoDB connection pool for web task |
+
+### Traefik go/no-go for OpenStack production
+
+**Decision (`docs/traefik-openstack-decision.md`):** set `deploy_traefik = false` for production OpenStack. Use **OpenStack Octavia LBaaS** instead — it terminates TLS via NREL PKI/Barbican, supports HA ACTIVE/STANDBY amphoras, and handles large payloads and long-running connections at the LB layer without touching the Nomad cluster. The in-pack Traefik job is for development/single-node only.
+
+### Recommended OpenStack deployment sequence
+
+1. **Storage preflight** — `scripts/preflight-storage.sh --var-file examples/openstack-production.hcl`
+2. **NFS tuning** — apply mount options from `docs/nfs-tuning-guide.md` (`rsize/wsize=1048576`, `async`)
+3. **Storage benchmark** — `scripts/benchmark-storage-saturation.sh --tier 250/500/1000/2000` to find safe worker ceiling; set `worker_autoscaling_max` to the tier below first saturation
+4. **Autoscaling ramp** — `worker_min_replicas = 0`, `autoscaler_cooldown = "10m"`, conservative ramp rate per `docs/autoscaling-storage-ramp-policy.md`
+5. **Worker local-scratch** — enable `worker_local_scratch_enabled = true` and validate artifact publish behavior with a test analysis
+6. **Swift backend** (if available) — `swift_artifact_storage_enabled = true` to eliminate shared-storage write pressure entirely
+7. **Staged rollout** — follow `docs/openstack-staged-rollout-runbook.md` (5→10→20→max workers, gate criteria: p95 latency < 30s, iowait < 20%, queue lag < 2×, failure rate < 2%)
+
+### Known application-level limitations (cannot be fixed in the pack)
+
+- **`web_count > 1`** — requires distributed locking (Redlock) or object-storage artifact backend in the upstream app
+- **`rserve_count > 1`** — requires multi-replica R dispatch in the app (PR #371, not yet merged)
+- **Swift native integration** — requires Swift SDK usage in the app; the pack only injects env vars
+- **Queue-depth Prometheus autoscaling** — requires the app to expose Prometheus queue metrics; until then only `worker_autoscaling_cpu_enabled` works
+
+## Storage saturation benchmark
+
+`scripts/benchmark-storage-saturation.sh` quantifies the NFS worker-count ceiling before production deployment. Run on a Nomad **client node** with the NFS share mounted.
+
+```bash
+# Run each tier sequentially (allow 60s cooldown between tiers)
+for TIER in 250 500 1000 2000; do
+  ./scripts/benchmark-storage-saturation.sh \
+    --tier "$TIER" --nfs-mount /mnt/openstudio \
+    --duration 300 --output-dir benchmark-results
+  sleep 60
+done
+
+# Analyze results and identify first saturation tier
+./scripts/benchmark-storage-saturation.sh --analyze --output-dir benchmark-results
+```
+
+**Saturation thresholds** (any one triggers `YES ⚠`):
+
+| Metric | Saturated when |
+|---|---|
+| `iowait%` | > 40% |
+| `nfs_retrans` | > 0 (any retransmission) |
+| `nfs_rtt_ms` (fio clat proxy) | > 20 ms |
+| `write_bw_MB/s` vs tier-250 baseline | < 25% |
+
+**Prerequisites:** `fio ≥ 3.x`, `sysstat`, `nfs-common`/`nfs-utils`, `jq`, `vmstat`. Results written to `benchmark-results/tier-<N>/summary.json`. Set `worker_autoscaling_max` to the tier **below** first saturation. Document the result in your var-file as a comment for future reference.
