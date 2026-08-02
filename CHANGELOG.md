@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `scripts/provision-openstack-storage.sh`: idempotent OpenStack storage provisioner covering Manila NFS share creation, IP-based ACL rules, NFS export-path retrieval, quota checks, optional Cinder volume provisioning, NFS mount readiness validation, and `--dry-run` mode (#355)
 - Added `docs/openstack-storage-provisioning.md`: full operator guide for provisioning Manila NFS and Cinder block volumes on OpenStack, including mounting NFS on Nomad client nodes, registering Nomad host volumes, wiring storage identifiers into pack var-files, CSI volume registration, and troubleshooting (#355)
 - Updated `docs/storage.md` with an "OpenStack Provisioning" section referencing the new script and guide (#355)
+- Added `docs/adr-001-storage-architecture.md`: Architecture Decision Record comparing Manila NFS, Swift object storage, and Cinder-backed dedicated NFS tier for high-scale OpenStack deployments; selects Swift as primary and Cinder NFS as fallback (#354).
+- Updated `docs/storage.md` with an Architecture Decision section at the top linking to ADR-001.
 
 - Added `rserve_count` variable to allow configuring Rserve replica count (default: 1) (#360)
 - Added `docs/openstack-staged-rollout-runbook.md` with staged worker ramp procedure, gate criteria (latency, iowait%, queue lag, failure rate), abort/rollback steps, evidence collection checklist, and final recommended OpenStack defaults (#365)

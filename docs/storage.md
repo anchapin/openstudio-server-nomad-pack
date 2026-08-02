@@ -1,5 +1,17 @@
 # Storage Preparation Guide
 
+## Architecture Decision
+
+The storage architecture for high-scale OpenStack deployments is documented in
+**[ADR-001: Storage Architecture for High-Scale OpenStudio Server on OpenStack](./adr-001-storage-architecture.md)**.
+
+**TL;DR:**
+- **Primary (>100 workers):** Swift object storage for artifacts + minimal Manila scratch space — see `docs/swift-artifact-backend.md`.
+- **Fallback (no Swift available):** Cinder-backed dedicated NFS tier — see `docs/openstack-storage-provisioning.md` and `docs/nfs-tuning-guide.md`.
+- **Development / low-scale:** Manila NFS only (default) — documented in this guide.
+
+---
+
 This guide covers everything you need to set up persistent storage for MongoDB and Redis
 **before** running `nomad-pack run`. Choose the storage backend that fits your environment:
 
