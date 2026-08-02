@@ -19,11 +19,26 @@ jobs:
 
       - name: Setup Nomad Pack
         uses: hashicorp/setup-nomad-pack@36154659711632399739eb3b34d2e71dd54ed473  # 0.10.0
+        with:
+          # Pin the CLI version: the action's `version` input defaults to
+          # "latest" (a moving target). The fmt gate behavior (including the
+          # `[[/* */]]` comment handling) was validated against v0.4.2.
+          version: 0.4.2
+
+      - name: Print Nomad Pack version
+        run: nomad-pack version
 
       - name: Check pack formatting
-        run: nomad-pack fmt -check -recursive .
+        # Scoped to templates/ (nomad-pack v0.4.2 recursive discovery from the
+        # pack root does not descend into templates/, making `-recursive .` a
+        # silent no-op that always exits 0).
+        run: nomad-pack fmt --check templates/
 
-      - name: Validate pack rendering
+      - name: Validate pack rendering (render-after-fmt guard)
+        # Renders immediately after the fmt gate to catch lexer regressions in
+        # the formatter (v0.4.2 `fmt -write` once rewrote `[[- /*` comment
+        # markers into a state the renderer rejects with "illegal number
+        # syntax"). Render is fast; keep it cheap.
         run: nomad-pack render .
 
       - name: Validate batch verification rendering
