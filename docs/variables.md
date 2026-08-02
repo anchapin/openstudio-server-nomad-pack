@@ -103,7 +103,7 @@
 | `prometheus_affinities` | `any` | `[]` | Placement affinities for the optional Prometheus group. |
 | `prometheus_spreads` | `any` | `[]` | Spread rules for the optional Prometheus group. |
 | `redis_exporter_image` | `string` | `"oliver006/redis_exporter:v1.62.0"` | Redis exporter image used by the optional in-pack Prometheus job. |
-| `worker_queue_requeued_query` | `string` | `"sum(redis_key_size{key=\"resque:queue:requeued\"}) + 1"` | Prometheus query for requeued backlog depth. The +1 keeps the series non-zero when the queue is empty so the autoscaler doesn't treat a missing series as an error. |
+| `worker_queue_requeued_query` | `string` | `"(sum(redis_key_size{key=\"resque:queue:requeued\"}) or vector(0))"` | Prometheus query for requeued backlog depth. Uses 'or vector(0)' so the series always resolves to 0 (not empty/error) when the queue key does not yet exist in Redis, which allows scale-to-zero when both queues are idle. |
 | `worker_queue_requeued_target` | `number` | `1` | Target queue depth for requeued jobs per worker allocation. |
 | `worker_queue_simulations_query` | `string` | `"(sum(redis_key_size{key=\"resque:queue:simulations\"}) or vector(0))"` | Prometheus query for simulations backlog depth. or vector(0) ensures the series always resolves even when the queue key doesn't exist yet in Redis. |
 | `worker_queue_simulations_target` | `number` | `2` | Target queue depth for simulation jobs per worker allocation. |

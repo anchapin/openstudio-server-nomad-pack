@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fixed `worker_autoscaling_scale_down_cooldown` being silently ignored: replaced flawed per-check `cooldown` overrides with the correct `cooldown_on_scale_up` field at the policy level (supported since Nomad Autoscaler 0.4.0; deployment uses 0.5.0). Policy-level `cooldown` now governs scale-down (`20m` default) and `cooldown_on_scale_up` governs scale-up (`10m` default).
 - Fixed `fresh-redeploy-openstack.sh` bootstrap cooldown override being a no-op: the script was overriding `autoscaler_cooldown`, which is not rendered in any template. It now correctly overrides `worker_autoscaling_scale_up_cooldown` during bootstrap (Phase 2) and restores the var-file value in Phase 3.
+- Fixed `worker_queue_requeued_query` default and `openstack.hcl` value: the `+1` trick (`sum(...) + 1`) was intended to prevent a missing-series error but silently breaks when the Redis key doesn't exist — Prometheus propagates empty through arithmetic, so `sum(empty) + 1` returns empty, not 1. This caused the autoscaler to oscillate between scale-up (when Redis had the key) and scale-down (when it didn't), creating thousands of short-lived allocations that were immediately stopped. Replaced with `(sum(...) or vector(0))` which consistently returns 0 when idle, enabling stable scale-to-zero behavior.
 
 ### Added
 

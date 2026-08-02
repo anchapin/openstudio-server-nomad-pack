@@ -591,8 +591,8 @@ variable "redis_exporter_image" {
 
 variable "worker_queue_requeued_query" {
   type        = string
-  description = "Prometheus query for requeued backlog depth. The +1 keeps the series non-zero when the queue is empty so the autoscaler doesn't treat a missing series as an error."
-  default     = "sum(redis_key_size{key=\"resque:queue:requeued\"}) + 1"
+  description = "Prometheus query for requeued backlog depth. Uses 'or vector(0)' so the series always resolves to 0 (not empty/error) when the queue key does not yet exist in Redis, which allows scale-to-zero when both queues are idle."
+  default     = "(sum(redis_key_size{key=\"resque:queue:requeued\"}) or vector(0))"
 }
 
 variable "worker_queue_requeued_target" {

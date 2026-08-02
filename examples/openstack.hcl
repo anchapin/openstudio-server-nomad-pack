@@ -178,7 +178,7 @@ worker_max_replicas        = 10000
 worker_queue_simulations_query = "(sum(redis_key_size{key=\"resque:queue:simulations\"}) or vector(0))"
 # Keep the requeued check neutral when that queue is empty so it doesn't
 # suppress scale-out driven by the simulations queue.
-worker_queue_requeued_query    = "sum(redis_key_size{key=\"resque:queue:requeued\"}) + 1"
+worker_queue_requeued_query    = "(sum(redis_key_size{key=\"resque:queue:requeued\"}) or vector(0))"
 # Scale out earlier: tolerate at most 2 queued simulation jobs per worker before
 # adding more allocations (default is 5 — too permissive for burst workloads).
 worker_queue_simulations_target = 2
