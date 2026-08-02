@@ -104,15 +104,17 @@ worker_update_progress_deadline = "20m"
 db_cpu    = 2000   # MHz
 db_memory = 4096   # MB — working set fits in RAM for typical project sizes
 
-db_storage_type   = "host_volume"
+db_storage_type   = "csi"
 db_volume_source  = "openstudio-mongodb"
+db_csi_plugin_id  = "hostpath-web-plugin0"
 
 # ---------- Redis ----------
 redis_cpu    = 500    # MHz
 redis_memory = 1024   # MB
 
-redis_storage_type   = "host_volume"
+redis_storage_type   = "csi"
 redis_volume_source  = "openstudio-redis"
+redis_csi_plugin_id  = "hostpath-web-plugin0"
 
 # Redis TCP keepalive — prevents NAT/firewall dropping idle Resque connections.
 redis_config_tcp_keepalive = 60
