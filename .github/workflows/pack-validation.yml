@@ -154,7 +154,7 @@ jobs:
           NOMAD_ADDR: http://127.0.0.1:4646
         run: |
           set +e
-          nomad-pack plan . --name openstudio-server
+          nomad-pack plan --name openstudio-server .
           code=$?
           set -e
           [ "$code" -le 1 ] || exit "$code"
@@ -164,7 +164,7 @@ jobs:
           NOMAD_ADDR: http://127.0.0.1:4646
         run: |
           set +e
-          nomad-pack plan --var-file examples/quickstart/minimal-dev.hcl . --name openstudio-server-minimal-dev
+          nomad-pack plan --var-file examples/quickstart/minimal-dev.hcl --name openstudio-server-minimal-dev .
           code=$?
           set -e
           [ "$code" -le 1 ] || exit "$code"
@@ -181,7 +181,8 @@ jobs:
             --var "vault_integration_enabled=false" \
             --var "enable_consul_connect=false" \
             --var "worker_update_progress_deadline=2h" \
-            . --name openstudio-server-production-ha
+            --name openstudio-server-production-ha \
+            .
           code=$?
           set -e
           [ "$code" -le 1 ] || exit "$code"
@@ -191,7 +192,7 @@ jobs:
           NOMAD_ADDR: http://127.0.0.1:4646
         run: |
           set +e
-          nomad-pack plan --var-file examples/advanced/airgapped.hcl . --name openstudio-server-airgapped
+          nomad-pack plan --var-file examples/advanced/airgapped.hcl --name openstudio-server-airgapped .
           code=$?
           set -e
           [ "$code" -le 1 ] || exit "$code"
@@ -201,7 +202,7 @@ jobs:
           NOMAD_ADDR: http://127.0.0.1:4646
         run: |
           set +e
-          nomad-pack plan --var "enable_batch_verification=true" . --name openstudio-server-batch-verification
+          nomad-pack plan --var "enable_batch_verification=true" --name openstudio-server-batch-verification .
           code=$?
           set -e
           [ "$code" -le 1 ] || exit "$code"

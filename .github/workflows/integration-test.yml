@@ -53,7 +53,7 @@ jobs:
 
       - name: Render and validate templates
         run: |
-          nomad-pack render . --var-file examples/quickstart/minimal-dev.hcl
+          nomad-pack render --var-file examples/quickstart/minimal-dev.hcl .
           echo "Template rendering succeeded"
 
   e2e-test:
@@ -200,7 +200,7 @@ jobs:
           echo "E2E_WEB_JOB=${E2E_JOB_PREFIX}-web" >> "${GITHUB_ENV}"
           echo "E2E_DB_JOB=${E2E_JOB_PREFIX}-db" >> "${GITHUB_ENV}"
           echo "E2E_REDIS_JOB=${E2E_JOB_PREFIX}-redis" >> "${GITHUB_ENV}"
-          nomad-pack run --detach . --var-file "${E2E_VAR_FILE}"
+          nomad-pack run --detach --var-file "${E2E_VAR_FILE}" .
 
       - name: Wait for Nomad web allocations
         env:
@@ -356,4 +356,4 @@ jobs:
         if: always()
         env:
           NOMAD_ADDR: http://127.0.0.1:4646
-        run: nomad-pack destroy . --var-file "${E2E_VAR_FILE}" || true
+        run: nomad-pack destroy --var-file "${E2E_VAR_FILE}" . || true

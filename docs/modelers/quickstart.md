@@ -51,7 +51,7 @@ worker_count = 4
 ## Step 3 — Deploy
 
 ```bash
-nomad-pack run . -var-file my-deployment.hcl
+nomad-pack run -var-file my-deployment.hcl .
 ```
 
 Nomad will start the following jobs:
@@ -93,7 +93,7 @@ project to the server.
 ## Stopping the Server
 
 ```bash
-nomad-pack destroy . --name openstudio-server
+nomad-pack destroy --name openstudio-server .
 ```
 
 ---
