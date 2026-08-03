@@ -31,9 +31,19 @@ nomad-pack plan --name openstudio-server-airgapped -var-file examples/advanced/a
 # Run the integration test script (render + plan across key scenarios)
 bash scripts/test_nomad_pack_integration.sh
 
+# Run a single focused test script (fast iteration)
+./scripts/test_pre_teardown.sh
+./scripts/test_bump_metadata_version.sh
+./scripts/test_backup_restore_docs_defaults.sh
+./scripts/test_release_version_bump_workflow.sh
+./scripts/test_migration_doc_variable_mapping.sh
+
 # Render a specific scenario inline (e.g., verify a single template change)
 nomad-pack render -var "enable_vector_collection=false" .
 nomad-pack render -var "web_image=nrel/openstudio-server:3.8.0" .
+
+# Validate a single Nomad job spec used by CI
+nomad job validate examples/advanced/test-batch.nomad
 
 # Test the version-bump helper in isolation
 # Uses tests/fixtures/metadata.sample.hcl as an isolated test fixture
@@ -60,10 +70,26 @@ nomad fmt -check policies/
 
 # Validate provisioning scripts (bash syntax only)
 for script in vagrant/provision/*.sh; do bash -n "$script"; done
+# Validate one provisioning script quickly
+bash -n vagrant/provision/nomad-client.sh
 
 # Run all CI workflows locally (requires act + Docker)
 act push -W .github/workflows/pack-validation.yml
+act pull_request -W .github/workflows/pack-validation.yml
 act push
+
+# Common local lifecycle shortcuts (Makefile wrappers)
+make up
+make deploy
+make status
+make down
+
+# OpenStack helper wrappers (preferred over ad-hoc SSH sequences)
+make os-bootstrap
+make os-deploy
+make os-status
+make os-logs JOB=web
+make os-teardown
 ```
 
 ---
@@ -416,6 +442,7 @@ Node class targeting uses the named macros `openstudio_server.compute_node_const
 ```bash
 cp variables.hcl packs/openstudio-server/variables.hcl
 cp metadata.hcl packs/openstudio-server/metadata.hcl
+cp outputs.tpl packs/openstudio-server/outputs.tpl
 cp templates/*.tpl templates/*.nomad.tpl packs/openstudio-server/templates/
 ```
 
