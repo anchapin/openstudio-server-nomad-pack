@@ -87,11 +87,12 @@ Measured on each Nomad compute node hosting worker allocations.
 
 ```bash
 # Deploy with Stage 1 settings
-nomad-pack run . \
+nomad-pack run \
   --name openstudio-server \
   -var-file examples/openstack-production.hcl \
   -var "worker_count=2" \
-  -var "worker_autoscaling_enabled=false"
+  -var "worker_autoscaling_enabled=false" \
+  .
 
 # Verify all allocations healthy
 nomad job status openstudio-server-worker
@@ -108,11 +109,12 @@ Advance to Stage 2 only if all gate criteria pass.
 ### Stage 2 — Ramp-25 (5 workers)
 
 ```bash
-nomad-pack run . \
+nomad-pack run \
   --name openstudio-server \
   -var-file examples/openstack-production.hcl \
   -var "worker_count=5" \
-  -var "worker_autoscaling_enabled=false"
+  -var "worker_autoscaling_enabled=false" \
+  .
 
 # Verify scale-out completed
 nomad job status openstudio-server-worker | grep running
@@ -124,11 +126,12 @@ nomad job status openstudio-server-worker | grep running
 ### Stage 3 — Ramp-50 (10 workers)
 
 ```bash
-nomad-pack run . \
+nomad-pack run \
   --name openstudio-server \
   -var-file examples/openstack-production.hcl \
   -var "worker_count=10" \
-  -var "worker_autoscaling_enabled=false"
+  -var "worker_autoscaling_enabled=false" \
+  .
 
 # Increase queue load to 50 % of target
 # Monitor for 1 hour
@@ -138,9 +141,10 @@ nomad-pack run . \
 
 ```bash
 # Enable autoscaling — autoscaler manages count between min/max replicas
-nomad-pack run . \
+nomad-pack run \
   --name openstudio-server \
-  -var-file examples/openstack-production.hcl
+  -var-file examples/openstack-production.hcl \
+  .
 
 # Ramp queue to 100 % of target load
 # Monitor for 2 hours
@@ -177,9 +181,10 @@ or if any of the following occur:
 nomad job scale openstudio-server-worker 0
 
 # 2. Redeploy prior var-file (saved before rollout)
-nomad-pack run . \
+nomad-pack run \
   --name openstudio-server \
-  -var-file <path-to-prior-var-file>
+  -var-file <path-to-prior-var-file> \
+  .
 
 # 3. Verify all services return to healthy
 consul catalog services | grep openstudio
@@ -239,8 +244,9 @@ redis-cli -h <redis-host> get resque:stat:failed
 
 ```bash
 # Save Nomad job plan diff to confirm no unintended changes before advancing
-nomad-pack plan . --name openstudio-server \
+nomad-pack plan --name openstudio-server \
   -var-file examples/openstack-production.hcl \
+  . \
   > evidence/stage-<N>-plan-output.txt
 
 # Save Redis queue depth snapshot

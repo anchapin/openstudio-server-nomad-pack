@@ -59,7 +59,7 @@ cp user-overrides.hcl my-deployment.hcl
 # Edit my-deployment.hcl — uncomment and set the image version lines
 
 # Deploy
-nomad-pack run . -var-file my-deployment.hcl
+nomad-pack run -var-file my-deployment.hcl .
 ```
 
 For a complete walkthrough see **[docs/infrastructure/getting-started-single-node.md](./docs/infrastructure/getting-started-single-node.md)**.

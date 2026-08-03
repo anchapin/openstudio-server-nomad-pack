@@ -4,7 +4,7 @@
 # This file is the ONLY file most energy modelers need to edit.
 # Copy this file, set the values below, and run:
 #
-#   nomad-pack run . -var-file user-overrides.hcl
+#   nomad-pack run -var-file user-overrides.hcl .
 #
 # Everything else — cluster networking, storage volumes, autoscaling, Vault,
 # Consul service discovery — has safe defaults and does not need to change

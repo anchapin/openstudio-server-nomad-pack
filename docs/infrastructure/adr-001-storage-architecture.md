@@ -225,7 +225,7 @@ To revert to Option A (Manila NFS) from either Option B or Option C:
 2. Remove `swift_artifact_backend_enabled = true` (or the Cinder NFS host volume reference) from
    your override var-file.
 3. Ensure the original Manila `host_volume` is still registered on Nomad clients.
-4. Redeploy: `nomad-pack run . -var-file <your-override>.hcl`.
+4. Redeploy: `nomad-pack run -var-file <your-override>.hcl .`.
 5. If data was migrated to Swift or Cinder NFS, `rsync` it back to the Manila share before
    restarting workers.
 
