@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Updated `nomad-pack` command examples across docs, examples, and CI workflows to use flags-before-pack-path syntax required by nomad-pack v0.4.2 (e.g., `nomad-pack run -var-file X .` instead of `nomad-pack run . -var-file X`) (#390).
+- Updated contributor/agent docs to use `nomad-pack fmt --check templates/` and explicitly warn that, on nomad-pack v0.4.2, `fmt -write templates/` can corrupt templates while `fmt --check -recursive .` is a silent no-op from pack root (#389).
 
 ### Added
 - Added `prometheus_alert_rules_enabled` variable (default `true`) to embed Prometheus alert rules into the in-pack Prometheus job when `prometheus_enabled = true`. Adds three rules: `OpenStudioSimulationsQueueBacklog` (simulations queue non-empty > 30 min), `OpenStudioRequeuedQueueBacklog` (requeued queue non-empty > 20 min), and `OpenStudioFailedJobs` (Resque failed queue non-empty > 5 min).

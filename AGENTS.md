@@ -9,8 +9,10 @@ A [Nomad Pack](https://developer.hashicorp.com/nomad/tutorials/nomad-pack/nomad-
 ## Build / Test / Lint Commands
 
 ```bash
-# Format-check all HCL files (non-destructive)
-nomad-pack fmt --check .
+# Format-check pack templates (non-destructive)
+# NOTE: On nomad-pack v0.4.2, `fmt -write templates/` can corrupt templates
+# and `fmt --check -recursive .` is a silent no-op from the pack root.
+nomad-pack fmt --check templates/
 
 # Render templates to stdout and inspect output
 nomad-pack render .
