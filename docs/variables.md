@@ -205,6 +205,7 @@
 | `docker_cap_drop` | `list(string)` | `["ALL"]` | Linux capabilities to drop from Docker containers. |
 | `enable_image_prepull` | `bool` | `true` | When true, renders the system-hooks job that pre-pulls all heavy images on every eligible node before scheduling. |
 | `prepull_kill_timeout` | `string` | `"600s"` | kill_timeout applied to every task in the image pre-pull system job. Must be >= 10 minutes to allow large image layers to be pulled. |
+| `prepull_restart_attempts` | `number` | `10` | Number of times each image pre-pull task group will retry on failure before the alloc is marked failed. Registry TLS handshake timeouts under concurrent cluster-wide pulls are transient; 10 retries over a 1-hour window absorbs the congestion without permanently bricking nodes. |
 | `poststop_cleanup_image` | `string` | `"alpine:3.20"` | The image used for poststop cleanup lifecycle tasks. |
 | `poststop_cleanup_paths` | `list(string)` | `[ "/alloc/tmp/analysis", "/alloc/tmp/openstudio/analysis", ]` | Directories removed by poststop cleanup lifecycle tasks when allocations stop. |
 | `enable_batch_verification` | `bool` | `false` | Enable standalone batch connectivity verification job. |

@@ -32,8 +32,10 @@ job "[[ var "job_name" . ]]-system-hooks" {
     [[ end ]]
 
     restart {
-      attempts = 3
-      mode     = "fail"
+      attempts = [[ var "prepull_restart_attempts" . ]]
+      interval = "1h"
+      delay    = "30s"
+      mode     = "delay"
     }
 
     task "pull-worker-image" {
@@ -121,8 +123,10 @@ job "[[ var "job_name" . ]]-system-hooks" {
     [[ template "constraints" (var "web_constraints" .) ]]
 
     restart {
-      attempts = 3
-      mode     = "fail"
+      attempts = [[ var "prepull_restart_attempts" . ]]
+      interval = "1h"
+      delay    = "30s"
+      mode     = "delay"
     }
 
     task "pull-web-image" {

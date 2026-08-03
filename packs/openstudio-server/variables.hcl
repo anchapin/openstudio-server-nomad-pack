@@ -1243,6 +1243,12 @@ variable "prepull_kill_timeout" {
   default     = "600s"
 }
 
+variable "prepull_restart_attempts" {
+  type        = number
+  description = "Number of times each image pre-pull task group will retry on failure before the alloc is marked failed. Registry TLS handshake timeouts under concurrent cluster-wide pulls are transient; 10 retries over a 1-hour window absorbs the congestion without permanently bricking nodes."
+  default     = 10
+}
+
 variable "poststop_cleanup_image" {
   type        = string
   description = "The image used for poststop cleanup lifecycle tasks."

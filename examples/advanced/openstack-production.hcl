@@ -83,7 +83,7 @@ worker_priority      = 50
 worker_cpu           = 1500   # MHz — leaves headroom for OS + Docker on 8-vCPU nodes
 worker_memory        = 1750   # MB  — ~38 % of 16 GB; allows 2 allocations per node
 worker_memory_max    = 4000   # MB  — burst to full node memory before OOM
-worker_process_count = "2"    # 2 processes × 3 000 MHz ≈ 6 000 MHz per allocation
+worker_process_count = "3"    # 3 processes × 500 MHz ≈ 4 500 MHz per allocation; 50 % more concurrent sims at same alloc count
 worker_command = "/bin/sh"
 worker_args    = ["-c", "sh /local/patch-hosts.sh && exec /usr/local/bin/start-workers"]
 
