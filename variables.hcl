@@ -505,12 +505,6 @@ variable "autoscaler_prometheus_address" {
   default     = "http://openstudio-prometheus.service.consul:9090"
 }
 
-variable "autoscaler_cooldown" {
-  type        = string
-  description = "Cooldown duration between worker autoscaling actions (e.g. '5m', '10m', '60m'). Reduced from the Helm chart stabilizationWindowSeconds of 3600 (60m) to 10m so idle workers are reclaimed faster after the queue drains. Increase if you see oscillation (rapid scale-up/scale-down cycles)."
-  default     = "10m"
-}
-
 variable "worker_autoscaling_scale_up_cooldown" {
   type        = string
   description = "Cooldown between scale-up events for the worker group. Longer values prevent storage shock on shared NFS by limiting how quickly new workers are added during a burst. Recommended minimum 10m for NFS-backed deployments. Only applies when worker_autoscaling_enabled = true."
@@ -697,46 +691,10 @@ variable "web_background_args" {
   default     = []
 }
 
-variable "web_background_count" {
-  type        = number
-  description = "The number of web-background task allocations. Must remain 1. Horizontal scale-out for this group is intentionally disabled; increase web_background_worker_count (COUNT) instead."
-  default     = 1
-}
-
 variable "web_background_worker_count" {
   type        = number
   description = "COUNT env var for the web-background task: number of Resque child worker processes per allocation. Increase to drain the background/analyses/analysis_wrappers queues faster. Tune in proportion to web_background_memory (each child ~256 MB) and web_background_cpu (each child ~250 MHz)."
   default     = 8
-}
-
-variable "web_background_autoscaling_enabled" {
-  type        = bool
-  description = "Deprecated for this pack profile. Keep false: web-background is pinned to a single allocation by design."
-  default     = false
-}
-
-variable "web_background_min_replicas" {
-  type        = number
-  description = "Minimum number of web-background replicas when autoscaling is enabled."
-  default     = 1
-}
-
-variable "web_background_max_replicas" {
-  type        = number
-  description = "Maximum number of web-background replicas when autoscaling is enabled."
-  default     = 5
-}
-
-variable "web_background_autoscaling_cpu_enabled" {
-  type        = bool
-  description = "Enable the built-in Nomad APM CPU autoscaling check for the web-background task group (avg_cpu target-value strategy). Only applies when web_background_autoscaling_enabled is true."
-  default     = false
-}
-
-variable "web_background_cpu_target_utilization" {
-  type        = number
-  description = "Target CPU utilization percentage for the web-background nomad-apm avg_cpu scaling check."
-  default     = 50
 }
 
 variable "db_image" {
@@ -785,12 +743,6 @@ variable "db_volume_source" {
   type        = string
   description = "Nomad volume source name for MongoDB persistent storage (host_volume name or CSI volume ID)."
   default     = "openstudio-mongodb"
-}
-
-variable "db_csi_plugin_id" {
-  type        = string
-  description = "Optional CSI plugin ID used by OpenStack helper scripts when creating the MongoDB volume. No effect unless db_storage_type = \"csi\"."
-  default     = ""
 }
 
 # Intentionally uses redis:6.2-alpine (newer, smaller) instead of the Helm chart's
@@ -878,12 +830,6 @@ variable "redis_volume_source" {
   type        = string
   description = "Nomad volume source name for Redis persistent storage (host_volume name or CSI volume ID)."
   default     = "openstudio-redis"
-}
-
-variable "redis_csi_plugin_id" {
-  type        = string
-  description = "Optional CSI plugin ID used by OpenStack helper scripts when creating the Redis volume. No effect unless redis_storage_type = \"csi\"."
-  default     = ""
 }
 
 variable "redis_health_check_interval" {
@@ -1748,10 +1694,4 @@ variable "aws_batch_job_definition" {
   type        = string
   description = "ARN or name of the AWS Batch job definition used for simulation jobs. Only used when batch_engine = 'aws_batch'."
   default     = ""
-}
-
-variable "aws_batch_vault_aws_role" {
-  type        = string
-  description = "Vault AWS secrets engine role name used to generate short-lived IAM credentials for the web dispatcher. Only used when batch_engine = 'aws_batch' and vault_enabled = true."
-  default     = "openstudio-aws-batch"
 }

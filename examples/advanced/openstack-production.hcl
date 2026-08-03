@@ -54,14 +54,11 @@ web_memory_max = 61440
 ingress_domain = "10.60.126.125"
 
 # ---------- Web-background ----------
-# Keep singleton: upstream app guidance is web-background_count must remain 1
-# to avoid race conditions in analysis lifecycle processing.
-web_background_count  = 1
+# Keep singleton: web-background is fixed at one allocation in the template.
 web_background_cpu    = 16000  # MHz
 web_background_memory = 16384  # MB
 web_background_memory_max = 32768
 
-web_background_autoscaling_enabled = false
 web_background_worker_count        = 56
 # Prioritize analysis lifecycle work before generic background jobs.
 web_background_queues              = "analyses,background"
@@ -133,12 +130,8 @@ worker_queue_requeued_target    = 1
 
 # Scale-up cooldown: 2 min keeps queue bursts from waiting on long cooldown windows.
 # Scale-down cooldown: 10 min reduces oscillation after burst drains.
-# The global autoscaler_cooldown is overridden per-direction below.
 worker_autoscaling_scale_up_cooldown   = "2m"
 worker_autoscaling_scale_down_cooldown = "10m"
-
-# Legacy global cooldown (used by CPU check and as fallback); kept for reference.
-autoscaler_cooldown = "30m"
 
 # Rolling update — prevents simultaneous eviction of running simulations.
 worker_update_max_parallel      = 1
@@ -155,7 +148,6 @@ db_memory_max = 45056
 db_static_port    = 27017
 db_storage_type   = "csi"
 db_volume_source  = "openstudio-mongodb"
-db_csi_plugin_id  = "hostpath-web-plugin0"
 
 # ---------- Redis ----------
 redis_cpu    = 8000   # MHz
@@ -165,7 +157,6 @@ redis_memory_max = 24576
 redis_static_port    = 6379
 redis_storage_type   = "csi"
 redis_volume_source  = "openstudio-redis"
-redis_csi_plugin_id  = "hostpath-web-plugin0"
 
 # Redis TCP keepalive — prevents NAT/firewall dropping idle Resque connections.
 redis_config_tcp_keepalive = 60

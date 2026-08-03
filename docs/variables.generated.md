@@ -89,7 +89,6 @@
 | `nomad_autoscaler_image` | `string` | `"hashicorp/nomad-autoscaler:0.4.7"` | The image name and tag for the Nomad Autoscaler daemon. See https://github.com/hashicorp/nomad-autoscaler/releases for available versions. |
 | `autoscaler_nomad_address` | `string` | `"http://nomad.service.consul:4646"` | Address of the Nomad server for the Nomad Autoscaler to connect to. Use the private IP when Consul DNS is not available (e.g. 'http://192.168.100.87:4646'). |
 | `autoscaler_prometheus_address` | `string` | `"http://openstudio-prometheus.service.consul:9090"` | Address of the Prometheus server used by the Nomad Autoscaler APM plugin to evaluate scaling checks. |
-| `autoscaler_cooldown` | `string` | `"10m"` | Cooldown duration between worker autoscaling actions (e.g. '5m', '10m', '60m'). Reduced from the Helm chart stabilizationWindowSeconds of 3600 (60m) to 10m so idle workers are reclaimed faster after the queue drains. Increase if you see oscillation (rapid scale-up/scale-down cycles). |
 | `worker_autoscaling_scale_up_cooldown` | `string` | `"10m"` | Cooldown between scale-up events for the worker group. Longer values prevent storage shock on shared NFS by limiting how quickly new workers are added during a burst. Recommended minimum 10m for NFS-backed deployments. Only applies when worker_autoscaling_enabled = true. |
 | `worker_autoscaling_scale_down_cooldown` | `string` | `"20m"` | Cooldown between scale-down events for the worker group. A longer scale-down window (default 20m) avoids thrashing when the queue briefly empties between simulation batches. Only applies when worker_autoscaling_enabled = true. |
 | `worker_autoscaling_evaluation_interval` | `string` | `"30s"` | How often the Nomad Autoscaler evaluates worker scaling policies. Lower values increase responsiveness but also increase Nomad API load. 30s is a safe default for most deployments. Only applies when worker_autoscaling_enabled = true. |
@@ -121,13 +120,7 @@
 | `web_background_command` | `string` | `"/usr/local/bin/start-web-background"` | Command run by the web-background task. Defaults to the image's start-web-background script, which launches Resque workers for background analysis lifecycle queues. |
 | `web_background_queues` | `string` | `"background,analyses"` | Resque QUEUES env var for the web-background task. Controls which queue(s) the start-web-background Resque workers process. Keep both 'background' and 'analyses': the 'analyses' queue handles analysis initialization/cleanup (including directory setup before zip extraction), and 'background' handles general async tasks. The 'analysis_wrappers' queue is consumed by the web task. Omitting 'analyses' causes the 'Destination already exists' error on re-initialization. Separate multiple queues with commas. NOTE: Use QUEUES (not QUEUE) — the application's resque:setup task explicitly resets QUEUE to prevent environment leaks. |
 | `web_background_args` | `list(string)` | `[]` | Optional args passed to web_background_command when set. |
-| `web_background_count` | `number` | `1` | The number of web-background task allocations. Must remain 1. Horizontal scale-out for this group is intentionally disabled; increase web_background_worker_count (COUNT) instead. |
 | `web_background_worker_count` | `number` | `8` | COUNT env var for the web-background task: number of Resque child worker processes per allocation. Increase to drain the background/analyses/analysis_wrappers queues faster. Tune in proportion to web_background_memory (each child ~256 MB) and web_background_cpu (each child ~250 MHz). |
-| `web_background_autoscaling_enabled` | `bool` | `false` | Deprecated for this pack profile. Keep false: web-background is pinned to a single allocation by design. |
-| `web_background_min_replicas` | `number` | `1` | Minimum number of web-background replicas when autoscaling is enabled. |
-| `web_background_max_replicas` | `number` | `5` | Maximum number of web-background replicas when autoscaling is enabled. |
-| `web_background_autoscaling_cpu_enabled` | `bool` | `false` | Enable the built-in Nomad APM CPU autoscaling check for the web-background task group (avg_cpu target-value strategy). Only applies when web_background_autoscaling_enabled is true. |
-| `web_background_cpu_target_utilization` | `number` | `50` | Target CPU utilization percentage for the web-background nomad-apm avg_cpu scaling check. |
 | `db_image` | `string` | `"mongo:6.0.7"` | The MongoDB database image name and tag. BREAKING UPGRADE NOTE: persisted data volumes created on mongo:4.2 must be migrated in sequence 4.2 -> 4.4 -> 5.0 -> 6.0.7; do not skip major versions. See docs/upgrading.md for the full procedure. |
 | `db_cpu` | `number` | `1000` | CPU shares allocated to the MongoDB task. |
 | `db_memory` | `number` | `4096` | Memory (MB) allocated to the MongoDB task. |
@@ -136,7 +129,6 @@
 | `db_health_check_timeout` | `string` | `"2s"` | Timeout for Consul health checks for the MongoDB service. |
 | `db_storage_type` | `string` | `"host_volume"` | MongoDB storage type: host_volume, csi, or ephemeral. Use ephemeral to disable persistent volume wiring. |
 | `db_volume_source` | `string` | `"openstudio-mongodb"` | Nomad volume source name for MongoDB persistent storage (host_volume name or CSI volume ID). |
-| `db_csi_plugin_id` | `string` | `""` | Optional CSI plugin ID used by OpenStack helper scripts when creating the MongoDB volume. No effect unless db_storage_type = \"csi\". |
 | `redis_image` | `string` | `"redis:6.2-alpine"` | The Redis image name and tag. Intentionally diverges from the Helm chart default (redis:6.0.9) by using redis:6.2-alpine; align Redis major.minor with your target OpenStudio Server release requirements. |
 | `redis_cpu` | `number` | `250` | CPU shares allocated to the Redis task. |
 | `redis_memory` | `number` | `1024` | Memory (MB) allocated to the Redis task. |
@@ -151,7 +143,6 @@
 | `redis_memory_max` | `number` | `0` | Memory hard limit (MB) for the Redis task (Nomad memory_max). Set to 0 to disable. Recommended: set to ~1.5× redis_memory so Redis can absorb a mass-enqueue spike without being OOM-killed while staying below the Nomad hard limit. |
 | `redis_storage_type` | `string` | `"host_volume"` | Redis storage type: host_volume, csi, or ephemeral. Use ephemeral to disable persistent volume wiring. |
 | `redis_volume_source` | `string` | `"openstudio-redis"` | Nomad volume source name for Redis persistent storage (host_volume name or CSI volume ID). |
-| `redis_csi_plugin_id` | `string` | `""` | Optional CSI plugin ID used by OpenStack helper scripts when creating the Redis volume. No effect unless redis_storage_type = \"csi\". |
 | `redis_health_check_interval` | `string` | `"10s"` | Interval between Consul health checks for the Redis service. |
 | `redis_health_check_timeout` | `string` | `"2s"` | Timeout for Consul health checks for the Redis service. |
 | `nfs_shared_volume_enabled` | `bool` | `false` | When true, an NFS shared volume is declared and mounted in both web and worker task groups. Volume type is controlled by nfs_volume_type. |
@@ -285,7 +276,6 @@
 | `aws_region` | `string` | `"us-east-1"` | AWS region where the Batch compute environment is located. Only used when batch_engine = 'aws_batch'. |
 | `aws_batch_job_queue` | `string` | `""` | ARN or name of the AWS Batch job queue to which simulations are submitted. Only used when batch_engine = 'aws_batch'. |
 | `aws_batch_job_definition` | `string` | `""` | ARN or name of the AWS Batch job definition used for simulation jobs. Only used when batch_engine = 'aws_batch'. |
-| `aws_batch_vault_aws_role` | `string` | `"openstudio-aws-batch"` | Vault AWS secrets engine role name used to generate short-lived IAM credentials for the web dispatcher. Only used when batch_engine = 'aws_batch' and vault_enabled = true. |
 
 ## Job Priority
 

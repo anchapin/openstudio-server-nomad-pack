@@ -54,10 +54,8 @@ consul_address = "192.168.100.87:8500"
 # replacement and can reschedule cleanly.
 db_storage_type    = "csi"
 db_volume_source   = "openstudio-mongodb"
-db_csi_plugin_id   = "hostpath-web-plugin0"
 redis_storage_type = "csi"
 redis_volume_source = "openstudio-redis"
-redis_csi_plugin_id = "hostpath-web-plugin0"
 
 # Shared analysis workspace: use a Nomad host_volume backed by the OS-level NFS
 # mount so web, web-background, and worker allocations see the same files.
@@ -105,7 +103,6 @@ web_max_requests                 = 10500
 web_background_cpu        = 16000  # scaled: 56 workers × ~286 MHz/worker
 web_background_memory     = 16384  # scaled: 56 workers × ~293 MB/worker (16 GiB soft)
 web_background_memory_max = 32768  # 2× soft limit (32 GiB hard ceiling)
-web_background_count      = 1      # matches Helm values.yaml (1 replica)
 web_background_worker_count = 56   # increased from 42 — proportional to above CPU/memory budget
 web_background_queues = "background,analyses"  # matches Helm hardcoded QUEUES order
 # Mongoid connection pool: web — one pool per Passenger process.
@@ -363,7 +360,6 @@ restore_enabled = false
 nomad_autoscaler_enabled   = true
 autoscaler_nomad_address   = "http://127.0.0.1:4646"
 nomad_autoscaler_image     = "hashicorp/nomad-autoscaler:0.5.0"
-autoscaler_cooldown        = "2m"
 
 # Storage-aware ramp guardrails (see docs/autoscaling-storage-ramp-policy.md).
 # These values are intentionally conservative for an OpenStack environment where

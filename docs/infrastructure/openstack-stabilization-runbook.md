@@ -60,7 +60,7 @@ Use the OpenStack/Nomad storage profile:
 
 - MongoDB: `db_storage_type = "csi"`
 - Redis: `redis_storage_type = "csi"`
-- DB/Redis CSI plugin IDs: `db_csi_plugin_id` / `redis_csi_plugin_id` set to the web-role plugin (for example `hostpath-web-plugin0`)
+- DB/Redis CSI plugin IDs: set `DB_CSI_PLUGIN_ID` / `REDIS_CSI_PLUGIN_ID` (or shared `CSI_PLUGIN_ID`) to the web-role plugin ID (for example `hostpath-web-plugin0`) when running helper scripts
 - Shared analysis data: `nfs_shared_volume_enabled = true`
 - NFS volume type: `host_volume`
 - NFS volume source: `openstudio-nfs`

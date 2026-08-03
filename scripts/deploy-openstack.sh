@@ -445,17 +445,16 @@ extract_simple_var() {
   echo "${value}"
 }
 
-enforce_web_background_singleton() {
-  local web_background_count web_background_autoscaling_enabled web_background_min_replicas web_background_max_replicas
-  web_background_count="$(extract_simple_var web_background_count 1)"
-  web_background_autoscaling_enabled="$(extract_simple_var web_background_autoscaling_enabled false)"
-  web_background_min_replicas="$(extract_simple_var web_background_min_replicas 1)"
-  web_background_max_replicas="$(extract_simple_var web_background_max_replicas 1)"
+enforce_removed_var_guardrails() {
+  if grep -Eq '^[[:space:]]*web_background_(count|autoscaling_enabled|min_replicas|max_replicas|autoscaling_cpu_enabled|cpu_target_utilization)[[:space:]]*=' "${VAR_FILE}"; then
+    err "Removed web-background scaling variables detected in ${VAR_FILE}."
+    err "web-background is a fixed singleton task group; tune throughput with web_background_worker_count instead."
+    exit 1
+  fi
 
-  if [ "${web_background_count}" != "1" ] || [ "${web_background_autoscaling_enabled}" = "true" ] || \
-     [ "${web_background_min_replicas}" != "1" ] || [ "${web_background_max_replicas}" != "1" ]; then
-    err "web-background must remain a singleton allocation."
-    err "Set web_background_count=1, web_background_autoscaling_enabled=false, web_background_min_replicas=1, and web_background_max_replicas=1."
+  if grep -Eq '^[[:space:]]*autoscaler_cooldown[[:space:]]*=' "${VAR_FILE}"; then
+    err "Removed variable autoscaler_cooldown detected in ${VAR_FILE}."
+    err "Use worker_autoscaling_scale_up_cooldown and worker_autoscaling_scale_down_cooldown instead."
     exit 1
   fi
 }
@@ -694,7 +693,7 @@ deploy_pack() {
   fi
 
   info "Running storage preflight..."
-  enforce_web_background_singleton
+  enforce_removed_var_guardrails
   PREFLIGHT_ARGS=(
     --var-file "${VAR_FILE}"
     --nomad-addr "${NOMAD_API}"
@@ -711,7 +710,7 @@ deploy_pack() {
   redis_volume_source="$(extract_simple_var redis_volume_source openstudio-redis)"
   worker_count="$(extract_simple_var worker_count 1)"
   worker_max_replicas="$(extract_simple_var worker_max_replicas 10)"
-  autoscaler_cooldown="$(extract_simple_var autoscaler_cooldown 60m)"
+  worker_autoscaling_scale_up_cooldown="$(extract_simple_var worker_autoscaling_scale_up_cooldown 10m)"
 
   topology_nodes=()
   db_nodes=()
@@ -767,7 +766,7 @@ deploy_pack() {
     --var "enable_image_prepull=false"
     --var "worker_count=${worker_count}"
     --var "worker_max_replicas=${bootstrap_worker_max_replicas}"
-    --var "autoscaler_cooldown=${BOOTSTRAP_AUTOSCALER_COOLDOWN}"
+    --var "worker_autoscaling_scale_up_cooldown=${BOOTSTRAP_AUTOSCALER_COOLDOWN}"
   )
   if [ -n "${worker_excluded_node_ids_json}" ]; then
     PHASE2_ARGS+=(--var "worker_excluded_node_ids=${worker_excluded_node_ids_json}")
@@ -777,7 +776,7 @@ deploy_pack() {
   run_pack_with_guard "${PHASE2_ARGS[@]}"
   wait_for_core_services
 
-  if [ "${bootstrap_worker_max_replicas}" != "${worker_max_replicas}" ] || [ "${BOOTSTRAP_AUTOSCALER_COOLDOWN}" != "${autoscaler_cooldown}" ]; then
+  if [ "${bootstrap_worker_max_replicas}" != "${worker_max_replicas}" ] || [ "${BOOTSTRAP_AUTOSCALER_COOLDOWN}" != "${worker_autoscaling_scale_up_cooldown}" ]; then
     section "Phase 3/3 — restore full worker autoscaling bounds"
     PHASE3_ARGS=(
       --var-file "${VAR_FILE}"
@@ -785,7 +784,7 @@ deploy_pack() {
       --var "enable_image_prepull=false"
       --var "worker_count=${worker_count}"
       --var "worker_max_replicas=${worker_max_replicas}"
-      --var "autoscaler_cooldown=${autoscaler_cooldown}"
+      --var "worker_autoscaling_scale_up_cooldown=${worker_autoscaling_scale_up_cooldown}"
     )
     if [ -n "${worker_excluded_node_ids_json}" ]; then
       PHASE3_ARGS+=(--var "worker_excluded_node_ids=${worker_excluded_node_ids_json}")

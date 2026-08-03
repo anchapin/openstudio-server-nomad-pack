@@ -25,7 +25,7 @@ The scale-to-max program addressed the three main bottlenecks that prevented Ope
 | 4 | [#356](https://github.com/anchapin/openstudio-server-nomad-pack/issues/356) Worker local-scratch + staged artifact publish | [#375](https://github.com/anchapin/openstudio-server-nomad-pack/pull/375) | Open | Worker local-scratch variables + staging logic |
 | 5 | [#357](https://github.com/anchapin/openstudio-server-nomad-pack/issues/357) Swift/object-storage artifact backend | [#374](https://github.com/anchapin/openstudio-server-nomad-pack/pull/374) | Open | Optional Swift backend variables |
 | 6 | [#358](https://github.com/anchapin/openstudio-server-nomad-pack/issues/358) Tune shared filesystem mount and server profiles | [#373](https://github.com/anchapin/openstudio-server-nomad-pack/pull/373) | Open | NFS tuning guide (`docs/storage.md` additions) |
-| 7 | [#359](https://github.com/anchapin/openstudio-server-nomad-pack/issues/359) Storage-aware autoscaling ramp policy | [#372](https://github.com/anchapin/openstudio-server-nomad-pack/pull/372) | Open | Autoscaling ramp variables; `autoscaler_cooldown` default changed 60m→10m; `worker_min_replicas` default changed 2→0 |
+| 7 | [#359](https://github.com/anchapin/openstudio-server-nomad-pack/issues/359) Storage-aware autoscaling ramp policy | [#372](https://github.com/anchapin/openstudio-server-nomad-pack/pull/372) | Open | Autoscaling ramp variables; worker cooldown split into scale-up/scale-down controls; `worker_min_replicas` default changed 2→0 |
 | 8 | [#360](https://github.com/anchapin/openstudio-server-nomad-pack/issues/360) Add configurable `rserve_count` | [#366](https://github.com/anchapin/openstudio-server-nomad-pack/pull/366) | ✅ Merged | `rserve_count` variable (default: 1) |
 | 9 | [#361](https://github.com/anchapin/openstudio-server-nomad-pack/issues/361) Multi-replica-safe Rserve routing | [#371](https://github.com/anchapin/openstudio-server-nomad-pack/pull/371) | Open | Rserve routing logic for `rserve_count > 1` |
 | 10 | [#362](https://github.com/anchapin/openstudio-server-nomad-pack/issues/362) Benchmark and tune Rserve horizontal scaling | [#370](https://github.com/anchapin/openstudio-server-nomad-pack/pull/370) | Open | `docs/rserve-horizontal-scaling.md` benchmark guide |
@@ -47,7 +47,8 @@ The scale-to-max program addressed the three main bottlenecks that prevented Ope
 | `traefik_write_timeout` | (tunable) | Traefik client write timeout | #368 |
 | `traefik_max_request_body_size` | (tunable) | Max upload body size for Traefik middleware | #368 |
 | `worker_min_replicas` | `0` (was `2`) | Minimum worker count; `0` enables scale-to-zero | #372 |
-| `autoscaler_cooldown` | `10m` (was `60m`) | Idle reclaim cooldown after queue drains | #372 |
+| `worker_autoscaling_scale_up_cooldown` | `10m` | Worker scale-up cooldown for storage-safe ramping | #372 |
+| `worker_autoscaling_scale_down_cooldown` | `20m` | Worker scale-down cooldown to reduce oscillation | #372 |
 | `redis_config_tcp_keepalive` | `60` | Prevent NAT/firewall from dropping idle Resque connections | #366/#367 |
 | `redis_memory_max` | `0` | Allow Redis to burst above soft limit during mass-enqueue | #367 |
 | `web_mongoid_pool_size` | `10` | MongoDB connection pool for web task | #367 |
@@ -85,7 +86,7 @@ Apply changes in this order to minimize risk and validate each layer before proc
 
 1. **Storage provisioning** — Run `scripts/preflight-storage.sh` to provision volumes and validate IOPS. Confirm with the storage benchmark methodology (PR #378).
 2. **NFS tuning** — Apply mount options and server profile tuning from the NFS tuning guide (PR #373) before any load test.
-3. **Autoscaling ramp policy** — Set `worker_min_replicas = 0`, `autoscaler_cooldown = "10m"`, and storage-aware scaling thresholds (PR #372) in your var-file.
+3. **Autoscaling ramp policy** — Set `worker_min_replicas = 0`, `worker_autoscaling_scale_up_cooldown = "10m"`, and storage-aware scaling thresholds (PR #372) in your var-file.
 4. **Worker local-scratch** — Enable local-scratch staging variables (PR #375) and validate artifact publish behavior with a test analysis before full ramp.
 5. **Swift artifact backend** — If Swift is available, enable the Swift backend variables (PR #374) to eliminate shared-storage write pressure entirely.
 6. **Traefik decision** — Follow `docs/traefik-openstack-decision.md`: set `deploy_traefik = false` for production and configure OpenStack Octavia LBaaS. If using Traefik, set the tuning variables from PR #368.

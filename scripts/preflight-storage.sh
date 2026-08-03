@@ -68,8 +68,8 @@ db_storage_type="$(_extract_var db_storage_type host_volume)"
 db_volume_source="$(_extract_var db_volume_source openstudio-mongodb)"
 redis_storage_type="$(_extract_var redis_storage_type host_volume)"
 redis_volume_source="$(_extract_var redis_volume_source openstudio-redis)"
-db_csi_plugin_id="$(_extract_var db_csi_plugin_id "${DB_CSI_PLUGIN_ID:-${CSI_PLUGIN_ID}}")"
-redis_csi_plugin_id="$(_extract_var redis_csi_plugin_id "${REDIS_CSI_PLUGIN_ID:-${CSI_PLUGIN_ID}}")"
+db_csi_plugin_id="${DB_CSI_PLUGIN_ID:-${CSI_PLUGIN_ID}}"
+redis_csi_plugin_id="${REDIS_CSI_PLUGIN_ID:-${CSI_PLUGIN_ID}}"
 nfs_shared_volume_enabled="$(_extract_var nfs_shared_volume_enabled false)"
 nfs_volume_type="$(_extract_var nfs_volume_type host)"
 nfs_volume_source="$(_extract_var nfs_volume_source openstudio-nfs)"
@@ -170,7 +170,7 @@ PY
     else
       if [ "${CREATE_MISSING_CSI}" = "true" ]; then
         if [ -z "${expected_plugin}" ]; then
-          echo "✗ Missing CSI volume '${vol}' and no plugin ID configured. Set db_csi_plugin_id/redis_csi_plugin_id or CSI_PLUGIN_ID." >&2
+          echo "✗ Missing CSI volume '${vol}' and no plugin ID configured. Set DB_CSI_PLUGIN_ID/REDIS_CSI_PLUGIN_ID or CSI_PLUGIN_ID." >&2
           exit 1
         fi
         tmp_spec="$(mktemp)"

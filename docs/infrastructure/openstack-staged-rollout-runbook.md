@@ -270,12 +270,10 @@ compute nodes). They are committed in `examples/openstack-production.hcl`.
 | `worker_autoscaling_scale_up_cooldown` | `2m` | Eliminates long cooldown plateaus (e.g., stuck at 14 workers) |
 | `worker_autoscaling_scale_down_cooldown` | `10m` | Prevents rapid oscillation once bursts begin draining |
 | `worker_kill_timeout` | `5400` s (90 min) | Covers longest observed OpenStack analysis runtime |
-| `autoscaler_cooldown` | `30m` | Legacy global fallback for non-worker scaling checks |
 | `db_cpu` | `4000` MHz | Keeps MongoDB stable under large queue bursts |
 | `db_memory` | `22528` MB | Holds larger working set in memory on OpenStack nodes |
 | `web_cpu` | `6000` MHz | Supports high-concurrency request routing and uploads |
 | `web_memory` | `51200` MB | Supports Passenger workers plus large upload buffers |
-| `web_background_count` | `1` | Keep singleton to avoid race conditions in app background lifecycle logic |
 | `web_background_worker_count` | `56` | Per-replica Resque worker count used in production tuning |
 
 ### Rollback Guidance
