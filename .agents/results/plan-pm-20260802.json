@@ -1,0 +1,171 @@
+{
+  "plan_id": "plan-pm-20260802",
+  "session": "pm",
+  "charter": {
+    "clarification_level": "LOW",
+    "task_domain": "planning",
+    "must_not_do": [
+      "modify .agents/ skill files",
+      "push directly to main or develop (branch-per-PR, repo convention)",
+      "re-enable the fmt gate before templates are fmt-clean (would fail CI)",
+      "remove dead variables while scripts/examples still pass them (nomad-pack hard-errors on unknown --var/var-file keys)"
+    ],
+    "success_criteria": [
+      "PR-A (fix/audit-bugs) and PR-B (ci/fmt-gate-hardening) created targeting develop",
+      "nomad-pack render . succeeds on both branches",
+      "nomad-pack fmt --check templates/ exits 0 on PR-B",
+      "bash -n passes on all touched scripts",
+      "scripts/generate-vars-doc.sh output matches docs/variables.md",
+      "packs/openstudio-server/ registry sync intact (3-way CI check)",
+      "scripts/test_nomad_pack_integration.sh green (render + plan across key scenarios)"
+    ],
+    "assumptions": [
+      "Two PRs: fix/audit-bugs (bug + docs fixes) and ci/fmt-gate-hardening (fmt cleanup + CI gate)",
+      "Pin nomad-pack v0.4.2 (locally validated version) in setup-nomad-pack version input",
+      "AUDIT-REPORT.md remains untracked (deliverable, not part of either PR)",
+      "Merge order: PR-B first (or rebase) so template edits land on formatted files with a working gate",
+      "integration-test.yml:48 flag-order issue requires verification under pinned CLI before changing"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "PR-A1",
+      "agent": "backend-engineer",
+      "pr": "fix/audit-bugs",
+      "title": "Fix queue-sweeper REDIS_URL (undefined redis_port)",
+      "acceptance_criteria": [
+        "queue-sweeper.nomad.tpl uses web_redis_url (matching worker.nomad.tpl:237 / nomad-batch-worker.nomad.tpl:70) instead of undefined redis_port",
+        "nomad-pack render . --var enable_queue_sweeper=true . produces REDIS_URL=redis://queue:6379 (default web_redis_url)",
+        "no other reference to redis_port remains"
+      ],
+      "priority": "P0",
+      "dependencies": []
+    },
+    {
+      "id": "PR-A2",
+      "agent": "backend-engineer",
+      "pr": "fix/audit-bugs",
+      "title": "Wire Vault role vars into the 6 vault_enabled blocks",
+      "acceptance_criteria": [
+        "All 6 vault {} blocks (web.nomad.tpl:134-137, web.nomad.tpl:~497-500, worker.nomad.tpl:183-186, db.nomad.tpl:48-58, redis.nomad.tpl:~51, rserve.nomad.tpl:~69) render role = <vault_default_role | per-service override> when set",
+        "Per-service overrides: vault_db_role, vault_redis_role, vault_rserve_role take precedence over vault_default_role",
+        "With all role vars at default (\"\"), rendered output is unchanged from today (no role line emitted, or empty-string role that is inert)",
+        "nomad-pack render . --var vault_enabled=true --var vault_default_role=openstudio-web . shows role in all 6 blocks",
+        "docs/infrastructure/vault-policies.md role examples stay consistent with rendered behavior"
+      ],
+      "priority": "P0",
+      "dependencies": []
+    },
+    {
+      "id": "PR-A3",
+      "agent": "backend-engineer",
+      "pr": "fix/audit-bugs",
+      "title": "Fix autoscaler_cooldown dead-var: wire bootstrap cooldown into worker scaling policy",
+      "acceptance_criteria": [
+        "deploy-openstack.sh bootstrap ramp (lines ~714, 770, 780-788) passes autoscaler_cooldown that actually affects the worker scaling block, OR script updated to pass worker_autoscaling_scale_*_cooldown vars",
+        "Rendering with autoscaler_cooldown=60m (or equivalent) changes the scaling block cooldown/cooldown_on_scale_up values from the 10m/20m defaults",
+        "Default behavior (no overrides) unchanged: scale-down 20m, scale-up 10m",
+        "bash -n scripts/deploy-openstack.sh passes"
+      ],
+      "priority": "P1",
+      "dependencies": []
+    },
+    {
+      "id": "PR-A4",
+      "agent": "backend-engineer",
+      "pr": "fix/audit-bugs",
+      "title": "Add deployment_marker variable (replace hardcoded openstudio-aurora-179d)",
+      "acceptance_criteria": [
+        "New deployment_marker variable in variables.hcl (default \"openstudio-server\" or similar neutral value)",
+        "web.nomad.tpl:8, db.nomad.tpl:10, redis.nomad.tpl:10, rserve.nomad.tpl:18 render deployment_marker from the variable",
+        "scripts/generate-vars-doc.sh regenerates docs/variables.md with the new variable",
+        "packs/openstudio-server/variables.hcl synced",
+        "nomad-pack render . succeeds and shows the marker"
+      ],
+      "priority": "P2",
+      "dependencies": []
+    },
+    {
+      "id": "PR-A5",
+      "agent": "docs-curator",
+      "pr": "fix/audit-bugs",
+      "title": "Fix stale docs: AGENTS.md tables/paths/commands, quickstart, README, nomad-pack version claims",
+      "acceptance_criteria": [
+        "AGENTS.md template table (lines ~91-102) lists all templates including traefik, prometheus, queue-sweeper, nomad-batch-worker",
+        "AGENTS.md docs table (lines ~283-295) uses correct paths (docs/modelers/, docs/infrastructure/)",
+        "AGENTS.md/README.md/docs/modelers/quickstart.md flag-order examples use flags before positional (README.md:62, quickstart.md:54, AGENTS.md:26-28)",
+        "nomad-pack minimum version bumped from 0.1.2 to 0.4.x in getting-started-single-node.md (lines 47, 108, 133) and any other references",
+        "docs/variables.md NOT hand-edited (generated file)"
+      ],
+      "priority": "P1",
+      "dependencies": []
+    },
+    {
+      "id": "PR-B1",
+      "agent": "cicd-pipeline-engineer",
+      "pr": "ci/fmt-gate-hardening",
+      "title": "Convert [[- /* trim-comments to plain [[/* */]] comments in all templates",
+      "acceptance_criteria": [
+        "openstudio-server.nomad.tpl lines 12/15/19/22 and line-1 headers in worker.nomad.tpl, rserve.nomad.tpl, nomad-batch-worker.nomad.tpl (and any other [[- /* or */ -]] occurrences) converted to [[/* */]]",
+        "nomad-pack render . succeeds BEFORE fmt -write (proves the conversion is render-safe)",
+        "grep for '[[- /*' and '*/ -]]' returns nothing"
+      ],
+      "priority": "P0",
+      "dependencies": []
+    },
+    {
+      "id": "PR-B2",
+      "agent": "cicd-pipeline-engineer",
+      "pr": "ci/fmt-gate-hardening",
+      "title": "Run nomad-pack fmt -write templates/ and verify render still works",
+      "acceptance_criteria": [
+        "nomad-pack fmt -write templates/ exits 0",
+        "nomad-pack fmt --check templates/ exits 0",
+        "nomad-pack render . still succeeds AFTER fmt (lexer regression check — this was the original corruption vector)",
+        "nomad-pack render --var enable_batch_verification=true . succeeds",
+        "packs/openstudio-server/templates/ synced from root templates/"
+      ],
+      "priority": "P0",
+      "dependencies": ["PR-B1"]
+    },
+    {
+      "id": "PR-B3",
+      "agent": "cicd-pipeline-engineer",
+      "pr": "ci/fmt-gate-hardening",
+      "title": "Re-scope fmt gate in pack-validation.yml from no-op to effective check",
+      "acceptance_criteria": [
+        "pack-validation.yml:24 nomad-pack fmt -check -recursive . replaced with nomad-pack fmt --check templates/ (exit 1 on unformatted, exit 0 when clean)",
+        "Optionally add a render-after-fmt step in the same workflow to catch future lexer regressions",
+        "No other CI workflow change introduced"
+      ],
+      "priority": "P0",
+      "dependencies": ["PR-B2"]
+    },
+    {
+      "id": "PR-B4",
+      "agent": "cicd-pipeline-engineer",
+      "pr": "ci/fmt-gate-hardening",
+      "title": "Pin nomad-pack CLI version in setup-nomad-pack action (both workflows)",
+      "acceptance_criteria": [
+        "pack-validation.yml and integration-test.yml setup-nomad-pack steps gain version: 0.4.2 (or current validated version)",
+        "Nomad version pin remains unchanged",
+        "Workflows remain valid YAML"
+      ],
+      "priority": "P1",
+      "dependencies": []
+    },
+    {
+      "id": "PR-B5",
+      "agent": "cicd-pipeline-engineer",
+      "pr": "ci/fmt-gate-hardening",
+      "title": "Verify and fix flag-order in integration-test.yml:48 (render . --var-file ...)",
+      "acceptance_criteria": [
+        "Test locally: does nomad-pack v0.4.2 accept positional-before-flag (render . --var-file X)? If it errors, reorder to nomad-pack render --var-file X .",
+        "All other nomad-pack invocations in CI workflows use flags-before-positional",
+        "Scripts already flags-first (deploy-openstack.sh:503 etc.) remain untouched"
+      ],
+      "priority": "P1",
+      "dependencies": []
+    }
+  ]
+}

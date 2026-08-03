@@ -49,6 +49,11 @@ job "[[ var "job_name" . ]]-redis" {
 
       [[ if var "vault_enabled" . ]]
       vault {
+        [[ if var "vault_redis_role" . ]]
+        role = "[[ var "vault_redis_role" . ]]"
+        [[ else if var "vault_default_role" . ]]
+        role = "[[ var "vault_default_role" . ]]"
+        [[ end ]]
         [[ if var "vault_policies" . ]]
         policies = [[ var "vault_policies" . | toJson ]]
         [[ end ]]

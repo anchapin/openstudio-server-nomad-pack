@@ -46,6 +46,11 @@ job "[[ var "job_name" . ]]-db" {
 
       [[ if var "vault_enabled" . ]]
       vault {
+        [[ if var "vault_db_role" . ]]
+        role = "[[ var "vault_db_role" . ]]"
+        [[ else if var "vault_default_role" . ]]
+        role = "[[ var "vault_default_role" . ]]"
+        [[ end ]]
         [[ if var "vault_policies" . ]]
         policies = [[ var "vault_policies" . | toJson ]]
         [[ end ]]
