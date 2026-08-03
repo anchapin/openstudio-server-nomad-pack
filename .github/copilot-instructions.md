@@ -102,6 +102,8 @@ worker ──► mongodb
 | `traefik.nomad.tpl` | Traefik ingress job | `deploy_traefik = true` |
 | `prometheus.nomad.tpl` | `<job_name>-prometheus` (Prometheus + redis_exporter sidecar) | `prometheus_enabled = false` (default) |
 | `queue-sweeper.nomad.tpl` | `<job_name>-queue-sweeper` (periodic batch, clears stale Redis locks) | `enable_queue_sweeper = false` (default) |
+| `stall-watchdog.nomad.tpl` | `<job_name>-stall-watchdog` (periodic batch, restarts stalled worker allocs) | `enable_stall_watchdog = true` |
+| `nomad-batch-worker.nomad.tpl` | `<job_name>-nomad-batch-worker` (Nomad-native batch execution mode) | `batch_engine == "nomad_batch"` |
 
 ### Helpers (`templates/_helpers.tpl`)
 
@@ -284,6 +286,48 @@ For the Prometheus queue-depth strategy, Prometheus must be running and scraping
 ### Queue-sweeper (`queue-sweeper.nomad.tpl`)
 
 `enable_queue_sweeper = true` deploys a periodic batch job (`<job_name>-queue-sweeper`) that runs on the schedule set by `queue_sweeper_cron` (default: every 2 minutes). It scans Redis for `resque:analysis:*:queuing` keys that have no TTL and have been idle longer than `queue_sweeper_max_lock_age_seconds` (default `120`), then deletes them. This automates the same lock-clearing that `scripts/clear-stale-queuing-locks.sh` does manually. The task uses `readonly_rootfs = false` (required for redis-cli temp files) and resolves Redis via Consul service DNS.
+
+### Stall-watchdog (`stall-watchdog.nomad.tpl`)
+
+`enable_stall_watchdog = true` deploys a periodic batch job (`<job_name>-stall-watchdog`) that detects data points frozen in `started` status with no `updated_at` progress for longer than `stall_watchdog_max_stall_seconds` (default `3600`). This covers the failure mode where EnergyPlus hangs silently inside a worker container without crashing Resque — leaving all worker slots occupied with zero throughput.
+
+**This is distinct from the queue-sweeper:**
+
+| Component | Failure mode | What it clears |
+|---|---|---|
+| `queue-sweeper` | Resque `resque:analysis:*:queuing` Redis lock with no TTL | Redis locks that block job dispatch |
+| `stall-watchdog` | EnergyPlus hangs silently inside worker; DP stuck in `started` | Running worker allocations (Nomad reschedules fresh) |
+
+Key variables:
+- `stall_watchdog_cron` (default: every 15 minutes)
+- `stall_watchdog_max_stall_seconds` (default `3600`)
+- `stall_watchdog_restart_allocs` — set `true` to auto-stop stalled worker allocs; `false` (default) for alert-only
+- `stall_watchdog_nomad_address` — Nomad API address reachable from inside the container (default `http://localhost:4646` with `network_mode = host`; override in NAT/multi-region environments)
+- `stall_watchdog_worker_job` — override if your worker job name differs from `<job_name>-worker`
+- `stall_watchdog_image` — must include Python 3 stdlib (`python:3.12-alpine` is the default)
+
+Exit codes: `0` (no stalled DPs), `1` (error), `2` (stalled DPs found). Use exit code `2` as a PagerDuty/alert gate when `restart_allocs = false`.
+
+The watchdog samples up to 20 DP UUIDs from the Resque `/working` page, checks `updated_at` via the web API, and (if `restart_allocs = true`) calls `POST /v1/allocation/<id>/stop` on every running worker alloc. Nomad reschedules fresh worker allocations automatically.
+
+### Compute backend (`batch_engine`)
+
+`batch_engine` controls which execution backend runs simulations. Default is `"internal"`.
+
+| Value | Behavior |
+|---|---|
+| `"internal"` | Workers run as long-lived Nomad service jobs on this cluster (standard mode) |
+| `"nomad_batch"` | Web dispatcher submits one parameterized Nomad batch allocation per simulation run via `POST /v1/job/<name>/dispatch`. The `worker` and `rserve` service jobs are **omitted** (scale-to-zero). |
+| `"aws_batch"` | Routes simulation submissions to an external AWS Batch queue. Worker and rserve service jobs are omitted. |
+
+**`nomad_batch` mode:** `nomad-batch-worker.nomad.tpl` renders a parameterized job (`type = "batch"` + `parameterized` stanza). The web dispatcher POSTs a JSON payload `{"analysis_id": "<uuid>", "datapoint_id": "<uuid>"}` and the values become `NOMAD_META_analysis_id` / `NOMAD_META_datapoint_id` env vars inside the task. The dispatcher reads `NOMAD_ADDR` + `NOMAD_TOKEN` from its Workload Identity. Key variables:
+- `nomad_batch_job_name` — the dispatched job name the web dispatcher calls
+- `nomad_batch_datacenter` / `nomad_batch_namespace` — target a separate datacenter or namespace
+- `nomad_batch_worker_image`, `nomad_batch_cpu`, `nomad_batch_memory`
+- `nomad_batch_kill_timeout` — must be ≥ longest expected simulation run time (same constraint as `worker_kill_timeout`)
+- `nomad_batch_constraints` — placement constraints list (same object shape as other `*_constraints` variables)
+
+When `batch_engine != "internal"`, do not set `worker_autoscaling_enabled = true` — there is no long-lived worker job to autoscale.
 
 ### Scheduler placement helpers
 
