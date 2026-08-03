@@ -69,8 +69,8 @@ job "[[ var "job_name" . ]]-db" {
       [[ end ]]
 
       config {
-        image           = "[[ var "db_image" . ]]"
-        ports           = ["db"]
+        image = "[[ var "db_image" . ]]"
+        ports = ["db"]
         ulimit {
           nofile = "[[ var "db_docker_ulimit_nofile" . ]]"
         }
@@ -163,9 +163,9 @@ EOT
       }
 
       config {
-        image       = "[[ var "vector_image" . ]]"
-        force_pull  = false
-        args  = ["--config", "local/vector.toml"]
+        image      = "[[ var "vector_image" . ]]"
+        force_pull = false
+        args       = ["--config", "local/vector.toml"]
       }
 
       template {

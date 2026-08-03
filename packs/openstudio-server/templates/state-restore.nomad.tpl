@@ -18,7 +18,7 @@ job "[[ var "job_name" . ]]-state-restore" {
       access_mode     = "multi-node-multi-writer"
       attachment_mode = "file-system"
       [[ else ]]
-      type      = "host"
+      type = "host"
       [[ end ]]
       source    = "[[ var "backup_volume_source" . ]]"
       read_only = true

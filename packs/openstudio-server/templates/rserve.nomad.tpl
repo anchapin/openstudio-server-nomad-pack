@@ -1,10 +1,10 @@
-[[- /*
+[[/*
   rserve.nomad.tpl
   Only rendered when batch_engine = "internal" (the default).
   When batch_engine is set to "nomad_batch" or "aws_batch", Rserve is not
   needed for remote worker dispatch; the external runner environment provides
   its own R execution context.
-*/ -]]
+*/]]
 [[ if eq (var "batch_engine" .) "internal" ]]
 job "[[ var "job_name" . ]]-rserve" {
   region      = "[[ var "region" . ]]"
@@ -82,8 +82,8 @@ job "[[ var "job_name" . ]]-rserve" {
       [[ end ]]
 
       config {
-        image           = "[[ var "rserve_image" . ]]"
-        ports           = ["rserve"]
+        image = "[[ var "rserve_image" . ]]"
+        ports = ["rserve"]
         ulimit {
           nofile = "[[ var "docker_ulimit_nofile" . ]]"
         }
@@ -106,8 +106,8 @@ job "[[ var "job_name" . ]]-rserve" {
       }
 
       service {
-        name = "openstudio-rserve"
-        port = "rserve"
+        name     = "openstudio-rserve"
+        port     = "rserve"
         provider = "consul"
         tags = [
           "ingress.domain=[[ var "ingress_domain" . ]]"
@@ -163,9 +163,9 @@ job "[[ var "job_name" . ]]-rserve" {
       }
 
       config {
-        image       = "[[ var "vector_image" . ]]"
-        force_pull  = false
-        args  = ["--config", "local/vector.toml"]
+        image      = "[[ var "vector_image" . ]]"
+        force_pull = false
+        args       = ["--config", "local/vector.toml"]
       }
 
       template {
