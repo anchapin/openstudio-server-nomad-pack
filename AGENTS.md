@@ -347,7 +347,7 @@ scripts/bump_metadata_version.sh metadata.hcl 0.3.0
 
 ### ACL policies
 
-`policies/` contains four HCL files:
+`policies/` contains five HCL files:
 
 | File | Role | Purpose |
 |---|---|---|
@@ -355,6 +355,7 @@ scripts/bump_metadata_version.sh metadata.hcl 0.3.0
 | `readonly.hcl` | Read-only | Log visibility and status — monitoring dashboards |
 | `cicd.hcl` | CI/CD service token | Minimal: render, plan, run, stop — automated pipelines |
 | `teardown.hcl` | Teardown | Stop lifecycle access for cleanup without deploy or exec |
+| `batch-dispatcher.hcl` | Batch dispatcher | Dispatch parameterized batch jobs when `batch_engine = "nomad_batch"` |
 
 All policies default to the `default` namespace (matching the pack default `nomad_namespace`). Policy HCL must pass `nomad fmt -check policies/` — enforced by `acl-policy-validation.yml`.
 

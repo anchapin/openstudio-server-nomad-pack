@@ -208,7 +208,7 @@ When bumping the OpenStudio Server version, update all four image variables toge
 | `readonly.hcl` | Log visibility and status |
 | `cicd.hcl` | Minimal: render, plan, run, stop |
 | `teardown.hcl` | Stop lifecycle only |
-
+| `batch-dispatcher.hcl` | Dispatch parameterized batch jobs (`batch_engine = "nomad_batch"`) |
 ### Example var-files (`examples/`)
 
 | File | Purpose |

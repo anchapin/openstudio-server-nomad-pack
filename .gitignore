@@ -13,3 +13,8 @@
 
 # Session-specific agent output artifacts
 .agents/results/*.json
+
+# Transient session/audit notes — committed copies are removed; prevent recurrence
+NEXT_SESSION.md
+AUDIT-REPORT.md
+*_PRD.md
