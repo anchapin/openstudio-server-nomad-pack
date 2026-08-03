@@ -3,7 +3,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-VAR_FILE="${REPO_ROOT}/examples/advanced/openstack.hcl"
+DEFAULT_VAR_FILE="${REPO_ROOT}/examples/advanced/openstack.hcl"
+VAR_FILES=("${DEFAULT_VAR_FILE}")
+VAR_FILES_SET=false
 NOMAD_ADDR="${NOMAD_ADDR:-http://127.0.0.1:4646}"
 NOMAD_NAMESPACE="${NOMAD_NAMESPACE:-default}"
 CREATE_MISSING_CSI=false
@@ -18,7 +20,11 @@ REDIS_CSI_CAPACITY_MAX="${REDIS_CSI_CAPACITY_MAX:-5GiB}"
 while [ $# -gt 0 ]; do
   case "$1" in
     --var-file)
-      VAR_FILE="$2"
+      if [ "${VAR_FILES_SET}" != "true" ]; then
+        VAR_FILES=()
+        VAR_FILES_SET=true
+      fi
+      VAR_FILES+=("$2")
       shift 2
       ;;
     --nomad-addr)
@@ -39,31 +45,39 @@ while [ $# -gt 0 ]; do
       ;;
     *)
       echo "Unknown arg: $1" >&2
-      echo "Usage: $0 [--var-file <path>] [--nomad-addr <url>] [--namespace <ns>] [--create-missing-csi] [--csi-plugin-id <id>]" >&2
+      echo "Usage: $0 [--var-file <path> ...] [--nomad-addr <url>] [--namespace <ns>] [--create-missing-csi] [--csi-plugin-id <id>]" >&2
       exit 2
       ;;
   esac
 done
 
-if [ ! -f "${VAR_FILE}" ]; then
-  echo "✗ var-file not found: ${VAR_FILE}" >&2
-  exit 1
-fi
+for var_file in "${VAR_FILES[@]}"; do
+  if [ ! -f "${var_file}" ]; then
+    echo "✗ var-file not found: ${var_file}" >&2
+    exit 1
+  fi
+done
 
 _extract_var() {
   local key="$1"
   local default="${2:-}"
-  local line value
-  line="$(grep -E "^[[:space:]]*${key}[[:space:]]*=" "${VAR_FILE}" | tail -n 1 || true)"
-  if [ -z "${line}" ]; then
+  local line value last_value=""
+  for var_file in "${VAR_FILES[@]}"; do
+    line="$(grep -E "^[[:space:]]*${key}[[:space:]]*=" "${var_file}" | tail -n 1 || true)"
+    if [ -z "${line}" ]; then
+      continue
+    fi
+    value="${line#*=}"
+    value="$(echo "${value}" | sed -E 's/[[:space:]]*#.*$//' | xargs)"
+    value="${value%\"}"
+    value="${value#\"}"
+    last_value="${value}"
+  done
+  if [ -z "${last_value}" ]; then
     echo "${default}"
     return
   fi
-  value="${line#*=}"
-  value="$(echo "${value}" | sed -E 's/[[:space:]]*#.*$//' | xargs)"
-  value="${value%\"}"
-  value="${value#\"}"
-  echo "${value}"
+  echo "${last_value}"
 }
 
 db_storage_type="$(_extract_var db_storage_type host_volume)"
@@ -79,7 +93,10 @@ nfs_volume_source="$(_extract_var nfs_volume_source openstudio-nfs)"
 echo "==> Storage preflight"
 echo "  nomad_addr=${NOMAD_ADDR}"
 echo "  namespace=${NOMAD_NAMESPACE}"
-echo "  var_file=${VAR_FILE}"
+echo "  var_files:"
+for var_file in "${VAR_FILES[@]}"; do
+  echo "    - ${var_file}"
+done
 
 curl -sf "${NOMAD_ADDR}/v1/status/leader" >/dev/null
 

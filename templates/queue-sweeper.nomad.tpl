@@ -109,9 +109,12 @@ replayed=0
 replay_skipped=0
 
 failed_len=$(redis_cmd LLEN resque:failed 2>/dev/null | tr -d '[:space:]')
-echo "queue_sweeper_failed_queue_check len=${failed_len:-0}"
+if [ -z "$failed_len" ]; then
+  failed_len=0
+fi
+echo "queue_sweeper_failed_queue_check len=$failed_len"
 
-if echo "${failed_len:-0}" | grep -qE '^[0-9]+$' && [ "${failed_len:-0}" -gt 0 ]; then
+if echo "$failed_len" | grep -qE '^[0-9]+$' && [ "$failed_len" -gt 0 ]; then
   # Read all entries at once to avoid index-shift problems during removal.
   # redis-cli outputs one list element per line.
   all_failed=$(redis_cmd LRANGE resque:failed 0 -1 2>/dev/null)

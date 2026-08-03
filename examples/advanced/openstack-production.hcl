@@ -128,15 +128,19 @@ nomad_autoscaler_enabled = true
 # Default: autoscaler_nomad_address      = "http://nomad.service.consul:4646"
 # Default: autoscaler_prometheus_address = "http://openstudio-prometheus.service.consul:9090"
 
-# Pin Prometheus to "system" class nodes — these handle infrastructure workloads
-# (db, redis, monitoring) and are distinct from "compute" worker nodes.
-# Ensure your Nomad clients have node_class = "system" set in their client.hcl,
-# or remove this constraint to allow Prometheus to schedule anywhere.
+# Place Prometheus on web-role infrastructure nodes (same placement domain as
+# db/redis in this OpenStack profile). This cluster uses Nomad node metadata
+# (meta.node_role), not node_class labels, for role targeting.
 prometheus_constraints = [
   {
-    attribute = "$${attr.nomad.node.class}"
+    attribute = "$${meta.node_role}"
     operator  = "="
-    value     = "system"
+    value     = "web"
+  },
+  {
+    attribute = "$${attr.driver.docker}"
+    operator  = "="
+    value     = "1"
   }
 ]
 

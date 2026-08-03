@@ -38,6 +38,8 @@ ingress_domain = "REPLACE_WITH_YOUR_INGRESS_IP_OR_HOSTNAME"
 #   autoscaler_prometheus_address = "http://openstudio-prometheus.service.consul:9090"
 #
 # Override below ONLY if Consul DNS is not available on your cluster.
+# If autoscaler logs show 'lookup nomad.service.consul: i/o timeout',
+# uncomment autoscaler_nomad_address and point it at your Nomad API endpoint.
 # Find the Nomad server IP with: nomad server members
 # Find the Prometheus IP with: consul catalog nodes -service=openstudio-prometheus
 #

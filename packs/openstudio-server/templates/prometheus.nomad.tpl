@@ -25,7 +25,7 @@ job "[[ var "job_name" . ]]-prometheus" {
 
       config {
         image        = "[[ var "redis_exporter_image" . ]]"
-        force_pull   = false
+        force_pull   = true
         network_mode = "host"
         args         = ["--check-keys=resque:queue:simulations,resque:queue:requeued,resque:failed"]
       }
@@ -46,7 +46,7 @@ EOT
       service {
         name     = "openstudio-redis-exporter"
         port     = "redis_exporter"
-        provider = "nomad"
+        provider = "consul"
         check {
           name     = "openstudio-redis-exporter-tcp"
           type     = "tcp"
@@ -66,7 +66,7 @@ EOT
 
       config {
         image        = "[[ var "prometheus_image" . ]]"
-        force_pull   = false
+        force_pull   = true
         network_mode = "host"
         args = [
           "--config.file=/local/prometheus.yml",
@@ -133,7 +133,7 @@ EOH
       service {
         name     = "openstudio-prometheus"
         port     = "http"
-        provider = "nomad"
+        provider = "consul"
         check {
           name     = "openstudio-prometheus-tcp"
           type     = "tcp"

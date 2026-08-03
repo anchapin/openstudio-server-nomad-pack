@@ -36,6 +36,7 @@
 #   PULP_REGISTRY_HOST  Registry hostname        (default: pulp-dev.hpc.nlr.gov)
 #   PULP_REGISTRY_IP    Registry IP              (default: 10.60.127.127)
 #   BOOT_TIMEOUT        Seconds to wait for SSH readiness after boot (default: 300)
+#   IP_LOOKUP_TIMEOUT   Seconds to wait for OpenStack to report node IP (default: 180)
 #
 # Capacity reference (as of 2025):
 #   Flavor azimuth.compute1-179d-250disk: 62 vCPU, 80 GB RAM, 250 GB disk
@@ -59,6 +60,7 @@ CONSUL_SERVER_IP="${CONSUL_SERVER_IP:-192.168.100.87}"
 PULP_REGISTRY_HOST="${PULP_REGISTRY_HOST:-pulp-dev.hpc.nlr.gov}"
 PULP_REGISTRY_IP="${PULP_REGISTRY_IP:-10.60.127.127}"
 BOOT_TIMEOUT="${BOOT_TIMEOUT:-300}"
+IP_LOOKUP_TIMEOUT="${IP_LOOKUP_TIMEOUT:-180}"
 
 COUNT=1
 START_INDEX=""
@@ -119,6 +121,87 @@ wait_for_ssh() {
     sleep 10
   done
   warn "SSH timeout on ${name} (${ip}) — node may still be booting; bootstrap it manually later"
+  return 1
+}
+
+extract_server_ip() {
+  local server_json="$1"
+  SERVER_JSON="${server_json}" python3 - <<'PY'
+import json, os, re, ipaddress
+
+raw = os.environ.get("SERVER_JSON", "")
+try:
+    s = json.loads(raw)
+except Exception:
+    raise SystemExit(1)
+
+addresses = s.get("addresses")
+candidates = []
+
+if isinstance(addresses, dict):
+    for _, entries in addresses.items():
+        if isinstance(entries, list):
+            for entry in entries:
+                if isinstance(entry, str):
+                    candidates.append(entry)
+                elif isinstance(entry, dict):
+                    ip = entry.get("addr")
+                    if ip:
+                        candidates.append(ip)
+        elif isinstance(entries, str):
+            candidates.append(entries)
+elif isinstance(addresses, str):
+    candidates.append(addresses)
+
+ips = []
+for item in candidates:
+    for token in re.findall(r'(?:\d{1,3}\.){3}\d{1,3}', item):
+        try:
+            ipaddress.ip_address(token)
+            ips.append(token)
+        except ValueError:
+            pass
+
+preferred = [ip for ip in ips if ip.startswith("192.168.")]
+if preferred:
+    print(preferred[0])
+elif ips:
+    print(ips[0])
+PY
+}
+
+get_server_ip_with_retry() {
+  local name="$1"
+  local deadline server_json status ip
+  deadline=$(( $(date +%s) + IP_LOOKUP_TIMEOUT ))
+
+  while (( $(date +%s) < deadline )); do
+    if ! server_json="$(openstack server show "${name}" -f json 2>/dev/null)"; then
+      sleep 3
+      continue
+    fi
+
+    status="$(SERVER_JSON="${server_json}" python3 - <<'PY'
+import json, os
+try:
+    print((json.loads(os.environ["SERVER_JSON"]).get("status") or "").strip().upper())
+except Exception:
+    print("")
+PY
+)"
+    ip="$(extract_server_ip "${server_json}" || true)"
+    if [[ -n "${ip}" ]]; then
+      echo "${ip}"
+      return 0
+    fi
+    if [[ "${status}" == "ERROR" ]]; then
+      warn "OpenStack reports ${name} in ERROR state before an IP was assigned."
+      return 1
+    fi
+    sleep 5
+  done
+
+  warn "Timed out waiting for IP on ${name} after ${IP_LOOKUP_TIMEOUT}s."
   return 1
 }
 
@@ -219,19 +302,8 @@ for (( i=0; i<COUNT; i++ )); do
     --wait \
     "${name}"
 
-  # Retrieve the assigned IP
-  local_ip=$(openstack server show "${name}" -f json \
-    | python3 -c "
-import sys,json
-s=json.load(sys.stdin)
-addrs=s.get('addresses',{})
-for net,entries in addrs.items():
-    for e in entries:
-        ip=e.get('addr','')
-        if ip.startswith('192.168.'):
-            print(ip); exit()
-        print(ip)
-" 2>/dev/null | head -1)
+  # Retrieve the assigned IP (OpenStack returns addresses as list[str] on this cloud).
+  local_ip="$(get_server_ip_with_retry "${name}" || true)"
 
   if [[ -z "$local_ip" ]]; then
     warn "Could not determine IP for ${name}; check OpenStack and bootstrap manually."
