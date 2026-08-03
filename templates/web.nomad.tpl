@@ -5,7 +5,7 @@ job "[[ var "job_name" . ]]-web" {
   type        = "service"
   priority    = [[ var "web_priority" . ]]
   meta {
-    deployment_marker = "openstack-aurora-179d"
+    deployment_marker = "[[ var "deployment_marker" . ]]"
   }
 
   update {
