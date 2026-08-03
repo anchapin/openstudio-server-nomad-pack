@@ -35,9 +35,15 @@ CSI_PLUGIN_READY_TIMEOUT_SECONDS="${OS_CSI_PLUGIN_READY_TIMEOUT_SECONDS:-180}"
 PREPULL_READY_NODE_IDS=""
 PREPULL_NOT_READY_NODE_IDS=""
 PREPULL_JOB_ID=""
+PREPULL_CORE_JOB_ID=""
 PREPULL_TARGET_NODE_IDS=""
 PREPULL_TOTAL_TARGET_COUNT=0
-PREPULL_EXCLUSION_RECONCILER_PID=""
+DETACHED_POSTDEPLOY_RECONCILER_PID=""
+DETACHED_POSTDEPLOY_RECONCILER_LOG=""
+DETACHED_POSTDEPLOY_RECONCILER_STATUS=""
+DETACHED_POSTDEPLOY_RECONCILER_EVENTS=""
+DETACHED_POSTDEPLOY_RECONCILER_METADATA=""
+SCRIPT_COMPLETED_SUCCESSFULLY=false
 ROLE_CSI_DEPLOY_SCRIPT="${REPO_ROOT}/scripts/deploy-hostpath-csi-role-plugins.sh"
 
 usage() {
@@ -163,6 +169,7 @@ nfs_volume_mount_path="$(_extract_var nfs_volume_mount_path /mnt/openstudio)"
 enable_image_prepull="$(_extract_var enable_image_prepull false)"
 worker_instance_type="$(_extract_var worker_instance_type "")"
 worker_runtime_image="$(_extract_var worker_runtime_image "")"
+web_count="$(_extract_var web_count 1)"
 worker_count="$(_extract_var worker_count 1)"
 worker_max_replicas="$(_extract_var worker_max_replicas 10)"
 worker_autoscaling_scale_up_cooldown="$(_extract_var worker_autoscaling_scale_up_cooldown 10m)"
@@ -728,6 +735,251 @@ if items:
 collect_prepull_ready_nodes() {
   local job_id="$1"
   local target_nodes="$2"
+  local task_group="${3:-}"
+  local task_name="${4:-image-cache-ready}"
+  TARGET_NODE_IDS="${target_nodes}" NOMAD_ADDR="${NOMAD_ADDR}" NOMAD_NAMESPACE="${NOMAD_NAMESPACE}" JOB_ID="${job_id}" TASK_GROUP="${task_group}" TASK_NAME="${task_name}" python3 - <<'PY'
+import json, os, subprocess
+
+targets = {x.strip() for x in os.environ.get("TARGET_NODE_IDS", "").splitlines() if x.strip()}
+if not targets:
+    raise SystemExit(0)
+task_group = os.environ.get("TASK_GROUP", "").strip()
+task_name = (os.environ.get("TASK_NAME", "") or "image-cache-ready").strip()
+
+cmd = ["nomad", "job", "allocs", "-json", os.environ["JOB_ID"]]
+env = os.environ.copy()
+proc = subprocess.run(cmd, capture_output=True, text=True, env=env)
+if proc.returncode != 0:
+    raise SystemExit(0)
+
+allocs = json.loads(proc.stdout)
+ready_nodes = set()
+for alloc in allocs:
+    if alloc.get("DesiredStatus") != "run":
+        continue
+    if alloc.get("ClientStatus") != "running":
+        continue
+    if task_group and alloc.get("TaskGroup") != task_group:
+        continue
+    node = alloc.get("NodeID")
+    if node not in targets:
+        continue
+    task = (alloc.get("TaskStates") or {}).get(task_name) or {}
+    if task.get("State") == "running":
+        ready_nodes.add(node)
+
+for node_id in sorted(ready_nodes):
+    print(node_id)
+PY
+}
+
+collect_prepull_target_nodes_by_group() {
+  local job_id="$1"
+  local task_group="$2"
+  NOMAD_ADDR="${NOMAD_ADDR}" NOMAD_NAMESPACE="${NOMAD_NAMESPACE}" JOB_ID="${job_id}" TASK_GROUP="${task_group}" python3 - <<'PY'
+import json, os, subprocess
+
+job_id = os.environ["JOB_ID"]
+task_group = os.environ["TASK_GROUP"]
+cmd = ["nomad", "job", "allocs", "-json", job_id]
+proc = subprocess.run(cmd, capture_output=True, text=True, env=os.environ.copy())
+if proc.returncode != 0:
+    raise SystemExit(0)
+
+allocs = json.loads(proc.stdout)
+nodes = set()
+for alloc in allocs:
+    if alloc.get("DesiredStatus") != "run":
+        continue
+    if alloc.get("TaskGroup") != task_group:
+        continue
+    node = alloc.get("NodeID")
+    if node:
+        nodes.add(node)
+
+for node_id in sorted(nodes):
+    print(node_id)
+PY
+}
+
+filter_nodes_by_role() {
+  local nodes="$1"
+  local desired_role="$2"
+  if [[ -z "${nodes}" || -z "${desired_role}" ]]; then
+    return 0
+  fi
+  TARGET_NODE_IDS="${nodes}" DESIRED_ROLE="${desired_role}" NOMAD_ADDR="${NOMAD_ADDR}" python3 - <<'PY'
+import json, os, urllib.request
+
+targets = {x.strip() for x in os.environ.get("TARGET_NODE_IDS", "").splitlines() if x.strip()}
+desired_role = os.environ.get("DESIRED_ROLE", "").strip()
+addr = os.environ["NOMAD_ADDR"].rstrip("/")
+if not targets or not desired_role:
+    raise SystemExit(0)
+
+for node_id in sorted(targets):
+    try:
+        with urllib.request.urlopen(f"{addr}/v1/node/{node_id}", timeout=20) as r:
+            detail = json.load(r)
+    except Exception:
+        continue
+    meta = detail.get("Meta") or {}
+    if (meta.get("node_role") or "").strip() == desired_role:
+        print(node_id)
+PY
+}
+
+refresh_prepull_not_ready_nodes() {
+  local ready_nodes="$1"
+  local target_nodes="$2"
+  TARGET_NODE_IDS="${target_nodes}" READY_NODE_IDS="${ready_nodes}" python3 - <<'PY'
+import os
+targets = {x.strip() for x in (os.environ.get("TARGET_NODE_IDS", "").splitlines()) if x.strip()}
+ready = {x.strip() for x in (os.environ.get("READY_NODE_IDS", "").splitlines()) if x.strip()}
+for node_id in sorted(targets - ready):
+    print(node_id)
+PY
+}
+
+build_combined_worker_exclusions_json() {
+  local prepull_not_ready_nodes="$1"
+  local combined=()
+  while IFS= read -r node_id; do
+    [[ -n "${node_id}" ]] && combined+=("${node_id}")
+  done <<< "${CSI_EXCLUDED_NODE_IDS}"
+  while IFS= read -r node_id; do
+    [[ -n "${node_id}" ]] && combined+=("${node_id}")
+  done <<< "${prepull_not_ready_nodes}"
+  build_worker_exclusion_var "${combined[@]}" || true
+}
+
+start_prepull_exclusion_reconciler() {
+  local effective_bootstrap_max="$1"
+  [[ "${enable_image_prepull}" == "true" ]] || return 0
+  [[ -n "${PREPULL_JOB_ID}" ]] || return 0
+  [[ -n "${PREPULL_TARGET_NODE_IDS}" ]] || return 0
+  (( PREPULL_TOTAL_TARGET_COUNT > 0 )) || return 0
+
+  local state_dir helper_script target_nodes_file csi_excluded_nodes_file var_files_file
+  local log_file status_file events_file metadata_file
+  local -a helper_args
+
+  state_dir="/tmp/openstudio-fresh-redeploy-${JOB_NAME}-$(date +%s)"
+  mkdir -p "${state_dir}"
+  helper_script="${state_dir}/prepull-postdeploy-reconciler.sh"
+  target_nodes_file="${state_dir}/target_nodes.txt"
+  csi_excluded_nodes_file="${state_dir}/csi_excluded_nodes.txt"
+  var_files_file="${state_dir}/var_files.txt"
+  log_file="${state_dir}/reconciler.log"
+  status_file="${state_dir}/status.txt"
+  events_file="${state_dir}/events.ndjson"
+  metadata_file="${state_dir}/metadata.txt"
+
+  printf '%s\n' "${PREPULL_TARGET_NODE_IDS}" > "${target_nodes_file}"
+  printf '%s\n' "${CSI_EXCLUDED_NODE_IDS}" > "${csi_excluded_nodes_file}"
+  printf '%s\n' "${VAR_FILES[@]}" > "${var_files_file}"
+  : > "${events_file}"
+
+  cat > "${helper_script}" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<USAGE
+Usage: prepull-postdeploy-reconciler.sh --repo-root <path> --nomad-addr <url> --namespace <ns> --job-name <name> --prepull-job-id <id> --target-nodes-file <path> --csi-excluded-nodes-file <path> --var-files-file <path> --worker-count <n> --bootstrap-worker-max-replicas <n> --worker-max-replicas <n> --bootstrap-cooldown <duration> --steady-cooldown <duration> --reconcile-interval-seconds <n> --initial-worker-exclusions-json <json-or-empty> --status-file <path> --events-file <path> [--disable-vector-collection] [--redis-node-class-override <class>]
+USAGE
+}
+
+REPO_ROOT=""
+NOMAD_ADDR=""
+NOMAD_NAMESPACE=""
+JOB_NAME=""
+PREPULL_JOB_ID=""
+TARGET_NODES_FILE=""
+CSI_EXCLUDED_NODES_FILE=""
+VAR_FILES_FILE=""
+WORKER_COUNT=""
+BOOTSTRAP_WORKER_MAX_REPLICAS=""
+WORKER_MAX_REPLICAS=""
+BOOTSTRAP_AUTOSCALER_COOLDOWN=""
+STEADY_AUTOSCALER_COOLDOWN=""
+RECONCILE_INTERVAL_SECONDS=""
+INITIAL_WORKER_EXCLUSIONS_JSON=""
+DISABLE_VECTOR_COLLECTION=false
+REDIS_NODE_CLASS_OVERRIDE=""
+STATUS_FILE=""
+EVENTS_FILE=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --repo-root) REPO_ROOT="$2"; shift 2 ;;
+    --nomad-addr) NOMAD_ADDR="$2"; shift 2 ;;
+    --namespace) NOMAD_NAMESPACE="$2"; shift 2 ;;
+    --job-name) JOB_NAME="$2"; shift 2 ;;
+    --prepull-job-id) PREPULL_JOB_ID="$2"; shift 2 ;;
+    --target-nodes-file) TARGET_NODES_FILE="$2"; shift 2 ;;
+    --csi-excluded-nodes-file) CSI_EXCLUDED_NODES_FILE="$2"; shift 2 ;;
+    --var-files-file) VAR_FILES_FILE="$2"; shift 2 ;;
+    --worker-count) WORKER_COUNT="$2"; shift 2 ;;
+    --bootstrap-worker-max-replicas) BOOTSTRAP_WORKER_MAX_REPLICAS="$2"; shift 2 ;;
+    --worker-max-replicas) WORKER_MAX_REPLICAS="$2"; shift 2 ;;
+    --bootstrap-cooldown) BOOTSTRAP_AUTOSCALER_COOLDOWN="$2"; shift 2 ;;
+    --steady-cooldown) STEADY_AUTOSCALER_COOLDOWN="$2"; shift 2 ;;
+    --reconcile-interval-seconds) RECONCILE_INTERVAL_SECONDS="$2"; shift 2 ;;
+    --initial-worker-exclusions-json) INITIAL_WORKER_EXCLUSIONS_JSON="$2"; shift 2 ;;
+    --status-file) STATUS_FILE="$2"; shift 2 ;;
+    --events-file) EVENTS_FILE="$2"; shift 2 ;;
+    --disable-vector-collection) DISABLE_VECTOR_COLLECTION=true; shift ;;
+    --redis-node-class-override) REDIS_NODE_CLASS_OVERRIDE="$2"; shift 2 ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "Unknown arg: $1" >&2; usage; exit 2 ;;
+  esac
+done
+
+if [[ -z "${REPO_ROOT}" || -z "${NOMAD_ADDR}" || -z "${NOMAD_NAMESPACE}" || -z "${JOB_NAME}" || -z "${PREPULL_JOB_ID}" || -z "${TARGET_NODES_FILE}" || -z "${CSI_EXCLUDED_NODES_FILE}" || -z "${VAR_FILES_FILE}" || -z "${WORKER_COUNT}" || -z "${BOOTSTRAP_WORKER_MAX_REPLICAS}" || -z "${WORKER_MAX_REPLICAS}" || -z "${BOOTSTRAP_AUTOSCALER_COOLDOWN}" || -z "${STEADY_AUTOSCALER_COOLDOWN}" || -z "${RECONCILE_INTERVAL_SECONDS}" || -z "${STATUS_FILE}" || -z "${EVENTS_FILE}" ]]; then
+  usage
+  exit 2
+fi
+
+export NOMAD_ADDR NOMAD_NAMESPACE
+
+emit_event() {
+  local phase="$1"
+  local message="$2"
+  local escaped
+  escaped="$(printf '%s' "${message}" | sed 's/\\/\\\\/g; s/"/\\"/g')"
+  printf '{"ts":"%s","phase":"%s","message":"%s"}\n' "$(date -u +%FT%TZ)" "${phase}" "${escaped}" >> "${EVENTS_FILE}"
+}
+
+echo "running" > "${STATUS_FILE}"
+emit_event "start" "detached reconciler started"
+trap 'echo "failed" > "${STATUS_FILE}"; emit_event "failed" "detached reconciler failed"' ERR
+
+TARGET_NODE_IDS="$(cat "${TARGET_NODES_FILE}")"
+CSI_EXCLUDED_NODE_IDS="$(cat "${CSI_EXCLUDED_NODES_FILE}")"
+mapfile -t VAR_FILES < "${VAR_FILES_FILE}"
+VAR_FILE_ARGS=()
+for var_file in "${VAR_FILES[@]}"; do
+  [[ -n "${var_file}" ]] || continue
+  VAR_FILE_ARGS+=(--var-file "${var_file}")
+done
+
+build_worker_exclusion_var() {
+  local nodes=("$@")
+  if [[ ${#nodes[@]} -eq 0 ]]; then
+    return 0
+  fi
+  printf '%s\n' "${nodes[@]}" | awk 'NF && !seen[$0]++' | python3 -c '
+import json, sys
+items = [line.strip() for line in sys.stdin if line.strip()]
+if items:
+    print(json.dumps(items))
+'
+}
+
+collect_prepull_ready_nodes() {
+  local job_id="$1"
+  local target_nodes="$2"
   TARGET_NODE_IDS="${target_nodes}" NOMAD_ADDR="${NOMAD_ADDR}" NOMAD_NAMESPACE="${NOMAD_NAMESPACE}" JOB_ID="${job_id}" python3 - <<'PY'
 import json, os, subprocess
 
@@ -784,78 +1036,178 @@ build_combined_worker_exclusions_json() {
   build_worker_exclusion_var "${combined[@]}" || true
 }
 
-start_prepull_exclusion_reconciler() {
-  local effective_bootstrap_max="$1"
-  [[ "${enable_image_prepull}" == "true" ]] || return 0
-  [[ -n "${PREPULL_JOB_ID}" ]] || return 0
-  [[ -n "${PREPULL_TARGET_NODE_IDS}" ]] || return 0
-  (( PREPULL_TOTAL_TARGET_COUNT > 0 )) || return 0
+render_worker_job_spec() {
+  local exclusions_json="$1"
+  local max_replicas="$2"
+  local cooldown="$3"
+  local rendered spec
+  local -a render_args
+  rendered="$(mktemp)"
+  spec="$(mktemp)"
 
-  (
-    local deadline now ready_nodes ready_count not_ready_nodes updated_exclusions_json
-    local -a args
-    local previous_exclusions_json="${WORKER_EXCLUDED_NODE_IDS_JSON:-}"
-    deadline=$(( $(date +%s) + PREPULL_WAIT_TIMEOUT_SECONDS ))
+  render_args=("${VAR_FILE_ARGS[@]}")
+  render_args+=(--var "enable_image_prepull=false")
+  if [[ "${DISABLE_VECTOR_COLLECTION}" == "true" ]]; then
+    render_args+=(--var "enable_vector_collection=false")
+  fi
+  if [[ -n "${REDIS_NODE_CLASS_OVERRIDE}" ]]; then
+    render_args+=(--var "redis_node_class=${REDIS_NODE_CLASS_OVERRIDE}")
+  fi
+  if [[ -n "${exclusions_json}" ]]; then
+    render_args+=(--var "worker_excluded_node_ids=${exclusions_json}")
+  else
+    render_args+=(--var "worker_excluded_node_ids=[]")
+  fi
+  render_args+=(--var "worker_count=${WORKER_COUNT}")
+  render_args+=(--var "worker_max_replicas=${max_replicas}")
+  render_args+=(--var "worker_autoscaling_scale_up_cooldown=${cooldown}")
 
-    while true; do
-      now="$(date +%s)"
-      if (( now > deadline )); then
-        echo "✗ pre-pull exclusion reconciler timed out before all target worker nodes were pre-pulled." >&2
-        exit 1
-      fi
+  nomad-pack render "${render_args[@]}" "${REPO_ROOT}" > "${rendered}"
+  awk '
+    /^openstudio-server\/worker\.nomad:$/ { in_section=1; next }
+    /^openstudio-server\/.*\.nomad:$/ { if (in_section) exit }
+    in_section { print }
+  ' "${rendered}" > "${spec}"
+  rm -f "${rendered}"
 
-      ready_nodes="$(collect_prepull_ready_nodes "${PREPULL_JOB_ID}" "${PREPULL_TARGET_NODE_IDS}")"
-      ready_count="$(printf "%s\n" "${ready_nodes}" | awk 'NF' | wc -l | tr -d ' ')"
-      not_ready_nodes="$(refresh_prepull_not_ready_nodes "${ready_nodes}" "${PREPULL_TARGET_NODE_IDS}")"
-      updated_exclusions_json="$(build_combined_worker_exclusions_json "${not_ready_nodes}")"
-
-      if [[ "${updated_exclusions_json}" != "${previous_exclusions_json}" ]]; then
-        echo ""
-        echo "==> Reconciling worker exclusions from live pre-pull readiness (${ready_count}/${PREPULL_TOTAL_TARGET_COUNT} ready)"
-        if [[ -n "${updated_exclusions_json}" ]]; then
-          echo "  - updated worker exclusions: ${updated_exclusions_json}"
-        else
-          echo "  - updated worker exclusions: []"
-        fi
-
-        args=("${VAR_FILE_ARGS[@]}" --name "${JOB_NAME}")
-        args+=(--var "enable_image_prepull=false")
-        if [[ "${DISABLE_VECTOR_COLLECTION}" == "true" ]]; then
-          args+=(--var "enable_vector_collection=false")
-        fi
-        if [[ -n "${REDIS_NODE_CLASS_OVERRIDE}" ]]; then
-          args+=(--var "redis_node_class=${REDIS_NODE_CLASS_OVERRIDE}")
-        fi
-        if [[ -n "${updated_exclusions_json}" ]]; then
-          args+=(--var "worker_excluded_node_ids=${updated_exclusions_json}")
-        else
-          args+=(--var "worker_excluded_node_ids=[]")
-        fi
-        args+=(--var "worker_count=${worker_count}")
-        args+=(--var "worker_max_replicas=${effective_bootstrap_max}")
-        args+=(--var "worker_autoscaling_scale_up_cooldown=${BOOTSTRAP_AUTOSCALER_COOLDOWN}")
-        run_pack_with_guard "${args[@]}"
-        previous_exclusions_json="${updated_exclusions_json}"
-      fi
-
-      if (( ready_count >= PREPULL_TOTAL_TARGET_COUNT )); then
-        echo "✓ Pre-pull completed on all target worker nodes; dynamic exclusions are fully reconciled."
-        break
-      fi
-
-      sleep "${PREPULL_RECONCILE_INTERVAL_SECONDS}"
-    done
-  ) &
-
-  PREPULL_EXCLUSION_RECONCILER_PID="$!"
+  if [[ ! -s "${spec}" ]]; then
+    rm -f "${spec}"
+    return 1
+  fi
+  echo "${spec}"
 }
 
-wait_for_prepull_exclusion_reconciler() {
-  if [[ -z "${PREPULL_EXCLUSION_RECONCILER_PID}" ]]; then
-    return 0
+run_worker_update() {
+  local exclusions_json="$1"
+  local max_replicas="$2"
+  local cooldown="$3"
+  local spec
+  spec="$(render_worker_job_spec "${exclusions_json}" "${max_replicas}" "${cooldown}")" || {
+    echo "✗ Failed to render worker job spec for reconciliation update." >&2
+    return 1
+  }
+  nomad job run "${spec}" >/dev/null
+  rm -f "${spec}"
+}
+
+total_target_count="$(printf "%s\n" "${TARGET_NODE_IDS}" | awk 'NF' | wc -l | tr -d ' ')"
+if (( total_target_count < 1 )); then
+  echo "✗ Detached pre-pull reconciler started with no target worker nodes." >&2
+  emit_event "failed" "no target worker nodes found"
+  exit 1
+fi
+
+previous_exclusions_json="${INITIAL_WORKER_EXCLUSIONS_JSON}"
+
+while true; do
+  ready_nodes="$(collect_prepull_ready_nodes "${PREPULL_JOB_ID}" "${TARGET_NODE_IDS}")"
+  ready_count="$(printf "%s\n" "${ready_nodes}" | awk 'NF' | wc -l | tr -d ' ')"
+
+  if (( ready_count >= total_target_count )); then
+    echo "✓ Pre-pull completed on all target worker nodes (${ready_count}/${total_target_count})."
+    emit_event "prepull-complete" "all target worker nodes pre-pulled (${ready_count}/${total_target_count})"
+    break
   fi
-  wait "${PREPULL_EXCLUSION_RECONCILER_PID}"
-  PREPULL_EXCLUSION_RECONCILER_PID=""
+
+  not_ready_nodes="$(refresh_prepull_not_ready_nodes "${ready_nodes}" "${TARGET_NODE_IDS}")"
+  updated_exclusions_json="$(build_combined_worker_exclusions_json "${not_ready_nodes}")"
+
+  if [[ "${updated_exclusions_json}" != "${previous_exclusions_json}" ]]; then
+    echo "==> Reconciling worker exclusions from live pre-pull readiness (${ready_count}/${total_target_count} ready)"
+    if [[ -n "${updated_exclusions_json}" ]]; then
+      echo "  - updated worker exclusions: ${updated_exclusions_json}"
+    else
+      echo "  - updated worker exclusions: []"
+    fi
+    emit_event "worker-exclusion-update" "updating worker exclusions for ${ready_count}/${total_target_count} ready nodes"
+    run_worker_update "${updated_exclusions_json}" "${BOOTSTRAP_WORKER_MAX_REPLICAS}" "${BOOTSTRAP_AUTOSCALER_COOLDOWN}"
+    previous_exclusions_json="${updated_exclusions_json}"
+  fi
+
+  sleep "${RECONCILE_INTERVAL_SECONDS}"
+done
+
+final_worker_excluded_node_ids_json="$(build_combined_worker_exclusions_json "")"
+if [[ "${BOOTSTRAP_WORKER_MAX_REPLICAS}" != "${WORKER_MAX_REPLICAS}" || "${BOOTSTRAP_AUTOSCALER_COOLDOWN}" != "${STEADY_AUTOSCALER_COOLDOWN}" || "${previous_exclusions_json}" != "${final_worker_excluded_node_ids_json}" ]]; then
+  echo "==> Phase 3/3: restore full worker autoscaling bounds"
+  emit_event "phase3-start" "restoring full worker autoscaling bounds"
+  run_worker_update "${final_worker_excluded_node_ids_json}" "${WORKER_MAX_REPLICAS}" "${STEADY_AUTOSCALER_COOLDOWN}"
+fi
+
+nomad job stop -namespace "${NOMAD_NAMESPACE}" -purge "${PREPULL_JOB_ID}" >/dev/null 2>&1 || true
+
+# Deploy the permanent system-hooks sentinel. The main pack was deployed with
+# enable_image_prepull=false to avoid conflicting with the prewarm jobs. Now
+# that prewarm is complete and purged, deploy the permanent job so its
+# `sleep 999999999` sentinel keeps Docker from GC-ing the openstudio-worker:local
+# image tag on every node. Without this, the tag is lost on the next Docker
+# prune and all worker allocations fail with "pull access denied".
+echo "==> Deploying permanent system-hooks image sentinel..."
+{
+  _sentinel_render_args=()
+  while IFS= read -r _vf; do
+    [[ -n "${_vf}" ]] && _sentinel_render_args+=(--var-file "${_vf}")
+  done < "${VAR_FILES_FILE}"
+  _sentinel_rendered="$(mktemp)"
+  _sentinel_spec="$(mktemp).nomad"
+  if nomad-pack render \
+      "${_sentinel_render_args[@]}" \
+      --var "job_name=${JOB_NAME}" \
+      --var "enable_image_prepull=true" \
+      "${REPO_ROOT}" > "${_sentinel_rendered}" 2>/dev/null; then
+    awk '
+      /^openstudio-server\/system-hooks\.nomad:$/ { in_section=1; next }
+      /^openstudio-server\/.*\.nomad:$/ { if (in_section) exit }
+      in_section { print }
+    ' "${_sentinel_rendered}" > "${_sentinel_spec}"
+    if [[ -s "${_sentinel_spec}" ]]; then
+      NOMAD_ADDR="${NOMAD_ADDR}" NOMAD_NAMESPACE="${NOMAD_NAMESPACE}" \
+        nomad job run "${_sentinel_spec}" >/dev/null 2>&1 \
+        && echo "  sentinel deployed: ${JOB_NAME}-system-hooks" \
+        || echo "  Warning: failed to deploy system-hooks sentinel" >&2
+    fi
+  fi
+  rm -f "${_sentinel_rendered}" "${_sentinel_spec}"
+}
+
+emit_event "completed" "detached reconciler completed successfully"
+echo "completed" > "${STATUS_FILE}"
+EOF
+  chmod +x "${helper_script}"
+
+  helper_args=(
+    --repo-root "${REPO_ROOT}"
+    --nomad-addr "${NOMAD_ADDR}"
+    --namespace "${NOMAD_NAMESPACE}"
+    --job-name "${JOB_NAME}"
+    --prepull-job-id "${PREPULL_JOB_ID}"
+    --target-nodes-file "${target_nodes_file}"
+    --csi-excluded-nodes-file "${csi_excluded_nodes_file}"
+    --var-files-file "${var_files_file}"
+    --worker-count "${worker_count}"
+    --bootstrap-worker-max-replicas "${effective_bootstrap_max}"
+    --worker-max-replicas "${worker_max_replicas}"
+    --bootstrap-cooldown "${BOOTSTRAP_AUTOSCALER_COOLDOWN}"
+    --steady-cooldown "${worker_autoscaling_scale_up_cooldown}"
+    --reconcile-interval-seconds "${PREPULL_RECONCILE_INTERVAL_SECONDS}"
+    --initial-worker-exclusions-json "${WORKER_EXCLUDED_NODE_IDS_JSON:-}"
+    --status-file "${status_file}"
+    --events-file "${events_file}"
+  )
+  if [[ "${DISABLE_VECTOR_COLLECTION}" == "true" ]]; then
+    helper_args+=(--disable-vector-collection)
+  fi
+  if [[ -n "${REDIS_NODE_CLASS_OVERRIDE}" ]]; then
+    helper_args+=(--redis-node-class-override "${REDIS_NODE_CLASS_OVERRIDE}")
+  fi
+
+  nohup "${helper_script}" "${helper_args[@]}" > "${log_file}" 2>&1 < /dev/null &
+  DETACHED_POSTDEPLOY_RECONCILER_PID="$!"
+  DETACHED_POSTDEPLOY_RECONCILER_LOG="${log_file}"
+  DETACHED_POSTDEPLOY_RECONCILER_STATUS="${status_file}"
+  DETACHED_POSTDEPLOY_RECONCILER_EVENTS="${events_file}"
+  DETACHED_POSTDEPLOY_RECONCILER_METADATA="${metadata_file}"
+  printf "pid=%s\nstatus_file=%s\nevents_file=%s\nlog_file=%s\n" "${DETACHED_POSTDEPLOY_RECONCILER_PID}" "${status_file}" "${events_file}" "${log_file}" > "${metadata_file}"
 }
 
 stop_prepull_job_if_running() {
@@ -865,18 +1217,26 @@ stop_prepull_job_if_running() {
   fi
 }
 
-run_system_hooks_phase() {
-  local total_count deadline now ready_count ready_nodes required_by_percent required_ready_count
-  local prewarm_job_name prewarm_job_id
-  [[ "${enable_image_prepull}" == "true" ]] || return 0
+stop_core_prepull_job_if_running() {
+  if [[ -n "${PREPULL_CORE_JOB_ID}" ]]; then
+    nomad job stop -namespace "${NOMAD_NAMESPACE}" -purge "${PREPULL_CORE_JOB_ID}" >/dev/null 2>&1 || true
+    PREPULL_CORE_JOB_ID=""
+  fi
+}
 
-  local rendered spec
-  prewarm_job_name="${JOB_NAME}-prewarm"
-  prewarm_job_id="${prewarm_job_name}-system-hooks"
+render_system_hooks_spec() {
+  local rendered spec job_name worker_enabled core_enabled
+  job_name="$1"
+  worker_enabled="$2"
+  core_enabled="$3"
   rendered="$(mktemp)"
   spec="$(mktemp)"
 
-  nomad-pack render "${VAR_FILE_ARGS[@]}" --var "job_name=${prewarm_job_name}" "${REPO_ROOT}" > "${rendered}"
+  nomad-pack render "${VAR_FILE_ARGS[@]}" \
+    --var "job_name=${job_name}" \
+    --var "prepull_worker_enabled=${worker_enabled}" \
+    --var "prepull_core_enabled=${core_enabled}" \
+    "${REPO_ROOT}" > "${rendered}"
   awk '
     /^openstudio-server\/system-hooks\.nomad:$/ { in_section=1; next }
     /^openstudio-server\/.*\.nomad:$/ { if (in_section) exit }
@@ -886,19 +1246,47 @@ run_system_hooks_phase() {
 
   if [[ ! -s "${spec}" ]]; then
     rm -f "${spec}"
-    echo "✗ Failed to render system-hooks job spec for pre-pull phase." >&2
-    exit 1
+    return 1
   fi
 
+  echo "${spec}"
+}
+
+run_system_hooks_phase() {
+  local total_count core_total_count deadline now ready_count core_ready_count ready_nodes core_ready_nodes required_by_percent required_ready_count
+  local core_required_ready_count
+  local prewarm_worker_job_name prewarm_worker_job_id
+  local prewarm_core_job_name prewarm_core_job_id
+  [[ "${enable_image_prepull}" == "true" ]] || return 0
+
+  local worker_spec core_spec
+  prewarm_worker_job_name="${JOB_NAME}-prewarm-worker"
+  prewarm_worker_job_id="${prewarm_worker_job_name}-system-hooks"
+  prewarm_core_job_name="${JOB_NAME}-prewarm-core"
+  prewarm_core_job_id="${prewarm_core_job_name}-system-hooks"
+  worker_spec="$(render_system_hooks_spec "${prewarm_worker_job_name}" "true" "false")" || {
+    echo "✗ Failed to render worker system-hooks job spec for pre-pull phase." >&2
+    exit 1
+  }
+  core_spec="$(render_system_hooks_spec "${prewarm_core_job_name}" "false" "true")" || {
+    rm -f "${worker_spec}"
+    echo "✗ Failed to render core system-hooks job spec for pre-pull phase." >&2
+    exit 1
+  }
+
   echo ""
-  echo "==> Phase 1/3: warm image cache (system-hooks)"
-  # Use an isolated prewarm job ID so manual `nomad-pack run` won't conflict
-  # with an unmanaged lingering system-hooks job from this phase.
-  if nomad job status -namespace "${NOMAD_NAMESPACE}" "${prewarm_job_id}" >/dev/null 2>&1; then
-    nomad job stop -namespace "${NOMAD_NAMESPACE}" -purge "${prewarm_job_id}" >/dev/null 2>&1 || true
+  echo "==> Phase 1/3: warm image cache (system-hooks worker + core in parallel)"
+  # Use isolated prewarm job IDs so manual `nomad-pack run` won't conflict
+  # with unmanaged lingering system-hooks jobs from this phase.
+  if nomad job status -namespace "${NOMAD_NAMESPACE}" "${prewarm_worker_job_id}" >/dev/null 2>&1; then
+    nomad job stop -namespace "${NOMAD_NAMESPACE}" -purge "${prewarm_worker_job_id}" >/dev/null 2>&1 || true
   fi
-  NOMAD_ADDR="${NOMAD_ADDR}" NOMAD_NAMESPACE="${NOMAD_NAMESPACE}" nomad job run "${spec}" >/dev/null
-  rm -f "${spec}"
+  if nomad job status -namespace "${NOMAD_NAMESPACE}" "${prewarm_core_job_id}" >/dev/null 2>&1; then
+    nomad job stop -namespace "${NOMAD_NAMESPACE}" -purge "${prewarm_core_job_id}" >/dev/null 2>&1 || true
+  fi
+  NOMAD_ADDR="${NOMAD_ADDR}" NOMAD_NAMESPACE="${NOMAD_NAMESPACE}" nomad job run "${worker_spec}" >/dev/null
+  NOMAD_ADDR="${NOMAD_ADDR}" NOMAD_NAMESPACE="${NOMAD_NAMESPACE}" nomad job run "${core_spec}" >/dev/null
+  rm -f "${worker_spec}" "${core_spec}"
 
   local target_nodes
   target_nodes="$(
@@ -940,12 +1328,35 @@ PY
   )"
 
   if [[ -z "${target_nodes}" ]]; then
-    nomad job stop -namespace "${NOMAD_NAMESPACE}" -purge "${prewarm_job_id}" >/dev/null 2>&1 || true
+    nomad job stop -namespace "${NOMAD_NAMESPACE}" -purge "${prewarm_worker_job_id}" >/dev/null 2>&1 || true
+    nomad job stop -namespace "${NOMAD_NAMESPACE}" -purge "${prewarm_core_job_id}" >/dev/null 2>&1 || true
     echo "✗ No target worker nodes found for pre-pull readiness checks." >&2
     exit 1
   fi
 
+  local core_target_nodes
+  local core_role_target_nodes
+  core_target_nodes="$(collect_prepull_target_nodes_by_group "${prewarm_core_job_id}" "prepull-core-images")"
+  if [[ -z "${core_target_nodes}" ]]; then
+    nomad job stop -namespace "${NOMAD_NAMESPACE}" -purge "${prewarm_worker_job_id}" >/dev/null 2>&1 || true
+    nomad job stop -namespace "${NOMAD_NAMESPACE}" -purge "${prewarm_core_job_id}" >/dev/null 2>&1 || true
+    echo "✗ No target core-service nodes found for pre-pull readiness checks." >&2
+    exit 1
+  fi
+  core_role_target_nodes="$(filter_nodes_by_role "${core_target_nodes}" "${STATEFUL_CSI_NODE_ROLE}")"
+  if [[ -n "${core_role_target_nodes}" ]]; then
+    core_target_nodes="${core_role_target_nodes}"
+  fi
+
   total_count="$(printf "%s\n" "${target_nodes}" | awk 'NF' | wc -l | tr -d ' ')"
+  core_total_count="$(printf "%s\n" "${core_target_nodes}" | awk 'NF' | wc -l | tr -d ' ')"
+  core_required_ready_count="${web_count}"
+  if (( core_required_ready_count < 1 )); then
+    core_required_ready_count=1
+  fi
+  if (( core_required_ready_count > core_total_count )); then
+    core_required_ready_count="${core_total_count}"
+  fi
   if [[ "${PREPULL_REQUIRE_ALL}" == "true" ]]; then
     required_ready_count="${total_count}"
     echo "  pre-pull gate requires ${required_ready_count}/${total_count} worker nodes (OS_PREPULL_REQUIRE_ALL=true)"
@@ -963,21 +1374,25 @@ PY
     fi
     echo "  pre-pull gate requires ${required_ready_count}/${total_count} worker nodes (min ${PREPULL_MIN_READY_PERCENT}%, worker_count=${worker_count})"
   fi
+  echo "  pre-pull gate requires ${core_required_ready_count}/${core_total_count} core nodes (web role capacity)"
   deadline=$(( $(date +%s) + PREPULL_WAIT_TIMEOUT_SECONDS ))
 
   while true; do
     now="$(date +%s)"
     if (( now > deadline )); then
-      nomad job stop -namespace "${NOMAD_NAMESPACE}" -purge "${prewarm_job_id}" >/dev/null 2>&1 || true
-      echo "✗ Timed out waiting for system-hooks pre-pull readiness on target worker nodes." >&2
+      nomad job stop -namespace "${NOMAD_NAMESPACE}" -purge "${prewarm_worker_job_id}" >/dev/null 2>&1 || true
+      nomad job stop -namespace "${NOMAD_NAMESPACE}" -purge "${prewarm_core_job_id}" >/dev/null 2>&1 || true
+      echo "✗ Timed out waiting for system-hooks pre-pull readiness on target worker/core nodes." >&2
       exit 1
     fi
 
-    ready_nodes="$(collect_prepull_ready_nodes "${prewarm_job_id}" "${target_nodes}")"
+    ready_nodes="$(collect_prepull_ready_nodes "${prewarm_worker_job_id}" "${target_nodes}" "prepull-worker-images" "image-cache-ready")"
+    core_ready_nodes="$(collect_prepull_ready_nodes "${prewarm_core_job_id}" "${core_target_nodes}" "prepull-core-images" "image-cache-ready-core")"
 
     ready_count="$(printf "%s\n" "${ready_nodes}" | awk 'NF' | wc -l | tr -d ' ')"
-    printf "\r  pre-pull readiness: %s/%s worker nodes ready (required: %s)" "${ready_count}" "${total_count}" "${required_ready_count}"
-    if (( ready_count >= required_ready_count )); then
+    core_ready_count="$(printf "%s\n" "${core_ready_nodes}" | awk 'NF' | wc -l | tr -d ' ')"
+    printf "\r  pre-pull readiness: workers %s/%s (required: %s), core %s/%s (required: %s)" "${ready_count}" "${total_count}" "${required_ready_count}" "${core_ready_count}" "${core_total_count}" "${core_required_ready_count}"
+    if (( ready_count >= required_ready_count && core_ready_count >= core_required_ready_count )); then
       echo ""
       echo "✓ Pre-pull readiness threshold met."
       break
@@ -987,7 +1402,8 @@ PY
 
   PREPULL_READY_NODE_IDS="${ready_nodes}"
   PREPULL_NOT_READY_NODE_IDS="$(refresh_prepull_not_ready_nodes "${ready_nodes}" "${target_nodes}")"
-  PREPULL_JOB_ID="${prewarm_job_id}"
+  PREPULL_JOB_ID="${prewarm_worker_job_id}"
+  PREPULL_CORE_JOB_ID="${prewarm_core_job_id}"
   PREPULL_TARGET_NODE_IDS="${target_nodes}"
   PREPULL_TOTAL_TARGET_COUNT="${total_count}"
 }
@@ -1161,12 +1577,18 @@ run_pack_with_guard() {
 }
 
 cleanup_background_jobs() {
-  if [[ -n "${PREPULL_EXCLUSION_RECONCILER_PID}" ]]; then
-    kill "${PREPULL_EXCLUSION_RECONCILER_PID}" >/dev/null 2>&1 || true
-    wait "${PREPULL_EXCLUSION_RECONCILER_PID}" >/dev/null 2>&1 || true
-    PREPULL_EXCLUSION_RECONCILER_PID=""
+  local exit_code="$?"
+  if [[ -n "${DETACHED_POSTDEPLOY_RECONCILER_PID}" ]]; then
+    if [[ "${SCRIPT_COMPLETED_SUCCESSFULLY}" != "true" ]]; then
+      kill "${DETACHED_POSTDEPLOY_RECONCILER_PID}" >/dev/null 2>&1 || true
+      wait "${DETACHED_POSTDEPLOY_RECONCILER_PID}" >/dev/null 2>&1 || true
+      stop_prepull_job_if_running
+    fi
+  else
+    stop_prepull_job_if_running
   fi
-  stop_prepull_job_if_running
+  stop_core_prepull_job_if_running
+  return "${exit_code}"
 }
 
 trap cleanup_background_jobs EXIT
@@ -1398,44 +1820,27 @@ RUN_ARGS+=(--var "worker_max_replicas=${effective_bootstrap_max}")
 RUN_ARGS+=(--var "worker_autoscaling_scale_up_cooldown=${BOOTSTRAP_AUTOSCALER_COOLDOWN}")
 run_pack_with_guard "${RUN_ARGS[@]}"
 
-# Keep pre-pull running in the background and continuously reconcile
-# worker_excluded_node_ids as nodes become image-cache-ready.
-start_prepull_exclusion_reconciler "${effective_bootstrap_max}"
-
 wait_for_core_services
-wait_for_prepull_exclusion_reconciler
-
-if [[ -n "${PREPULL_JOB_ID}" && -n "${PREPULL_TARGET_NODE_IDS}" ]]; then
-  PREPULL_READY_NODE_IDS="$(collect_prepull_ready_nodes "${PREPULL_JOB_ID}" "${PREPULL_TARGET_NODE_IDS}")"
-  PREPULL_NOT_READY_NODE_IDS="$(refresh_prepull_not_ready_nodes "${PREPULL_READY_NODE_IDS}" "${PREPULL_TARGET_NODE_IDS}")"
-fi
-WORKER_EXCLUDED_NODE_IDS_JSON="$(build_combined_worker_exclusions_json "${PREPULL_NOT_READY_NODE_IDS}")"
-
-if [[ "${effective_bootstrap_max}" != "${worker_max_replicas}" || "${BOOTSTRAP_AUTOSCALER_COOLDOWN}" != "${worker_autoscaling_scale_up_cooldown}" || -n "${PREPULL_NOT_READY_NODE_IDS}" ]]; then
-  echo ""
-  echo "==> Phase 3/3: restore full worker autoscaling bounds"
-  FINAL_ARGS=("${VAR_FILE_ARGS[@]}" --name "${JOB_NAME}")
-  FINAL_ARGS+=(--var "enable_image_prepull=false")
-  if [[ "${DISABLE_VECTOR_COLLECTION}" == "true" ]]; then
-    FINAL_ARGS+=(--var "enable_vector_collection=false")
-  fi
-  if [[ -n "${REDIS_NODE_CLASS_OVERRIDE}" ]]; then
-    FINAL_ARGS+=(--var "redis_node_class=${REDIS_NODE_CLASS_OVERRIDE}")
-  fi
-  if [[ -n "${WORKER_EXCLUDED_NODE_IDS_JSON}" ]]; then
-    FINAL_ARGS+=(--var "worker_excluded_node_ids=${WORKER_EXCLUDED_NODE_IDS_JSON}")
-  else
-    FINAL_ARGS+=(--var "worker_excluded_node_ids=[]")
-  fi
-  FINAL_ARGS+=(--var "worker_count=${worker_count}")
-  FINAL_ARGS+=(--var "worker_max_replicas=${worker_max_replicas}")
-  FINAL_ARGS+=(--var "worker_autoscaling_scale_up_cooldown=${worker_autoscaling_scale_up_cooldown}")
-  run_pack_with_guard "${FINAL_ARGS[@]}"
-fi
-
-stop_prepull_job_if_running
+# Core-image prewarm is only needed through web startup; keep worker prewarm
+# running for detached post-deploy reconciliation.
+stop_core_prepull_job_if_running
 
 wait_for_prometheus_if_enabled
 
+# Keep pre-pull running after this script returns. The detached reconciler
+# updates worker_excluded_node_ids until all target nodes are pre-pulled, then
+# performs Phase 3 (full worker bounds restore) and stops the pre-pull job.
+start_prepull_exclusion_reconciler "${effective_bootstrap_max}"
+if [[ -n "${DETACHED_POSTDEPLOY_RECONCILER_PID}" ]]; then
+  echo ""
+  echo "==> Detached pre-pull reconciler started"
+  echo "  pid=${DETACHED_POSTDEPLOY_RECONCILER_PID}"
+  echo "  status_file=${DETACHED_POSTDEPLOY_RECONCILER_STATUS}"
+  echo "  events_file=${DETACHED_POSTDEPLOY_RECONCILER_EVENTS}"
+  echo "  log_file=${DETACHED_POSTDEPLOY_RECONCILER_LOG}"
+  echo "  metadata_file=${DETACHED_POSTDEPLOY_RECONCILER_METADATA}"
+fi
+
+SCRIPT_COMPLETED_SUCCESSFULLY=true
 echo ""
 echo "✓ Fresh redeploy complete"
