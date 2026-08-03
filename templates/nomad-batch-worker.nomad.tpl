@@ -1,4 +1,4 @@
-[[- /*
+[[/*
   nomad-batch-worker.nomad.tpl
   ─────────────────────────────────────────────────────────────────────────────
   Renders a *parameterized* Nomad batch job that the OpenStudio Server web
@@ -15,18 +15,18 @@
   and POSTs to /v1/job/<nomad_batch_job_name>/dispatch.
 
   Template syntax: [[ ]] pack delimiters (NOT {{ }}).
-*/ -]]
+*/]]
 [[ if eq (var "batch_engine" .) "nomad_batch" ]]
 job "[[ var "job_name" . ]]-[[ var "nomad_batch_job_name" . ]]" {
-  region      = "[[ var "region" . ]]"
+  region = "[[ var "region" . ]]"
   [[ if ne (var "nomad_batch_datacenter" .) "" ]]
   datacenters = ["[[ var "nomad_batch_datacenter" . ]]"]
   [[ else ]]
   datacenters = [[ var "datacenters" . | toJson ]]
   [[ end ]]
-  namespace   = "[[ if ne (var "nomad_batch_namespace" .) "" ]][[ var "nomad_batch_namespace" . ]][[ else ]][[ var "nomad_namespace" . ]][[ end ]]"
-  type        = "batch"
-  priority    = [[ var "worker_priority" . ]]
+  namespace = "[[ if ne (var "nomad_batch_namespace" .) "" ]][[ var "nomad_batch_namespace" . ]][[ else ]][[ var "nomad_namespace" . ]][[ end ]]"
+  type      = "batch"
+  priority  = [[ var "worker_priority" . ]]
 
   # Parameterized stanza — the dispatcher dispatches one allocation per
   # simulation datapoint by calling POST /v1/job/<name>/dispatch with a JSON
@@ -55,7 +55,7 @@ job "[[ var "job_name" . ]]-[[ var "nomad_batch_job_name" . ]]" {
         command = "[[ var "nomad_batch_worker_command" . ]]"
         [[ end ]]
         [[ if var "nomad_batch_worker_args" . ]]
-        args    = [[ var "nomad_batch_worker_args" . | toJson ]]
+        args = [[ var "nomad_batch_worker_args" . | toJson ]]
         [[ end ]]
       }
 
@@ -63,11 +63,11 @@ job "[[ var "job_name" . ]]-[[ var "nomad_batch_job_name" . ]]" {
         MONGO_USER = "[[ var "mongo_user" . ]]"
         QUEUES     = "simulations"
         # Dispatcher-injected identifiers — decoded from dispatch payload at runtime.
-        ANALYSIS_ID  = "${NOMAD_META_analysis_id}"
-        DATAPOINT_ID = "${NOMAD_META_datapoint_id}"
+        ANALYSIS_ID                 = "${NOMAD_META_analysis_id}"
+        DATAPOINT_ID                = "${NOMAD_META_datapoint_id}"
         OS_SERVER_NUMBER_OF_WORKERS = "1"
         [[ if var "web_redis_url" . ]]
-        REDIS_URL  = "[[ var "web_redis_url" . ]]"
+        REDIS_URL = "[[ var "web_redis_url" . ]]"
         [[ end ]]
         [[ if not (var "vault_integration_enabled" .) ]]
         MONGO_PASSWORD  = "[[ var "mongo_password" . ]]"
@@ -78,11 +78,11 @@ job "[[ var "job_name" . ]]-[[ var "nomad_batch_job_name" . ]]" {
 
       [[ if var "vault_integration_enabled" . ]]
       template {
-        destination = "secrets/env"
-        env         = true
+        destination     = "secrets/env"
+        env             = true
         left_delimiter  = "{{"
         right_delimiter = "}}"
-        data = <<-EOT
+        data            = <<-EOT
 {{ with secret "[[ var "vault_kv_mongodb_path" . ]]" }}
 MONGO_PASSWORD  = {{ .Data.data.password | toJSON }}
 {{ end }}
@@ -103,10 +103,10 @@ EOT
 
       # Consul-hosted service addresses are resolved via /etc/hosts patching.
       template {
-        destination = "local/patch-hosts.sh"
+        destination     = "local/patch-hosts.sh"
         left_delimiter  = "{{"
         right_delimiter = "}}"
-        data = <<-EOT
+        data            = <<-EOT
 #!/bin/sh
 {{ range service "openstudio-db" -}}
 echo "{{ .Address }} db" >> /etc/hosts
@@ -115,7 +115,7 @@ echo "{{ .Address }} db" >> /etc/hosts
 echo "{{ .Address }} queue" >> /etc/hosts
 {{ end -}}
 EOT
-        change_mode = "noop"
+        change_mode     = "noop"
       }
     }
   }
