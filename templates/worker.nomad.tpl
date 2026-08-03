@@ -185,6 +185,20 @@ EOT
 
       [[ if var "vault_enabled" . ]]
       vault {
+        [[ if var "vault_default_role" . ]]
+        role = "[[ var "vault_default_role" . ]]"
+        [[ end ]]
+        [[ if var "vault_policies" . ]]
+        policies = [[ var "vault_policies" . | toJson ]]
+        [[ end ]]
+        [[ if var "vault_namespace" . ]]
+        namespace = "[[ var "vault_namespace" . ]]"
+        [[ end ]]
+        change_mode = "[[ var "vault_change_mode" . ]]"
+        [[ if var "vault_change_signal" . ]]
+        change_signal = "[[ var "vault_change_signal" . ]]"
+        [[ end ]]
+        env = [[ var "vault_env" . ]]
       }
       [[ end ]]
 
