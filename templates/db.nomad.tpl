@@ -44,26 +44,7 @@ job "[[ var "job_name" . ]]-db" {
       driver = "docker"
       user   = "[[ var "db_docker_user" . ]]"
 
-      [[ if var "vault_enabled" . ]]
-      vault {
-        [[ if var "vault_db_role" . ]]
-        role = "[[ var "vault_db_role" . ]]"
-        [[ else if var "vault_default_role" . ]]
-        role = "[[ var "vault_default_role" . ]]"
-        [[ end ]]
-        [[ if var "vault_policies" . ]]
-        policies = [[ var "vault_policies" . | toJson ]]
-        [[ end ]]
-        [[ if var "vault_namespace" . ]]
-        namespace = "[[ var "vault_namespace" . ]]"
-        [[ end ]]
-        change_mode = "[[ var "vault_change_mode" . ]]"
-        [[ if var "vault_change_signal" . ]]
-        change_signal = "[[ var "vault_change_signal" . ]]"
-        [[ end ]]
-        env = [[ var "vault_env" . ]]
-      }
-      [[ end ]]
+      [[ template "openstudio_server.vault_block" (dict "root" . "role" (var "vault_db_role" .)) ]]
 
       [[ if ne (var "db_storage_type" .) "ephemeral" ]]
       volume_mount {
@@ -74,10 +55,10 @@ job "[[ var "job_name" . ]]-db" {
       [[ end ]]
 
       config {
-        image      = "[[ var "db_image" . ]]"
+        image = "[[ var "db_image" . ]]"
         # Ensure DB always re-pulls to avoid stale wrong-arch cache entries on nodes.
         force_pull = true
-        ports = ["db"]
+        ports      = ["db"]
         ulimit {
           nofile = "[[ var "db_docker_ulimit_nofile" . ]]"
         }
@@ -138,15 +119,9 @@ job "[[ var "job_name" . ]]-db" {
         [[ end ]]
       }
 
-      [[ if var "vault_integration_enabled" . ]]
-      [[ if not (var "vault_enabled" .) ]]
-      vault {
-        policies      = ["[[ var "vault_policy" . ]]"]
-        change_mode   = "restart"
-        change_signal = "SIGTERM"
-      }
-      [[ end ]]
+      [[ template "openstudio_server.vault_integration_block" . ]]
 
+      [[ if var "vault_integration_enabled" . ]]
       template {
         destination = "secrets/env"
         env         = true
@@ -160,62 +135,7 @@ EOT
       [[ end ]]
     }
 
-    [[ if var "enable_vector_collection" . ]]
-    task "vector" {
-      driver = "docker"
-
-      lifecycle {
-        hook    = "prestart"
-        sidecar = true
-      }
-
-      config {
-        image      = "[[ var "vector_image" . ]]"
-        force_pull = false
-        args       = ["--config", "local/vector.toml"]
-      }
-
-      template {
-        data        = <<EOH
-[sources.alloc_logs]
-type = "file"
-include = ["/alloc/logs/*.std*"]
-
-[sinks.console]
-type = "console"
-inputs = ["alloc_logs"]
-encoding.codec = "json"
-EOH
-        destination = "local/vector.toml"
-      }
-
-      resources {
-        cpu    = 100
-        memory = 64
-      }
-    }
-    [[ end ]]
-
-    task "cleanup-poststop" {
-      driver = "docker"
-
-      lifecycle {
-        hook = "poststop"
-      }
-
-      config {
-        image   = "[[ var "poststop_cleanup_image" . ]]"
-        command = "sh"
-        args = [
-          "-ec",
-          <<EOT
-set -eu
-[[ range var "poststop_cleanup_paths" . -]]
-rm -rf "[[ . ]]"
-[[ end -]]
-EOT
-        ]
-      }
-    }
+    [[ template "openstudio_server.vector_task" . ]]
+    [[ template "openstudio_server.cleanup_poststop_task" . ]]
   }
 }

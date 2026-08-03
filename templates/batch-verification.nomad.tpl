@@ -8,10 +8,7 @@ job "[[ var "job_name" . ]]-batch-verify" {
   group "batch-verification" {
     count = 1
 
-    restart {
-      attempts = 0
-      mode     = "fail"
-    }
+    [[ template "openstudio_server.restart_block" (dict "attempts" 0 "mode" "fail") ]]
 
     task "verify-connectivity" {
       driver = "docker"

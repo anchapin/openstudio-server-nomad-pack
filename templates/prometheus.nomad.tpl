@@ -93,7 +93,7 @@ scrape_configs:
 EOH
       }
 
-[[ if var "prometheus_alert_rules_enabled" . ]]
+      [[ if var "prometheus_alert_rules_enabled" . ]]
       template {
         destination = "local/openstudio-alerts.yml"
         data        = <<EOH
@@ -128,7 +128,7 @@ groups:
           description: "resque:failed has remained non-empty for more than [[ var "prometheus_alert_failed_jobs_minutes" . ]] minutes."
 EOH
       }
-[[ end ]]
+      [[ end ]]
 
       service {
         name     = "openstudio-prometheus"

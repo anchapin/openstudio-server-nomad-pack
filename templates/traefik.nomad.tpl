@@ -5,14 +5,7 @@ job "[[ var "job_name" . ]]-traefik" {
   namespace   = "[[ var "nomad_namespace" . ]]"
   type        = "service"
 
-  update {
-    max_parallel      = 1
-    health_check      = "checks"
-    min_healthy_time  = "10s"
-    healthy_deadline  = "5m"
-    progress_deadline = "10m"
-    auto_revert       = true
-  }
+  [[ template "openstudio_server.update_block" (dict "max_parallel" 1 "health_check" "checks" "min_healthy_time" "10s" "healthy_deadline" "5m" "progress_deadline" "10m" "auto_revert" true) ]]
 
   group "traefik" {
     count = 1
