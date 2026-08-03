@@ -97,6 +97,11 @@ Each Nomad job is a separate `.nomad.tpl` file under `templates/`. The pack rend
 | `system-hooks.nomad.tpl` | `<job_name>-system-hooks` (image pre-pull) | `enable_image_prepull = true` (default) |
 | `nomad-autoscaler.nomad.tpl` | autoscaler daemon job | `nomad_autoscaler_enabled = true` |
 | `batch-verification.nomad.tpl` | `<job_name>-batch-verify` | `enable_batch_verification = true` |
+| `traefik.nomad.tpl` | Traefik ingress job | `deploy_traefik = true` |
+| `prometheus.nomad.tpl` | `<job_name>-prometheus` (Prometheus + redis_exporter sidecar) | `prometheus_enabled = true` |
+| `queue-sweeper.nomad.tpl` | `<job_name>-queue-sweeper` | `enable_queue_sweeper = true` |
+| `stall-watchdog.nomad.tpl` | `<job_name>-stall-watchdog` | `enable_stall_watchdog = true` |
+| `nomad-batch-worker.nomad.tpl` | `<job_name>-nomad-batch-worker` | `batch_engine == "nomad_batch"` |
 | `state-backup.nomad.tpl` | `<job_name>-state-backup` (periodic batch) | `backup_enabled = false` (default) |
 | `state-restore.nomad.tpl` | `<job_name>-state-restore` (on-demand batch) | `restore_enabled = false` (default) |
 | `openstudio_test.nomad.tpl` | `<job_name>-test` (parameterized batch) | always |
@@ -284,15 +289,15 @@ update {
 
 | File | Content |
 |---|---|
-| `getting-started-single-node.md` | Step-by-step single-node deploy guide |
-| `operations-guide.md` | Day-2 operations: scaling, draining, updating |
-| `storage.md` | Host volume, CSI, NFS configuration detail |
-| `upgrading.md` | Version upgrade procedures |
-| `migration-k8s-to-nomad.md` | Helm → Nomad Pack migration guide |
-| `vault-policies.md` | Vault policy templates and setup |
-| `acl-policies.md` | Nomad ACL policy reference |
-| `compatibility.md` | Pack ↔ app version compatibility matrix |
-| `variables.md` | Auto-generated variable reference (do not edit manually) |
+| `docs/modelers/getting-started-single-node.md` | Step-by-step single-node deploy guide |
+| `docs/infrastructure/operations-guide.md` | Day-2 operations: scaling, draining, updating |
+| `docs/infrastructure/storage.md` | Host volume, CSI, NFS configuration detail |
+| `docs/infrastructure/upgrading.md` | Version upgrade procedures |
+| `docs/infrastructure/migration-k8s-to-nomad.md` | Helm → Nomad Pack migration guide |
+| `docs/infrastructure/vault-policies.md` | Vault policy templates and setup |
+| `docs/infrastructure/acl-policies.md` | Nomad ACL policy reference |
+| `docs/compatibility.md` | Pack ↔ app version compatibility matrix |
+| `docs/variables.md` | Auto-generated variable reference (do not edit manually) |
 
 ---
 
