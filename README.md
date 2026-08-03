@@ -102,7 +102,7 @@ The OpenStack deploy helper (`scripts/deploy-openstack.sh --deploy`) runs this p
 
 To mirror stack images into Pulp ahead of deploys, use `scripts/mirror-images-to-pulp.sh` (reads image tags from your var-file and skips tags already present in Pulp).
 
-For role-isolated CSI on OpenStack, deploy separate hostpath plugin instances with `scripts/deploy-hostpath-csi-role-plugins.sh`, then set `db_csi_plugin_id` and `redis_csi_plugin_id` in `examples/openstack.hcl` (for example `hostpath-web-plugin0`) so DB/Redis volumes are created on the web-role plugin.
+For role-isolated CSI on OpenStack, deploy separate hostpath plugin instances with `scripts/deploy-hostpath-csi-role-plugins.sh`, then export `DB_CSI_PLUGIN_ID` and `REDIS_CSI_PLUGIN_ID` (or `CSI_PLUGIN_ID`) before running storage preflight/deploy helpers so DB/Redis volumes bind to the intended plugin.
 
 ## Pack Registry Layout Scaffold
 
@@ -350,7 +350,8 @@ Set `worker_autoscaling_enabled = true` to activate worker scaling policies:
 | `nomad_autoscaler_enabled` | `false` | Render optional autoscaler daemon stub (`templates/nomad-autoscaler.nomad.tpl`) |
 | `worker_min_replicas` | `1` | Minimum worker allocations |
 | `worker_max_replicas` | `10` | Maximum worker allocations |
-| `autoscaler_cooldown` | `"60m"` | Cooldown between scaling decisions |
+| `worker_autoscaling_scale_up_cooldown` | `"10m"` | Cooldown between scale-up events |
+| `worker_autoscaling_scale_down_cooldown` | `"20m"` | Cooldown between scale-down events |
 | `autoscaler_prometheus_address` | `"http://prometheus:9090"` | Prometheus URL for the Autoscaler plugin (only required for PromQL queue-depth checks) |
 | `worker_queue_requeued_query` | see vars | PromQL for the `requeued` queue depth |
 | `worker_queue_simulations_query` | see vars | PromQL for the `simulations` queue depth |

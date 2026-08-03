@@ -27,13 +27,9 @@ web_priority = 90
 web_cpu      = 1000
 web_memory   = 2048
 
-web_background_count = 2
-
-# ---------- Web-background (autoscaling) ----------
-# Static seed count; autoscaler owns the actual count.
-web_background_autoscaling_enabled = true
-web_background_min_replicas        = 1
-web_background_max_replicas        = 5
+# ---------- Web-background ----------
+# Singleton by design; tune background throughput with web_background_worker_count.
+web_background_worker_count = 8
 
 # ---------- Worker (autoscaling) ----------
 worker_priority      = 60
@@ -49,7 +45,8 @@ worker_autoscaling_enabled  = true
 worker_autoscaling_cpu_enabled = true  # Uses nomad-apm (built-in Nomad API driver); no Prometheus required
 worker_min_replicas         = 2
 worker_max_replicas         = 20
-autoscaler_cooldown         = "60m"
+worker_autoscaling_scale_up_cooldown   = "60m"
+worker_autoscaling_scale_down_cooldown = "60m"
 
 worker_update_max_parallel      = 2
 worker_update_min_healthy_time  = "1m"

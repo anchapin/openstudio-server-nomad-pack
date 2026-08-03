@@ -48,10 +48,8 @@ Avoid startup cooldown traps and bound ramp velocity:
 | `worker_max_replicas` | Hard cap on worker count | `10` | `50` |
 | `worker_queue_query_window` | PromQL smoothing window (`max_over_time`) | `2m` | `1m` |
 
-> **Note:** `worker_autoscaling_scale_up_cooldown` replaces the legacy `autoscaler_cooldown`
-> variable for the worker scaling policy. The `autoscaler_cooldown` variable is still read
-> by other check strategies; set `worker_autoscaling_scale_up_cooldown` specifically for
-> NFS-safe worker ramp control.
+> **Note:** Use `worker_autoscaling_scale_up_cooldown` and
+> `worker_autoscaling_scale_down_cooldown` for worker ramp control.
 
 ### Conservative Profile (NFS / Shared Storage)
 
@@ -236,5 +234,4 @@ See [`docs/variables.md`](variables.md) for full descriptions of all autoscaling
 - `worker_autoscaling_queue_enabled`
 - `worker_queue_query_window` *(new)*
 - `worker_queue_requeued_target` / `worker_queue_simulations_target`
-- `autoscaler_cooldown` *(legacy global cooldown)*
 - `nomad_autoscaler_enabled`
