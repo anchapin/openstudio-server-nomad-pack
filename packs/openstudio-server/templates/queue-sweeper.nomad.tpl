@@ -99,7 +99,7 @@ EOH
       }
 
       env {
-        REDIS_URL = "redis://openstudio-redis.service.consul:[[ var "redis_port" . ]]"
+        REDIS_URL = "[[ var "web_redis_url" . ]]"
       }
     }
   }
