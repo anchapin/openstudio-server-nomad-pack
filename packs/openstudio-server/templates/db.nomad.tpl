@@ -74,10 +74,10 @@ job "[[ var "job_name" . ]]-db" {
       [[ end ]]
 
       config {
-        image      = "[[ var "db_image" . ]]"
+        image = "[[ var "db_image" . ]]"
         # Ensure DB always re-pulls to avoid stale wrong-arch cache entries on nodes.
         force_pull = true
-        ports = ["db"]
+        ports      = ["db"]
         ulimit {
           nofile = "[[ var "db_docker_ulimit_nofile" . ]]"
         }
