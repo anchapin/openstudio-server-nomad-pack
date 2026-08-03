@@ -41,6 +41,47 @@ jobs:
         # syntax"). Render is fast; keep it cheap.
         run: nomad-pack render .
 
+  render-matrix:
+    name: Render Matrix (${{ matrix.scenario.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario:
+          - name: default
+            args: "."
+          - name: minimal-dev
+            args: "-var-file examples/quickstart/minimal-dev.hcl ."
+          - name: simple
+            args: "-var-file examples/quickstart/simple.hcl ."
+          - name: production-ha
+            args: "-var-file examples/advanced/production-ha.hcl ."
+          - name: airgapped
+            args: "-var-file examples/advanced/airgapped.hcl ."
+          - name: openstack-production
+            args: "-var-file examples/advanced/openstack-production.hcl ."
+          - name: e2e-test
+            args: "-var-file examples/advanced/e2e-test.hcl ."
+          - name: batch-verification
+            args: "-var enable_batch_verification=true ."
+          - name: nomad-batch-engine
+            args: "-var batch_engine=nomad_batch -var nomad_batch_datacenter=dc1 -var nomad_batch_namespace=default -var nomad_batch_job_name=openstudio-simulation ."
+          - name: aws-batch-engine
+            args: "-var batch_engine=aws_batch -var aws_region=us-east-1 -var aws_batch_job_queue=openstudio-queue -var aws_batch_job_definition=openstudio-worker ."
+          - name: vector-disabled
+            args: "-var enable_vector_collection=false ."
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Setup Nomad Pack
+        uses: hashicorp/setup-nomad-pack@36154659711632399739eb3b34d2e71dd54ed473  # 0.10.0
+        with:
+          version: 0.4.2
+
+      - name: Render Nomad Pack matrix scenario
+        run: nomad-pack render ${{ matrix.scenario.args }}
+
       - name: Validate batch verification rendering
         run: nomad-pack render --var "enable_batch_verification=true" .
 
