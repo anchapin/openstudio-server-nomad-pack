@@ -74,6 +74,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
 
+      - name: Setup Nomad
+        uses: hashicorp/setup-nomad@ceba9087d4322dbdd7b35dafac5a87a8c459a157  # v1.0.0
+
       - name: Setup Nomad Pack
         uses: hashicorp/setup-nomad-pack@36154659711632399739eb3b34d2e71dd54ed473  # 0.10.0
         with:
