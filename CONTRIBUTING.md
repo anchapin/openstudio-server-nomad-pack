@@ -29,6 +29,8 @@ Please read this guide before opening a PR.
 
 ### Pack validation
 
+> ⚠️ **WARNING — `nomad-pack fmt` corruption risk:** Running `nomad-pack fmt -write templates/` (or `fmt --write`) on v0.4.2 has a known lexer bug that **silently corrupts template files** by mangling `[[- /* ... */]]` comment markers. Always use `--check` (read-only) and never `--write` or `-write` against this repository's templates.
+
 ```bash
 # Format-check pack templates (non-destructive)
 # NOTE: On nomad-pack v0.4.2, `fmt -write templates/` can corrupt templates
@@ -41,8 +43,9 @@ nomad-pack render .
 # Render with an example var-file override
 nomad-pack render -var-file examples/quickstart/minimal-dev.hcl .
 
-# Validate the rendered job spec against a live Nomad cluster
-nomad-pack validate .
+# Plan against a running Nomad dev agent (replaces `nomad-pack validate` — not a valid command in v0.4.2)
+nomad agent -dev -bind=127.0.0.1 -log-level=ERROR &
+nomad-pack plan --name openstudio-server .
 ```
 
 ### Running CI locally with `act`
@@ -80,7 +83,7 @@ bash scripts/test_nomad_pack_integration.sh
 4. Update `CHANGELOG.md` under the `[Unreleased]` section (see below).
 5. If you changed any variable in `variables.hcl`, regenerate the variable docs (see below).
 6. All required CI checks must pass before merge:
-   - `pack-validation.yml` — format, render, validate
+   - `pack-validation.yml` — format, render, plan (dry-run for multiple example var-files)
    - `acl-policy-validation.yml` — ACL policy lint
    - `integration-test.yml` — end-to-end stack test (triggered on PRs to `develop` that touch `templates/**`, `variables.hcl`, `packs/**`, `scripts/**`, `examples/**`, `metadata.hcl`, or the workflow file itself)
 

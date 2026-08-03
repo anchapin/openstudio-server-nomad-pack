@@ -82,14 +82,6 @@ constraint {
 }
 [[- end -]]
 
-[[- define "openstudio_server.compute_node_constraint" -]]
-[[ template "openstudio_server.node_class_constraint" (var "compute_node_class" .) ]]
-[[- end -]]
-
-[[- define "openstudio_server.system_node_constraint" -]]
-[[ template "openstudio_server.node_class_constraint" (var "system_node_class" .) ]]
-[[- end -]]
-
 [[- define "openstudio_server.arch_constraint" -]]
 
 constraint {

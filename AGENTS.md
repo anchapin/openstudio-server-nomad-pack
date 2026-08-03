@@ -19,9 +19,6 @@ nomad-pack render .
 nomad-pack render -var-file examples/quickstart/minimal-dev.hcl .
 nomad-pack render -var "enable_batch_verification=true" .
 
-# Validate rendered job specs against a live Nomad cluster
-nomad-pack validate .
-
 # Plan (dry-run) against a running Nomad dev agent
 nomad agent -dev -bind=127.0.0.1 -log-level=ERROR &
 nomad-pack plan --name openstudio-server .
@@ -423,7 +420,7 @@ cp templates/*.tpl templates/*.nomad.tpl packs/openstudio-server/templates/
 
 | Workflow | Trigger | What it checks |
 |---|---|---|
-| `pack-validation.yml` | push to `develop` or `main`, PR to `develop` or `main`, `workflow_dispatch` | fmt, render, validate, `examples/test-batch.nomad` job spec validation, Vagrantfile syntax, script syntax, version-bump tests, `variables.md` diff, backup/restore default-doc consistency, README links to `docs/variables.md`, `compatibility.md` version gate, Nomad dev-agent plan for all example var-files, `packs/` registry sync, integration test script |
+| `pack-validation.yml` | push to `develop` or `main`, PR to `develop` or `main`, `workflow_dispatch` | fmt, render, plan (dry-run for multiple example var-files), `examples/test-batch.nomad` job spec validation, Vagrantfile syntax, script syntax, version-bump tests, `variables.md` diff, backup/restore default-doc consistency, README links to `docs/variables.md`, `compatibility.md` version gate, `packs/` registry sync, integration test script |
 | `acl-policy-validation.yml` | push/PR to `develop` or `main` on `policies/**` or `scripts/apply-acl-policies.sh` changes | `nomad fmt -check policies/` |
 | `integration-test.yml` | PR to `develop` (path-filtered) | template render + e2e stack test |
 | `release-version-bump.yml` | push to `main` | **Step 1:** auto-bumps patch version in `metadata.hcl`, syncs `packs/openstudio-server/metadata.hcl`, commits both files, creates and pushes `v*` git tag — triggers `release.yml` |

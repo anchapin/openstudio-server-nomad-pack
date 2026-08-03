@@ -6,7 +6,7 @@ job "[[ var "job_name" . ]]-redis" {
   meta {
     app_version       = "[[ var "app_version" . ]]"
     ingress_domain    = "[[ var "ingress_domain" . ]]"
-    vault_integration = "[[ var "vault_integration_enabled" . ]]"
+    vault_integration = "[[ var "vault_integration_enabled" . ]]" # observability label; not consumed by the Nomad scheduler
     deployment_marker = "[[ var "deployment_marker" . ]]"
   }
 

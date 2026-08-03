@@ -25,6 +25,9 @@ datacenters = ["dc1"]       # Update to match your Nomad datacenter name(s)
 
 # ---------- Images ----------
 # All images pulled from the internal Pulp registry to avoid Docker Hub rate limits.
+# NOTE: pulp-dev.hpc.nlr.gov is an NREL-internal registry. If you are deploying
+# outside of NREL, replace these image references with public images (e.g.,
+# "nrel/openstudio-server:<version>") or your own internal registry mirror.
 web_image            = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/nrel/openstudio-server:179-flock"
 web_background_image = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/nrel/openstudio-server:179-flock"
 worker_image         = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/nrel/openstudio-server:179-flock"
@@ -80,7 +83,7 @@ worker_priority      = 50
 worker_cpu           = 1500   # MHz — leaves headroom for OS + Docker on 8-vCPU nodes
 worker_memory        = 1750   # MB  — ~38 % of 16 GB; allows 2 allocations per node
 worker_memory_max    = 4000   # MB  — burst to full node memory before OOM
-worker_process_count = 2    # 2 processes × 3 000 MHz ≈ 6 000 MHz per allocation
+worker_process_count = "2"    # 2 processes × 3 000 MHz ≈ 6 000 MHz per allocation
 worker_command = "/bin/sh"
 worker_args    = ["-c", "sh /local/patch-hosts.sh && exec /usr/local/bin/start-workers"]
 

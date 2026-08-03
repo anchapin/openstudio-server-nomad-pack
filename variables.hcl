@@ -1532,19 +1532,6 @@ variable "test_busybox_image_tag" {
   default     = "stable"
 }
 
-# Node class / placement variables
-variable "compute_node_class" {
-  type        = string
-  description = "Nomad node class label for CPU-intensive compute nodes. Used by the openstudio_server.compute_node_constraint helper macro."
-  default     = "compute"
-}
-
-variable "system_node_class" {
-  type        = string
-  description = "Nomad node class label for infrastructure/system nodes. Used by the openstudio_server.system_node_constraint helper macro."
-  default     = "system"
-}
-
 # Swift / object-storage artifact backend variables
 variable "swift_artifact_storage_enabled" {
   type        = bool

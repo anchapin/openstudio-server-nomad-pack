@@ -8,8 +8,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Fixed `release.yml` creating releases on wrong commit: `tag_name` was sourced from `metadata.hcl` at checkout time rather than the triggering tag; changed to `github.ref_name` and removed now-unused "Read pack version" step.
+- Fixed `Makefile` `deploy` target: `nomad-pack render` was called with `--auto-approve`, an invalid flag for the `render` subcommand that caused silent no-op deploys.
+- Fixed `worker_process_count` type mismatch in `examples/advanced/openstack-production.hcl`: value was unquoted integer `2` but variable type is `string`; changed to `"2"`.
+- Fixed `scripts/preflight-storage.sh` relative `VAR_FILE` path: script failed when invoked outside repo root; now anchored to `REPO_ROOT` via `BASH_SOURCE[0]` like all other scripts.
+- Fixed `integration-test.yml` not running E2E tests on PRs targeting `main`: added `main` to `pull_request.branches` so release PRs are validated before merge.
+- Fixed inconsistent `actions/checkout` pin in `acl-policy-validation.yml`: upgraded stale SHA to `11bd71901bbe5b1630ceea73d27597364c9af683` (v4.2.2) matching all other workflows.
+- Fixed stale `nomad-pack validate .` command in `CONTRIBUTING.md` and `AGENTS.md` (`validate` is not a valid subcommand in v0.4.2); replaced with `nomad-pack plan`.
+- Fixed duplicate `### Added` / `### Changed` / `### Fixed` headings in `CHANGELOG.md [Unreleased]`; consolidated into one of each per Keep a Changelog format.
+- Removed dead `openstudio_server.compute_node_constraint` and `openstudio_server.system_node_constraint` helper macros from `templates/_helpers.tpl`: defined but never called by any template. Removed corresponding `compute_node_class` and `system_node_class` variables from `variables.hcl` and the `packs/` registry mirror.
+- Removed stale `benchmark-results/` gitignore patterns (no such directory in repo).
 - Updated `nomad-pack` command examples across docs, examples, and CI workflows to use flags-before-pack-path syntax required by nomad-pack v0.4.2 (e.g., `nomad-pack run -var-file X .` instead of `nomad-pack run . -var-file X`) (#390).
 - Updated contributor/agent docs to use `nomad-pack fmt --check templates/` and explicitly warn that, on nomad-pack v0.4.2, `fmt -write templates/` can corrupt templates while `fmt --check -recursive .` is a silent no-op from pack root (#389).
+
+- Removed the circular `web-background` prestart dependency on `openstudio-web`; it now waits for `openstudio-rserve` instead, allowing the web job to become healthy on fresh deployments.
+- Fixed "Analysis initialization failed: Seed zip ... Destination already exists" error by changing the `web_background_queues` default from `analysis_wrappers` to `background,analyses`. The `analyses` queue contains cleanup/pre-initialization jobs that must run before zip extraction; without those workers running, stale files from a prior failed initialization were never removed, causing the "already exists" error on retry.
+- Renamed `APP_SECRET_KEY_BASE` environment variable to `SECRET_KEY_BASE` across web, web-background, and worker tasks to match the Rails standard and the Helm chart; the HCL variable name `app_secret_key_base` is unchanged.
+- Fixed web task missing `QUEUES = "analysis_wrappers"` env var, now aligned with the Helm chart's web deployment.
+
+- Docker Compose-based quick-start infrastructure (`docker/docker-compose.yaml`, `docker/nomad.hcl`, `Makefile`, `scripts/quickstart.sh`) that runs Consul and Nomad in containers with host networking — reducing local dev prerequisites from 5 (Docker, nomad-pack, native Nomad, native Consul, CNI plugins) to 2 (Docker + nomad-pack). Both the Makefile and quickstart script use `curl` API calls exclusively — no native `nomad` or `consul` CLI required. Updated `docs/getting-started-single-node.md` with a "Quick Start (5 minutes)" section at the top. (#349)
+
+- Pinned `test_curl_image_tag` default from `latest` to `8.9.1` to remove the only floating container image tag and restore reproducible test job image resolution. (#301)
+- Reconciled CI workflow trigger documentation in AGENTS.md and README.md with actual `.github/workflows/` configurations: `pack-validation.yml` runs on push to `develop` **and** `main`; `acl-policy-validation.yml` covers policy and ACL script changes; added missing `release.yml` row to README CI table (#279)
+- Renamed backup/restore volume selector variable from `backup_nfs_host_volume` to `backup_volume_source` across templates, examples, and docs to clarify support for both `host_volume` and `csi` backends. (#315)
+- Aligned Nomad ACL policy defaults with the pack default namespace by switching policy files from `openstudio` to `default`, and updated ACL docs/script guidance for custom namespace substitution (#309)
+- Added an explicit `nomad job validate examples/test-batch.nomad` gate to `pack-validation.yml` so smoke-test batch spec errors fail fast in validation CI instead of surfacing only in slower e2e runs (#305)
+- Added `main` branch triggers to `acl-policy-validation.yml` for both push and pull request events so ACL policy changes are validated before and after merge on release branch updates (#306)
+- Clarified Vault flag behavior in variables and docs: `vault_integration_enabled` now explicitly documents KV template secret injection, `vault_enabled` documents explicit role-based `vault` blocks, and docs now describe recommended dual-enable and fallback behavior when only one flag is set (#303)
+- Synced `packs/openstudio-server/metadata.hcl` during automated release version bumps and added CI checks/docs coverage to prevent future registry metadata drift (#296)
+- Fixed `scripts/pre-teardown.sh` to stop all optional teardown-sensitive jobs when present by adding missing `<JOB_NAME>-state-restore`, `<JOB_NAME>-batch-verify`, and `<JOB_NAME>-test` stop calls; also documented the full stop order in `docs/operations-guide.md` and added `scripts/test_pre_teardown.sh` coverage in CI (#297)
+- Added missing `openstudio-web` and `openstudio-rserve` service URLs to deployment output, including an unconditional OpenStudio Web UI section so operators can find the primary UI even when Traefik is disabled (#294)
+- Increased `web_memory_max` default from `2048` to `4096` and documented that it must exceed `web_memory`, so Nomad web tasks can actually burst beyond their soft memory reservation by default (#295)
+- Made templates fmt-clean and render-stable under nomad-pack v0.4.2: converted `[[- /*` / `*/ -]]` trim-comment markers — which v0.4.2 `fmt -write` rewrites into lexer-invalid output that breaks `nomad-pack render .` with "illegal number syntax" — to plain `[[/* */]]` comments, then formatted all templates and synced the `packs/` registry mirror (#383)
+- Fixed the CI fmt gate being a silent no-op: `nomad-pack fmt -check -recursive .` always exits 0 under v0.4.2 (recursive discovery never descends from the pack root), so unformatted templates went undetected; the gate now runs `nomad-pack fmt --check templates/` and is followed by a render-after-fmt guard step that catches formatter regressions (#383)
+- Pinned `version: 0.4.2` in all `hashicorp/setup-nomad-pack` steps (the action's default `latest` is a moving target) and echoed the CLI version in CI logs (#383)
 
 ### Added
 - Added `prometheus_alert_rules_enabled` variable (default `true`) to embed Prometheus alert rules into the in-pack Prometheus job when `prometheus_enabled = true`. Adds three rules: `OpenStudioSimulationsQueueBacklog` (simulations queue non-empty > 30 min), `OpenStudioRequeuedQueueBacklog` (requeued queue non-empty > 20 min), and `OpenStudioFailedJobs` (Resque failed queue non-empty > 5 min).
@@ -21,51 +53,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `enable_stall_watchdog`, `stall_watchdog_cron`, `stall_watchdog_max_stall_seconds`, `stall_watchdog_restart_allocs`, `stall_watchdog_nomad_address`, `stall_watchdog_worker_job`, `stall_watchdog_image`, `stall_watchdog_cpu`, and `stall_watchdog_memory` variables.
 - Enabled `enable_stall_watchdog = true` with `stall_watchdog_nomad_address = "http://192.168.100.87:4646"` in `examples/advanced/openstack-production.hcl`.
 
-### Added
 - Added `batch_engine` variable (`"internal"` | `"nomad_batch"` | `"aws_batch"`) to select the simulation compute backend; defaults to `"internal"` for full backward compatibility.
 - Added Nomad Batch provider variables: `nomad_batch_datacenter`, `nomad_batch_namespace`, `nomad_batch_job_name`, `nomad_batch_worker_image`, `nomad_batch_cpu`, `nomad_batch_memory`, `nomad_batch_worker_command`, `nomad_batch_worker_args`, `nomad_batch_constraints`, `nomad_batch_kill_timeout`, `nomad_batch_identity_ttl`.
-- Added AWS Batch provider variables: `aws_region`, `aws_batch_job_queue`, `aws_batch_job_definition`, `aws_batch_vault_aws_role`.
 - Added `templates/nomad-batch-worker.nomad.tpl` — a parameterized Nomad batch job (`type = "batch"`) deployed when `batch_engine = "nomad_batch"`. The web dispatcher dispatches one allocation per simulation via `POST /v1/job/<name>/dispatch`.
 - Added `OS_EXTERNAL_BATCH`, `BATCH_PROVIDER`, `NOMAD_BATCH_JOB_NAME`, `NOMAD_BATCH_NAMESPACE`, `AWS_DEFAULT_REGION`, `AWS_BATCH_JOB_QUEUE`, and `AWS_BATCH_JOB_DEFINITION` env vars injected into the web task when `batch_engine != "internal"`.
 - Added Nomad Workload Identity `identity` block to the web task when `batch_engine = "nomad_batch"`, providing a scoped short-lived `NOMAD_TOKEN` for API dispatch without static credentials.
 - Added `policies/batch-dispatcher.hcl` — minimal ACL policy for the web Workload Identity (submit-job, dispatch-job, read-job, list-jobs only).
 - Added `nomad-batch-engine` and `aws-batch-engine` scenarios to `scripts/test_nomad_pack_integration.sh`.
 
-### Changed
-- `templates/worker.nomad.tpl` — wrapped job definition in `[[ if eq (var "batch_engine" .) "internal" ]]` guard; worker service job is omitted when using an external batch engine.
-- `templates/rserve.nomad.tpl` — wrapped job definition in `[[ if eq (var "batch_engine" .) "internal" ]]` guard; Rserve service job is omitted when using an external batch engine.
-- `policies/operator.hcl` — updated comment to reference batch-dispatcher use case.
-
-### Added
 - Added `user-overrides.hcl` template at the repository root — a modeler-facing file containing only the variables energy modelers need to set (image version, worker count, port, job name), with rich inline comments.
 - Added `examples/quickstart/simple.hcl` — a minimal, clean var-file for first-time modeler deployments.
 - Added `docs/modelers/quickstart.md` — 3-step quickstart guide for energy modelers.
 - Added `docs/modelers/submitting-osw-jobs.md` — guide for submitting OSW files, PAT projects, and REST API calls.
 - Added `docs/modelers/README.md` and `docs/infrastructure/README.md` index pages routing users to the right documentation.
 - Added `examples/README.md` routing energy modelers to `quickstart/` and admins to `advanced/`.
-
-### Changed
-- Reorganized `examples/` into `examples/quickstart/` (modeler-facing) and `examples/advanced/` (admin/HA/OpenStack).
-- Reorganized `docs/` into `docs/modelers/` (energy modeler guides) and `docs/infrastructure/` (admin/ops guides).
-- Refactored `README.md` as a traffic controller with prominent separate sections for energy modelers and infrastructure admins.
-- Updated all CI workflow path references (`pack-validation.yml`, `integration-test.yml`), scripts, and `Makefile` to reflect the new `examples/quickstart/` and `examples/advanced/` paths.
-
-
-
-- Fixed worker `patch-hosts.sh` missing `web` hostname entry: the Consul-template that generates `/etc/hosts` for worker containers only injected entries for `db`, `queue`, and `rserve`, but omitted `openstudio-web`. Every simulation subprocess uploads reports and marks the data point complete via `http://web:80/data_points/.../upload_file`; with no `/etc/hosts` entry for `web`, every upload failed silently and every data point was marked `datapoint failure`. Added `{{ range service "openstudio-web" }}echo "{{ .Address }} web"{{ end }}` to the worker template. Docker Compose was unaffected because the overlay network provides built-in DNS for all service names.
-
-- Fixed `traefik_max_request_body_size` default value: was `"500MB"` (a human-readable string) but Traefik's `maxRequestBodyBytes` Consul tag requires a plain integer (bytes). Traefik failed to parse the tag and dropped the entire web service route, returning 404 for all requests. Changed default to `"524288000"` (500 MiB in bytes) and updated description to warn that only integers are accepted.
-- Fixed `worker_autoscaling_scale_down_cooldown` being silently ignored: replaced flawed per-check `cooldown` overrides with the correct `cooldown_on_scale_up` field at the policy level (supported since Nomad Autoscaler 0.4.0; deployment uses 0.5.0). Policy-level `cooldown` now governs scale-down (`20m` default) and `cooldown_on_scale_up` governs scale-up (`10m` default).
-- Fixed `fresh-redeploy-openstack.sh` bootstrap cooldown override being a no-op: the script was overriding `autoscaler_cooldown`, which is not rendered in any template. It now correctly overrides `worker_autoscaling_scale_up_cooldown` during bootstrap (Phase 2) and restores the var-file value in Phase 3.
-- Fixed `worker_queue_requeued_query` default and `openstack.hcl` value: the `+1` trick (`sum(...) + 1`) was intended to prevent a missing-series error but silently breaks when the Redis key doesn't exist — Prometheus propagates empty through arithmetic, so `sum(empty) + 1` returns empty, not 1. This caused the autoscaler to oscillate between scale-up (when Redis had the key) and scale-down (when it didn't), creating thousands of short-lived allocations that were immediately stopped. Replaced with `(sum(...) or vector(0))` which consistently returns 0 when idle, enabling stable scale-to-zero behavior.
-
-- Fixed `openstack-production.hcl` not enabling queue-depth autoscaling: the file only set `worker_autoscaling_cpu_enabled = true` but omitted `worker_autoscaling_queue_enabled`, `prometheus_enabled`, and `nomad_autoscaler_enabled`. With CPU-only scaling, workers only scale when CPU is high on *already-running* workers, not when the simulation queue is large — causing the autoscaler to leave deep queues (300+ simulations) underserved. Enabled all three flags, set `worker_queue_simulations_target = 15` and `worker_queue_requeued_target = 15` (1 worker per 15 queued jobs), and tightened scale-up cooldown from 30m to 5m so a burst queue ramps quickly to `worker_max_replicas`.
-- Fixed OpenStack worker scaling stabilization defaults to avoid cooldown lockouts after deploy: aligned `worker_count` with `worker_min_replicas` (2), reduced `worker_autoscaling_scale_down_cooldown` to `5m`, restored queue-depth targets to `15/15`, and lowered the default `worker_max_replicas` guardrail to `200` in `examples/openstack-production.hcl`; updated OpenStack rollout and autoscaling ramp docs with the same guidance.
-- Tuned OpenStack high-queue autoscaling profile from live cluster trials: set `worker_max_replicas=160`, `worker_queue_simulations_target=20`, `worker_queue_requeued_target=20`, `worker_autoscaling_scale_up_cooldown=2m`, and `worker_autoscaling_scale_down_cooldown=10m` after iterative load observations (40→60→80→100→120→140→160 workers) to improve ramp speed while preserving allocation stability.
-- Tuned analyses-queue throughput via `web-background` scaling in live cluster tests: increasing `web_background_count` from `1` to `2` (with `web_background_worker_count=56` per replica) drained `resque:queue:analyses` from 140 to 0 in ~4 minutes with no allocation failures or restarts, so `examples/openstack-production.hcl` now defaults to `web_background_count=2`.
-- Reverted `web_background_count` default back to `1` in `examples/openstack-production.hcl` and runbook guidance after upstream application guidance that horizontal web-background replicas may trigger race conditions in analysis lifecycle processing.
-
-### Added
 
 - Added optional Swift/object-storage artifact backend: `swift_artifact_storage_enabled` master switch and seven supporting variables (`swift_auth_url`, `swift_username`, `swift_password`, `swift_tenant_name`, `swift_container`, `swift_region`, `swift_auth_version`). When enabled, OpenStack Swift credentials and `ARTIFACT_STORAGE_BACKEND=swift` are injected as env vars into web and worker tasks, decoupling heavy artifact writes from shared NFS. See `docs/swift-artifact-backend.md` for migration and rollback guidance. (#357)
 - Added `examples/openstack-production.hcl` var-file template for OpenStack deployments with commented-out Swift configuration block.
@@ -94,6 +95,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `docs/nfs-tuning-guide.md`: comprehensive NFS client/server tuning guide with three deployment profiles (Conservative / Balanced / Aggressive), OpenStack Manila/Ganesha export tuning, benchmark methodology using `fio`/`nfsstat`/`iostat`, and guardrails for high-concurrency (100+ worker) deployments (#358).
 
 ### Changed
+- `templates/worker.nomad.tpl` — wrapped job definition in `[[ if eq (var "batch_engine" .) "internal" ]]` guard; worker service job is omitted when using an external batch engine.
+- `templates/rserve.nomad.tpl` — wrapped job definition in `[[ if eq (var "batch_engine" .) "internal" ]]` guard; Rserve service job is omitted when using an external batch engine.
+- `policies/operator.hcl` — updated comment to reference batch-dispatcher use case.
+
+- Reorganized `examples/` into `examples/quickstart/` (modeler-facing) and `examples/advanced/` (admin/HA/OpenStack).
+- Reorganized `docs/` into `docs/modelers/` (energy modeler guides) and `docs/infrastructure/` (admin/ops guides).
+- Refactored `README.md` as a traffic controller with prominent separate sections for energy modelers and infrastructure admins.
+- Updated all CI workflow path references (`pack-validation.yml`, `integration-test.yml`), scripts, and `Makefile` to reflect the new `examples/quickstart/` and `examples/advanced/` paths.
+
+- Fixed worker `patch-hosts.sh` missing `web` hostname entry: the Consul-template that generates `/etc/hosts` for worker containers only injected entries for `db`, `queue`, and `rserve`, but omitted `openstudio-web`. Every simulation subprocess uploads reports and marks the data point complete via `http://web:80/data_points/.../upload_file`; with no `/etc/hosts` entry for `web`, every upload failed silently and every data point was marked `datapoint failure`. Added `{{ range service "openstudio-web" }}echo "{{ .Address }} web"{{ end }}` to the worker template. Docker Compose was unaffected because the overlay network provides built-in DNS for all service names.
+
+- Fixed `traefik_max_request_body_size` default value: was `"500MB"` (a human-readable string) but Traefik's `maxRequestBodyBytes` Consul tag requires a plain integer (bytes). Traefik failed to parse the tag and dropped the entire web service route, returning 404 for all requests. Changed default to `"524288000"` (500 MiB in bytes) and updated description to warn that only integers are accepted.
+- Fixed `worker_autoscaling_scale_down_cooldown` being silently ignored: replaced flawed per-check `cooldown` overrides with the correct `cooldown_on_scale_up` field at the policy level (supported since Nomad Autoscaler 0.4.0; deployment uses 0.5.0). Policy-level `cooldown` now governs scale-down (`20m` default) and `cooldown_on_scale_up` governs scale-up (`10m` default).
+- Fixed `fresh-redeploy-openstack.sh` bootstrap cooldown override being a no-op: the script was overriding `autoscaler_cooldown`, which is not rendered in any template. It now correctly overrides `worker_autoscaling_scale_up_cooldown` during bootstrap (Phase 2) and restores the var-file value in Phase 3.
+- Fixed `worker_queue_requeued_query` default and `openstack.hcl` value: the `+1` trick (`sum(...) + 1`) was intended to prevent a missing-series error but silently breaks when the Redis key doesn't exist — Prometheus propagates empty through arithmetic, so `sum(empty) + 1` returns empty, not 1. This caused the autoscaler to oscillate between scale-up (when Redis had the key) and scale-down (when it didn't), creating thousands of short-lived allocations that were immediately stopped. Replaced with `(sum(...) or vector(0))` which consistently returns 0 when idle, enabling stable scale-to-zero behavior.
+
+- Fixed `openstack-production.hcl` not enabling queue-depth autoscaling: the file only set `worker_autoscaling_cpu_enabled = true` but omitted `worker_autoscaling_queue_enabled`, `prometheus_enabled`, and `nomad_autoscaler_enabled`. With CPU-only scaling, workers only scale when CPU is high on *already-running* workers, not when the simulation queue is large — causing the autoscaler to leave deep queues (300+ simulations) underserved. Enabled all three flags, set `worker_queue_simulations_target = 15` and `worker_queue_requeued_target = 15` (1 worker per 15 queued jobs), and tightened scale-up cooldown from 30m to 5m so a burst queue ramps quickly to `worker_max_replicas`.
+- Fixed OpenStack worker scaling stabilization defaults to avoid cooldown lockouts after deploy: aligned `worker_count` with `worker_min_replicas` (2), reduced `worker_autoscaling_scale_down_cooldown` to `5m`, restored queue-depth targets to `15/15`, and lowered the default `worker_max_replicas` guardrail to `200` in `examples/openstack-production.hcl`; updated OpenStack rollout and autoscaling ramp docs with the same guidance.
+- Tuned OpenStack high-queue autoscaling profile from live cluster trials: set `worker_max_replicas=160`, `worker_queue_simulations_target=20`, `worker_queue_requeued_target=20`, `worker_autoscaling_scale_up_cooldown=2m`, and `worker_autoscaling_scale_down_cooldown=10m` after iterative load observations (40→60→80→100→120→140→160 workers) to improve ramp speed while preserving allocation stability.
 
 - Updated `docs/storage.md` §5.1 NFS mount options: promoted `nfsvers=4.1`, increased `rsize`/`wsize` from 64 KiB to 1 MiB, replaced `sync`/`intr`/`timeo=14` with `hard,timeo=600,retrans=2,noresvport,_netdev` (Balanced profile); added §8 NFS Tuning for High Concurrency cross-reference to `nfs-tuning-guide.md` (#358).
 - Updated `examples/openstack.hcl`: added inline Balanced-profile `/etc/fstab` snippet and mount option rationale comments for the NFS shared volume block (#358).
@@ -104,14 +124,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `rserve_count` variable (default `1`): sets the number of Rserve task group allocations. Set to a higher value to run multiple Rserve replicas for fault tolerance. Each allocation registers independently in Consul; unhealthy replicas are automatically excluded from routing. See `docs/rserve-multi-replica.md`.
 - Added `docs/rserve-multi-replica.md`: documents multi-replica Rserve routing via Consul DNS, health check/failover semantics, `rserve_spreads` configuration, and known limitations. (#361)
 
-### Changed
-
 - Updated `web_background_worker_count` default from `6` to `8` to drain the `background` / `analyses` queues faster out-of-the-box.
 - Updated `web_background_cpu` default from `250` MHz to `2000` MHz (8 workers × ~250 MHz each) and `web_background_memory` from `512` MB to `2048` MB (8 workers × ~256 MB each) to match the new default worker count; `web_background_memory_max` default updated from `0` (disabled) to `4096` MB (2× soft limit) to allow burst headroom.
 - Updated `examples/openstack.hcl`: scaled `web_background_worker_count` from `42` to `56` (+33%) with proportional resource adjustments (`cpu` 12000→16000 MHz, `memory` 12288→16384 MB, `memory_max` 24576→32768 MB); added `redis_config_tcp_keepalive = 60`, `redis_memory_max = 24576` (1.5× redis_memory), `web_mongoid_pool_size = 154` (matching MAX_POOL), and `web_background_mongoid_pool_size = 58` (56 workers + 2 headroom).
-
-
-### Changed
 
 - Changed `worker_min_replicas` default from `2` to `0` to allow scale-to-zero when `worker_autoscaling_queue_enabled = true` and the queue is empty; operators who require a standing worker floor should set this explicitly.
 - Changed `autoscaler_cooldown` default from `60m` to `10m` so idle workers are reclaimed faster after the queue drains; increase to `60m` or higher in environments prone to rapid scale-up/scale-down oscillation.
@@ -124,32 +139,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `mongo_user` variable (`MONGO_USER` env var) injected into web, web-background, and worker containers to align with the Helm chart, which sets `MONGO_USER` on all workloads for MongoDB authenticated connections.
 - Added `web_background_worker_count` variable (default `6`) injected as the `COUNT` env var into the web-background task to control the number of Resque child worker processes per allocation, matching the Helm chart's configurable worker count.
 - Added `init-shared-storage-perms` prestart lifecycle task to the `web-background` group: runs `alpine:3.20` as root (with `CHOWN`+`FOWNER` capabilities) to `mkdir -p` and `chmod 2777` the analysis directory tree on the shared NFS volume before any workers start, mirroring the Helm chart's `init-fix-shared-storage-perms` init container.
-
-### Fixed
-
-- Removed the circular `web-background` prestart dependency on `openstudio-web`; it now waits for `openstudio-rserve` instead, allowing the web job to become healthy on fresh deployments.
-- Fixed "Analysis initialization failed: Seed zip ... Destination already exists" error by changing the `web_background_queues` default from `analysis_wrappers` to `background,analyses`. The `analyses` queue contains cleanup/pre-initialization jobs that must run before zip extraction; without those workers running, stale files from a prior failed initialization were never removed, causing the "already exists" error on retry.
-- Renamed `APP_SECRET_KEY_BASE` environment variable to `SECRET_KEY_BASE` across web, web-background, and worker tasks to match the Rails standard and the Helm chart; the HCL variable name `app_secret_key_base` is unchanged.
-- Fixed web task missing `QUEUES = "analysis_wrappers"` env var, now aligned with the Helm chart's web deployment.
-
-- Docker Compose-based quick-start infrastructure (`docker/docker-compose.yaml`, `docker/nomad.hcl`, `Makefile`, `scripts/quickstart.sh`) that runs Consul and Nomad in containers with host networking — reducing local dev prerequisites from 5 (Docker, nomad-pack, native Nomad, native Consul, CNI plugins) to 2 (Docker + nomad-pack). Both the Makefile and quickstart script use `curl` API calls exclusively — no native `nomad` or `consul` CLI required. Updated `docs/getting-started-single-node.md` with a "Quick Start (5 minutes)" section at the top. (#349)
-
-### Fixed
-
-- Pinned `test_curl_image_tag` default from `latest` to `8.9.1` to remove the only floating container image tag and restore reproducible test job image resolution. (#301)
-- Reconciled CI workflow trigger documentation in AGENTS.md and README.md with actual `.github/workflows/` configurations: `pack-validation.yml` runs on push to `develop` **and** `main`; `acl-policy-validation.yml` covers policy and ACL script changes; added missing `release.yml` row to README CI table (#279)
-- Renamed backup/restore volume selector variable from `backup_nfs_host_volume` to `backup_volume_source` across templates, examples, and docs to clarify support for both `host_volume` and `csi` backends. (#315)
-- Aligned Nomad ACL policy defaults with the pack default namespace by switching policy files from `openstudio` to `default`, and updated ACL docs/script guidance for custom namespace substitution (#309)
-- Added an explicit `nomad job validate examples/test-batch.nomad` gate to `pack-validation.yml` so smoke-test batch spec errors fail fast in validation CI instead of surfacing only in slower e2e runs (#305)
-- Added `main` branch triggers to `acl-policy-validation.yml` for both push and pull request events so ACL policy changes are validated before and after merge on release branch updates (#306)
-- Clarified Vault flag behavior in variables and docs: `vault_integration_enabled` now explicitly documents KV template secret injection, `vault_enabled` documents explicit role-based `vault` blocks, and docs now describe recommended dual-enable and fallback behavior when only one flag is set (#303)
-- Synced `packs/openstudio-server/metadata.hcl` during automated release version bumps and added CI checks/docs coverage to prevent future registry metadata drift (#296)
-- Fixed `scripts/pre-teardown.sh` to stop all optional teardown-sensitive jobs when present by adding missing `<JOB_NAME>-state-restore`, `<JOB_NAME>-batch-verify`, and `<JOB_NAME>-test` stop calls; also documented the full stop order in `docs/operations-guide.md` and added `scripts/test_pre_teardown.sh` coverage in CI (#297)
-- Added missing `openstudio-web` and `openstudio-rserve` service URLs to deployment output, including an unconditional OpenStudio Web UI section so operators can find the primary UI even when Traefik is disabled (#294)
-- Increased `web_memory_max` default from `2048` to `4096` and documented that it must exceed `web_memory`, so Nomad web tasks can actually burst beyond their soft memory reservation by default (#295)
-- Made templates fmt-clean and render-stable under nomad-pack v0.4.2: converted `[[- /*` / `*/ -]]` trim-comment markers — which v0.4.2 `fmt -write` rewrites into lexer-invalid output that breaks `nomad-pack render .` with "illegal number syntax" — to plain `[[/* */]]` comments, then formatted all templates and synced the `packs/` registry mirror (#383)
-- Fixed the CI fmt gate being a silent no-op: `nomad-pack fmt -check -recursive .` always exits 0 under v0.4.2 (recursive discovery never descends from the pack root), so unformatted templates went undetected; the gate now runs `nomad-pack fmt --check templates/` and is followed by a render-after-fmt guard step that catches formatter regressions (#383)
-- Pinned `version: 0.4.2` in all `hashicorp/setup-nomad-pack` steps (the action's default `latest` is a moving target) and echoed the CLI version in CI logs (#383)
 
 ## [0.2.67] - 2026-07-29
 

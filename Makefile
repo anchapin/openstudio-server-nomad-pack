@@ -180,7 +180,7 @@ deploy: check-infra ## Deploy OpenStudio Server with minimal-dev config
 	@echo "Rendering and deploying jobs..."
 	@rm -rf /tmp/nomad-pack-render && mkdir /tmp/nomad-pack-render
 	@NOMAD_ADDR=http://127.0.0.1:4646 nomad-pack render --var-file $(VAR_FILE) \
-		--to-dir /tmp/nomad-pack-render --auto-approve . >/dev/null 2>&1
+		--to-dir /tmp/nomad-pack-render . >/dev/null 2>&1
 	@for f in /tmp/nomad-pack-render/openstudio-server/*.nomad; do \
 		job=$$(basename "$$f" .hcl); \
 		echo "  Submitting $$job..."; \

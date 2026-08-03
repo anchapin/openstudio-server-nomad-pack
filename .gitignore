@@ -11,11 +11,5 @@
 *.orig
 *.rej
 
-# Keep benchmark summaries, ignore bulky raw benchmark artifacts by default.
-benchmark-results/**
-!benchmark-results/
-!benchmark-results/tier-*/
-!benchmark-results/tier-*/summary.json
-
 # Session-specific agent output artifacts
 .agents/results/*.json
