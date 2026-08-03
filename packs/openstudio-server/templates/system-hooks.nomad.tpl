@@ -31,12 +31,7 @@ job "[[ var "job_name" . ]]-system-hooks" {
     }
     [[ end ]]
 
-    restart {
-      attempts = [[ var "prepull_restart_attempts" . ]]
-      interval = "1h"
-      delay    = "30s"
-      mode     = "delay"
-    }
+    [[ template "openstudio_server.restart_block" (dict "attempts" (var "prepull_restart_attempts" .) "interval" "1h" "delay" "30s" "mode" "delay") ]]
 
     task "pull-worker-image" {
       lifecycle {
@@ -122,12 +117,7 @@ job "[[ var "job_name" . ]]-system-hooks" {
   group "prepull-core-images" {
     [[ template "constraints" (var "web_constraints" .) ]]
 
-    restart {
-      attempts = [[ var "prepull_restart_attempts" . ]]
-      interval = "1h"
-      delay    = "30s"
-      mode     = "delay"
-    }
+    [[ template "openstudio_server.restart_block" (dict "attempts" (var "prepull_restart_attempts" .) "interval" "1h" "delay" "30s" "mode" "delay") ]]
 
     task "pull-web-image" {
       lifecycle {

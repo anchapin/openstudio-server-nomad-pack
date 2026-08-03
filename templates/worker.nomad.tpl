@@ -12,14 +12,7 @@ job "[[ var "job_name" . ]]-worker" {
   type        = "service"
   priority    = [[ var "worker_priority" . ]]
 
-  update {
-    max_parallel      = [[ var "worker_update_max_parallel" . ]]
-    health_check      = "[[ var "worker_update_health_check" . ]]"
-    min_healthy_time  = "[[ var "worker_update_min_healthy_time" . ]]"
-    healthy_deadline  = "[[ var "worker_update_healthy_deadline" . ]]"
-    progress_deadline = "[[ var "worker_update_progress_deadline" . ]]"
-    auto_revert       = [[ var "worker_update_auto_revert" . ]]
-  }
+  [[ template "openstudio_server.update_block" (dict "max_parallel" (var "worker_update_max_parallel" .) "health_check" (var "worker_update_health_check" .) "min_healthy_time" (var "worker_update_min_healthy_time" .) "healthy_deadline" (var "worker_update_healthy_deadline" .) "progress_deadline" (var "worker_update_progress_deadline" .) "auto_revert" (var "worker_update_auto_revert" .)) ]]
 
   group "worker" {
     count = [[ var "worker_count" . ]]
@@ -153,18 +146,9 @@ job "[[ var "job_name" . ]]-worker" {
       }
       [[ end ]]
 
-      [[ if var "vault_integration_enabled" . ]]
-      [[ if not (var "vault_enabled" .) ]]
-      vault {
-        [[ if var "vault_default_role" . ]]
-        role = "[[ var "vault_default_role" . ]]"
-        [[ end ]]
-        policies      = ["[[ var "vault_policy" . ]]"]
-        change_mode   = "restart"
-        change_signal = "SIGTERM"
-      }
-      [[ end ]]
+      [[ template "openstudio_server.vault_integration_block" . ]]
 
+      [[ if var "vault_integration_enabled" . ]]
       template {
         destination = "secrets/env"
         env         = true
@@ -183,24 +167,7 @@ EOT
       }
       [[ end ]]
 
-      [[ if var "vault_enabled" . ]]
-      vault {
-        [[ if var "vault_default_role" . ]]
-        role = "[[ var "vault_default_role" . ]]"
-        [[ end ]]
-        [[ if var "vault_policies" . ]]
-        policies = [[ var "vault_policies" . | toJson ]]
-        [[ end ]]
-        [[ if var "vault_namespace" . ]]
-        namespace = "[[ var "vault_namespace" . ]]"
-        [[ end ]]
-        change_mode = "[[ var "vault_change_mode" . ]]"
-        [[ if var "vault_change_signal" . ]]
-        change_signal = "[[ var "vault_change_signal" . ]]"
-        [[ end ]]
-        env = [[ var "vault_env" . ]]
-      }
-      [[ end ]]
+      [[ template "openstudio_server.vault_block" (dict "root" .) ]]
 
       config {
         image      = "[[ if var "worker_runtime_image" . ]][[ var "worker_runtime_image" . ]][[ else ]][[ var "worker_image" . ]][[ end ]]"
@@ -321,41 +288,7 @@ EOT
       }
     }
 
-    [[ if var "enable_vector_collection" . ]]
-    task "vector" {
-      driver = "docker"
-
-      lifecycle {
-        hook    = "prestart"
-        sidecar = true
-      }
-
-      config {
-        image      = "[[ var "vector_image" . ]]"
-        force_pull = false
-        args       = ["--config", "local/vector.toml"]
-      }
-
-      template {
-        data        = <<EOH
-[sources.alloc_logs]
-type = "file"
-include = ["/alloc/logs/*.std*"]
-
-[sinks.console]
-type = "console"
-inputs = ["alloc_logs"]
-encoding.codec = "json"
-EOH
-        destination = "local/vector.toml"
-      }
-
-      resources {
-        cpu    = 100
-        memory = 64
-      }
-    }
-    [[ end ]]
+    [[ template "openstudio_server.vector_task" . ]]
   }
 }
 

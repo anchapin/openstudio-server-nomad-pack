@@ -28,12 +28,7 @@ job "[[ var "job_name" . ]]-stall-watchdog" {
   group "stall-watchdog" {
     count = 1
 
-    restart {
-      attempts = 2
-      interval = "5m"
-      delay    = "15s"
-      mode     = "fail"
-    }
+    [[ template "openstudio_server.restart_block" (dict "attempts" 2 "interval" "5m" "delay" "15s" "mode" "fail") ]]
 
     network {
       mode = "host"

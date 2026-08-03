@@ -20,12 +20,7 @@ job "[[ var "job_name" . ]]-queue-sweeper" {
   group "queue-sweeper" {
     count = 1
 
-    restart {
-      attempts = 3
-      interval = "2m"
-      delay    = "10s"
-      mode     = "fail"
-    }
+    [[ template "openstudio_server.restart_block" (dict "attempts" 3 "interval" "2m" "delay" "10s" "mode" "fail") ]]
 
     task "sweep" {
       driver = "docker"

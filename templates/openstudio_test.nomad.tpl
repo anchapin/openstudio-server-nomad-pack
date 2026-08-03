@@ -15,10 +15,7 @@ job "[[ var "job_name" . ]]-test" {
   group "health-checks" {
     count = 1
 
-    restart {
-      attempts = 0
-      mode     = "fail"
-    }
+    [[ template "openstudio_server.restart_block" (dict "attempts" 0 "mode" "fail") ]]
 
     task "web-http-check" {
       driver = "docker"

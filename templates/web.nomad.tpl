@@ -8,14 +8,7 @@ job "[[ var "job_name" . ]]-web" {
     deployment_marker = "[[ var "deployment_marker" . ]]"
   }
 
-  update {
-    max_parallel      = [[ var "web_update_max_parallel" . ]]
-    health_check      = "[[ var "web_update_health_check" . ]]"
-    min_healthy_time  = "[[ var "web_update_min_healthy_time" . ]]"
-    healthy_deadline  = "[[ var "web_update_healthy_deadline" . ]]"
-    progress_deadline = "[[ var "web_update_progress_deadline" . ]]"
-    auto_revert       = [[ var "web_update_auto_revert" . ]]
-  }
+  [[ template "openstudio_server.update_block" (dict "max_parallel" (var "web_update_max_parallel" .) "health_check" (var "web_update_health_check" .) "min_healthy_time" (var "web_update_min_healthy_time" .) "healthy_deadline" (var "web_update_healthy_deadline" .) "progress_deadline" (var "web_update_progress_deadline" .) "auto_revert" (var "web_update_auto_revert" .)) ]]
 
   group "web" {
     # WARNING: web_count must remain 1 (the default).
@@ -104,18 +97,9 @@ job "[[ var "job_name" . ]]-web" {
       }
       [[ end ]]
 
-      [[ if var "vault_integration_enabled" . ]]
-      [[ if not (var "vault_enabled" .) ]]
-      vault {
-        [[ if var "vault_default_role" . ]]
-        role = "[[ var "vault_default_role" . ]]"
-        [[ end ]]
-        policies      = ["[[ var "vault_policy" . ]]"]
-        change_mode   = "restart"
-        change_signal = "SIGTERM"
-      }
-      [[ end ]]
+      [[ template "openstudio_server.vault_integration_block" . ]]
 
+      [[ if var "vault_integration_enabled" . ]]
       template {
         destination = "secrets/env"
         env         = true
@@ -134,24 +118,7 @@ EOT
       }
       [[ end ]]
 
-      [[ if var "vault_enabled" . ]]
-      vault {
-        [[ if var "vault_default_role" . ]]
-        role = "[[ var "vault_default_role" . ]]"
-        [[ end ]]
-        [[ if var "vault_policies" . ]]
-        policies = [[ var "vault_policies" . | toJson ]]
-        [[ end ]]
-        [[ if var "vault_namespace" . ]]
-        namespace = "[[ var "vault_namespace" . ]]"
-        [[ end ]]
-        change_mode = "[[ var "vault_change_mode" . ]]"
-        [[ if var "vault_change_signal" . ]]
-        change_signal = "[[ var "vault_change_signal" . ]]"
-        [[ end ]]
-        env = [[ var "vault_env" . ]]
-      }
-      [[ end ]]
+      [[ template "openstudio_server.vault_block" (dict "root" .) ]]
 
       env {
         MONGO_USER = "[[ var "mongo_user" . ]]"
@@ -339,41 +306,7 @@ EOT
       }
     }
 
-    [[ if var "enable_vector_collection" . ]]
-    task "vector" {
-      driver = "docker"
-
-      lifecycle {
-        hook    = "prestart"
-        sidecar = true
-      }
-
-      config {
-        image      = "[[ var "vector_image" . ]]"
-        force_pull = false
-        args       = ["--config", "local/vector.toml"]
-      }
-
-      template {
-        data        = <<EOH
-[sources.alloc_logs]
-type = "file"
-include = ["/alloc/logs/*.std*"]
-
-[sinks.console]
-type = "console"
-inputs = ["alloc_logs"]
-encoding.codec = "json"
-EOH
-        destination = "local/vector.toml"
-      }
-
-      resources {
-        cpu    = 100
-        memory = 64
-      }
-    }
-    [[ end ]]
+    [[ template "openstudio_server.vector_task" . ]]
   }
 
   group "web-background" {
@@ -484,15 +417,9 @@ EOF
       }
       [[ end ]]
 
-      [[ if var "vault_integration_enabled" . ]]
-      [[ if not (var "vault_enabled" .) ]]
-      vault {
-        policies      = ["[[ var "vault_policy" . ]]"]
-        change_mode   = "restart"
-        change_signal = "SIGTERM"
-      }
-      [[ end ]]
+      [[ template "openstudio_server.vault_integration_block" . ]]
 
+      [[ if var "vault_integration_enabled" . ]]
       template {
         destination = "secrets/env"
         env         = true
@@ -511,24 +438,7 @@ EOT
       }
       [[ end ]]
 
-      [[ if var "vault_enabled" . ]]
-      vault {
-        [[ if var "vault_default_role" . ]]
-        role = "[[ var "vault_default_role" . ]]"
-        [[ end ]]
-        [[ if var "vault_policies" . ]]
-        policies = [[ var "vault_policies" . | toJson ]]
-        [[ end ]]
-        [[ if var "vault_namespace" . ]]
-        namespace = "[[ var "vault_namespace" . ]]"
-        [[ end ]]
-        change_mode = "[[ var "vault_change_mode" . ]]"
-        [[ if var "vault_change_signal" . ]]
-        change_signal = "[[ var "vault_change_signal" . ]]"
-        [[ end ]]
-        env = [[ var "vault_env" . ]]
-      }
-      [[ end ]]
+      [[ template "openstudio_server.vault_block" (dict "root" .) ]]
 
       env {
         MONGO_USER = "[[ var "mongo_user" . ]]"
@@ -646,40 +556,6 @@ EOT
       }
     }
 
-    [[ if var "enable_vector_collection" . ]]
-    task "vector" {
-      driver = "docker"
-
-      lifecycle {
-        hook    = "prestart"
-        sidecar = true
-      }
-
-      config {
-        image      = "[[ var "vector_image" . ]]"
-        force_pull = false
-        args       = ["--config", "local/vector.toml"]
-      }
-
-      template {
-        data        = <<EOH
-[sources.alloc_logs]
-type = "file"
-include = ["/alloc/logs/*.std*"]
-
-[sinks.console]
-type = "console"
-inputs = ["alloc_logs"]
-encoding.codec = "json"
-EOH
-        destination = "local/vector.toml"
-      }
-
-      resources {
-        cpu    = 100
-        memory = 64
-      }
-    }
-    [[ end ]]
+    [[ template "openstudio_server.vector_task" . ]]
   }
 }
