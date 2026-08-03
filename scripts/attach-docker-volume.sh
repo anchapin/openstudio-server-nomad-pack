@@ -54,7 +54,7 @@ TOML
 # Start services and pull image
 systemctl start containerd; sleep 3
 systemctl start docker; sleep 5
-IMAGE="pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/nrel/openstudio-server:179-flock"
+IMAGE="${OPENSTUDIO_IMAGE:-pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/nrel/openstudio-server:179-flock}"
 docker image inspect "$IMAGE" &>/dev/null || docker pull "$IMAGE"
 
 # Cleanup and maintenance cron

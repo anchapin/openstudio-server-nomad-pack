@@ -114,6 +114,8 @@ jobs:
           echo "{\"dns\": [\"${DOCKER_BRIDGE_IP}\", \"8.8.8.8\"]}" | \
             sudo tee /etc/docker/daemon.json > /dev/null
           sudo systemctl restart docker
+          # Wait for docker0 to come back up before binding dnsmasq to it.
+          until ip link show docker0 >/dev/null 2>&1; do sleep 0.5; done
           # Re-detect bridge IP after restart (should still be 172.17.0.1).
           DOCKER_BRIDGE_IP=$(docker network inspect bridge \
             --format '{{(index .IPAM.Config 0).Gateway}}' 2>/dev/null || echo "172.17.0.1")

@@ -26,7 +26,7 @@
 
 set -euo pipefail
 
-NOMAD_ADDR="${NOMAD_ADDR:-http://10.60.126.125:4646}"
+NOMAD_ADDR="${NOMAD_ADDR:-http://127.0.0.1:4646}"
 NOMAD_NAMESPACE="${NOMAD_NAMESPACE:-default}"
 DRY_RUN=false
 MAX_AGE=120  # seconds idle before treating a TTL=-1 key as stale

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DOC_PATH="${1:-docs/infrastructure/migration-k8s-to-nomad.md}"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+DOC_PATH="${1:-${REPO_ROOT}/docs/infrastructure/migration-k8s-to-nomad.md}"
 
 if [ ! -f "${DOC_PATH}" ]; then
   echo "ERROR: ${DOC_PATH} not found."

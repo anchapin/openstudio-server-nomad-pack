@@ -131,7 +131,7 @@ jobs:
           done
           if [ "${FAIL}" -ne 0 ]; then
             echo ""
-            echo "Add 'user = \"[[ var \"docker_user\" . ]]\"' at the task level (not inside the config block) for each main service task."
+            echo "Add 'user = \"[[ var \"docker_user\" . ]]\"' (or the service-specific variant: db_docker_user / redis_docker_user) at the task level (not inside the config block) for each main service task."
             exit 1
           fi
 
@@ -245,7 +245,7 @@ jobs:
           fi
 
           # 4. Template files must be identical
-          for tpl in templates/*.tpl templates/*.nomad.tpl; do
+          for tpl in templates/*.tpl; do
             [ -f "${tpl}" ] || continue
             fname=$(basename "${tpl}")
             pack_tpl="packs/openstudio-server/templates/${fname}"

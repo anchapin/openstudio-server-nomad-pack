@@ -54,6 +54,7 @@ else
   NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
 fi
 
+trap 'rm -f "${METADATA_FILE}.bak"' EXIT
 sed -E -i.bak 's/^([[:space:]]*version[[:space:]]*=[[:space:]]*")[0-9]+\.[0-9]+\.[0-9]+(".*)$/\1'"${NEW_VERSION}"'\2/' "${METADATA_FILE}"
 rm -f "${METADATA_FILE}.bak"
 

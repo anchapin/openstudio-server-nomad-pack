@@ -196,18 +196,9 @@ except Exception:
       break
     fi
 
-    # Check for failed jobs
+    # Check for failed jobs (parse the pipe-separated shell string, not JSON)
     local failed
-    failed=$(echo "$jobs_status" | python3 -c "
-import sys, json
-try:
-    jobs = json.load(sys.stdin)
-    for j in jobs:
-        if j.get('Status') == 'failed':
-            print(j.get('ID', ''))
-except Exception:
-    pass
-" 2>/dev/null) || true
+    failed=$(echo "$jobs_status" | tr '|' '\n' | awk -F= '$2=="failed"{print $1}' | head -1)
     if [ -n "$failed" ]; then
       echo ""
       warn "Job '$failed' has failed. Check: ${NOMAD_API}/ui/jobs/${JOB_NAME}"

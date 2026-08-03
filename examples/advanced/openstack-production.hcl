@@ -4,7 +4,7 @@
 # Typical target node flavour: 8 vCPU / 16 GB RAM compute nodes.
 #
 # Usage:
-#   nomad-pack run -var-file examples/openstack-production.hcl .
+#   nomad-pack run -var-file examples/advanced/openstack-production.hcl .
 #
 # Prerequisites:
 #   - Vault cluster integrated with Nomad (vault_enabled = true below)

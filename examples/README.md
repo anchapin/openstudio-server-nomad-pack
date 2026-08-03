@@ -34,8 +34,8 @@ air-gapped, and high-availability deployments.
 | File | Description |
 |---|---|
 | [`advanced/production-ha.hcl`](advanced/production-ha.hcl) | Multi-datacenter HA with Vault, Consul Connect, autoscaling |
-| [`advanced/openstack.hcl`](advanced/openstack.hcl) | NREL aurora-179d OpenStack cluster |
-| [`advanced/openstack-production.hcl`](advanced/openstack-production.hcl) | Production OpenStack with Vault, NFS, autoscaler |
+| [`advanced/openstack.hcl`](advanced/openstack.hcl) | NREL aurora-179d OpenStack cluster — default var-file used by `scripts/deploy-openstack.sh` (`$OS_VAR_FILE`) |
+| [`advanced/openstack-production.hcl`](advanced/openstack-production.hcl) | Production OpenStack with Vault, NFS, autoscaler — incremental hardening on top of `openstack.hcl`; use for production rollouts |
 | [`advanced/airgapped.hcl`](advanced/airgapped.hcl) | Private registry image overrides for air-gapped clusters |
 | [`advanced/e2e-test.hcl`](advanced/e2e-test.hcl) | End-to-end integration test configuration |
 | [`advanced/test-batch.nomad`](advanced/test-batch.nomad) | Standalone Nomad batch job spec for CI validation |

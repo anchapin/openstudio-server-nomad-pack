@@ -7,16 +7,6 @@
 //   Call with a string value:
 //     [[ template "openstudio_server.node_class_constraint" "compute" ]]
 //
-// openstudio_server.compute_node_constraint
-//   Convenience wrapper — constrains to var "compute_node_class".
-//   Call with the root context:
-//     [[ template "openstudio_server.compute_node_constraint" . ]]
-//
-// openstudio_server.system_node_constraint
-//   Convenience wrapper — constrains to var "system_node_class".
-//   Call with the root context:
-//     [[ template "openstudio_server.system_node_constraint" . ]]
-//
 // openstudio_server.arch_constraint
 //   Emits hard constraints for kernel.name = linux and cpu.arch = amd64.
 //   Call with the root context:

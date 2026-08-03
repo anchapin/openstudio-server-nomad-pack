@@ -199,7 +199,7 @@ stop: ## Stop and purge all OpenStudio Server jobs via API
 	if [ -n "$$IDS" ]; then \
 		for id in $$IDS; do \
 			echo "  Stopping $$id..."; \
-			curl -sf -X PUT "http://127.0.0.1:4646/v1/job/$${id}/deregister" >/dev/null 2>&1 || true; \
+			curl -sf -X DELETE "http://127.0.0.1:4646/v1/job/$${id}?purge=true" >/dev/null 2>&1 || true; \
 		done; \
 	else \
 		echo "(no jobs found with prefix $(JOB_NAME))"; \
