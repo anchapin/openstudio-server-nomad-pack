@@ -67,6 +67,11 @@ job "[[ var "job_name" . ]]-rserve" {
 
       [[ if var "vault_enabled" . ]]
       vault {
+        [[ if var "vault_rserve_role" . ]]
+        role = "[[ var "vault_rserve_role" . ]]"
+        [[ else if var "vault_default_role" . ]]
+        role = "[[ var "vault_default_role" . ]]"
+        [[ end ]]
         [[ if var "vault_policies" . ]]
         policies = [[ var "vault_policies" . | toJson ]]
         [[ end ]]

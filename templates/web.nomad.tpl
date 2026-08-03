@@ -107,6 +107,9 @@ job "[[ var "job_name" . ]]-web" {
       [[ if var "vault_integration_enabled" . ]]
       [[ if not (var "vault_enabled" .) ]]
       vault {
+        [[ if var "vault_default_role" . ]]
+        role = "[[ var "vault_default_role" . ]]"
+        [[ end ]]
         policies      = ["[[ var "vault_policy" . ]]"]
         change_mode   = "restart"
         change_signal = "SIGTERM"
