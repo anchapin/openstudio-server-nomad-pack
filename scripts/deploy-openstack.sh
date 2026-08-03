@@ -740,6 +740,14 @@ deploy_pack() {
 
   run_system_hooks_phase
 
+  # Build two exclusion lists:
+  #   worker_excluded_node_ids_json  — Phase 2 only: CSI topology nodes + pre-pull not-ready
+  #                                    nodes. Keeps workers on already-cached nodes during the
+  #                                    bootstrap ramp so first simulations start quickly.
+  #   topology_only_exclusion_json   — Phase 3 and beyond: CSI topology nodes only.
+  #                                    Pre-pull exclusions are a temporary bootstrap gate; once
+  #                                    the Phase 2 ramp succeeds they must be dropped or they
+  #                                    permanently block workers from 99%+ of the cluster.
   combined_worker_exclusions=()
   combined_worker_exclusions+=("${topology_nodes[@]}")
   while IFS= read -r node_id; do
@@ -747,6 +755,8 @@ deploy_pack() {
   done <<< "${PREPULL_NOT_READY_NODE_IDS}"
 
   worker_excluded_node_ids_json="$(build_worker_exclusion_var "${combined_worker_exclusions[@]}" || true)"
+  topology_only_exclusion_json="$(build_worker_exclusion_var "${topology_nodes[@]}" || true)"
+
   if [ "${db_storage_type}" = "csi" ] || [ "${redis_storage_type}" = "csi" ]; then
     if [ -z "${worker_excluded_node_ids_json}" ]; then
       err "Could not derive worker exclusion node IDs from CSI topology/allocation state; aborting to avoid DB/Redis starvation."
@@ -770,13 +780,23 @@ deploy_pack() {
   )
   if [ -n "${worker_excluded_node_ids_json}" ]; then
     PHASE2_ARGS+=(--var "worker_excluded_node_ids=${worker_excluded_node_ids_json}")
-    info "Restricting workers to pre-pulled nodes and protecting CSI topology node(s): ${worker_excluded_node_ids_json}"
+    info "Phase 2: restricting workers to pre-pulled nodes and protecting CSI topology node(s) (temporary bootstrap gate): ${worker_excluded_node_ids_json}"
   fi
 
   run_pack_with_guard "${PHASE2_ARGS[@]}"
   wait_for_core_services
 
-  if [ "${bootstrap_worker_max_replicas}" != "${worker_max_replicas}" ] || [ "${BOOTSTRAP_AUTOSCALER_COOLDOWN}" != "${worker_autoscaling_scale_up_cooldown}" ]; then
+  # Phase 3 runs if:
+  #   (a) bootstrap replicas/cooldown differ from production values (original condition), OR
+  #   (b) the Phase 2 exclusion list contains pre-pull not-ready nodes that must be dropped.
+  #       Without this check, equal bootstrap/production bounds skip Phase 3 entirely and the
+  #       pre-pull exclusions stay permanently baked into the job.
+  local needs_phase3=false
+  [ "${bootstrap_worker_max_replicas}" != "${worker_max_replicas}" ] && needs_phase3=true
+  [ "${BOOTSTRAP_AUTOSCALER_COOLDOWN}" != "${worker_autoscaling_scale_up_cooldown}" ] && needs_phase3=true
+  [ "${worker_excluded_node_ids_json}" != "${topology_only_exclusion_json}" ] && needs_phase3=true
+
+  if [ "${needs_phase3}" = "true" ]; then
     section "Phase 3/3 — restore full worker autoscaling bounds"
     PHASE3_ARGS=(
       --var-file "${VAR_FILE}"
@@ -786,8 +806,15 @@ deploy_pack() {
       --var "worker_max_replicas=${worker_max_replicas}"
       --var "worker_autoscaling_scale_up_cooldown=${worker_autoscaling_scale_up_cooldown}"
     )
-    if [ -n "${worker_excluded_node_ids_json}" ]; then
-      PHASE3_ARGS+=(--var "worker_excluded_node_ids=${worker_excluded_node_ids_json}")
+    # Phase 3 drops the pre-pull not-ready exclusions; only CSI topology nodes stay excluded.
+    # Passing the full Phase 2 list here would permanently lock workers off the majority of
+    # the cluster whenever nodes hadn't finished pre-pulling at Phase 2 submit time.
+    if [ -n "${topology_only_exclusion_json}" ]; then
+      PHASE3_ARGS+=(--var "worker_excluded_node_ids=${topology_only_exclusion_json}")
+      info "Phase 3: retaining CSI topology exclusion only: ${topology_only_exclusion_json}"
+    else
+      PHASE3_ARGS+=(--var "worker_excluded_node_ids=[]")
+      info "Phase 3: clearing pre-pull bootstrap exclusions; workers can spread to all eligible nodes"
     fi
     run_pack_with_guard "${PHASE3_ARGS[@]}"
   fi

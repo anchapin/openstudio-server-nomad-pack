@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Fixed `scripts/deploy-openstack.sh` Phase 3 permanently carrying pre-pull not-ready node exclusions into production: Phase 2 correctly restricts workers to pre-pulled nodes (topology + pre-pull-not-ready), but Phase 3 re-passed the same combined list, permanently locking workers off the majority of the cluster after bootstrap. Phase 3 now only retains CSI topology node exclusions (DB/Redis pinning); pre-pull exclusions are cleared so workers can spread to all eligible nodes. Also fixed Phase 3 never being triggered when bootstrap autoscaling bounds matched production bounds — added a third trigger condition (`worker_excluded_node_ids_json != topology_only_exclusion_json`) so Phase 3 always fires when there are pre-pull exclusions to drop, regardless of whether the autoscaling bounds changed.
 - Fixed `release.yml` creating releases on wrong commit: `tag_name` was sourced from `metadata.hcl` at checkout time rather than the triggering tag; changed to `github.ref_name` and removed now-unused "Read pack version" step.
 - Fixed `Makefile` `deploy` target: `nomad-pack render` was called with `--auto-approve`, an invalid flag for the `render` subcommand that caused silent no-op deploys.
 - Fixed `worker_process_count` type mismatch in `examples/advanced/openstack-production.hcl`: value was unquoted integer `2` but variable type is `string`; changed to `"2"`.
