@@ -2,11 +2,24 @@
 
 > This file is the primary working guide for Copilot sessions. Keep it aligned with `AGENTS.md`, `README.md`, and `CONTRIBUTING.md`. Check `NEXT_SESSION.md` for the current active focus area when starting a new session.
 
+## Known bugs and caveats (as of pack v0.2.67 / nomad-pack v0.4.2)
+
+> See `AUDIT-REPORT.md` for full details. Do not close these without fixing the root cause.
+
+- **`redis_port` undefined** (`queue-sweeper.nomad.tpl:102`): `enable_queue_sweeper=true` produces an empty Redis URL. Use `web_redis_url` instead of hand-building the URL. *(Critical — feature is broken out of the box.)*
+- **`vault_enabled=true` renders empty `vault {}` blocks**: `vault_db_role`, `vault_redis_role`, `vault_rserve_role`, `vault_default_role` are defined in `variables.hcl` but referenced **nowhere** in any template. Role-based Vault integration is unimplemented. Do not document it as working.
+- **`nomad-pack fmt` (v0.4.2) corrupts templates**: Running `fmt -write templates/` mangles the `[[- /*` comment-header workaround and breaks `render`. Do **not** run `nomad-pack fmt -write` on `templates/`. The CI `fmt -check -recursive .` gate is also a no-op (exits 0, finds no files). Use `nomad-pack fmt -check templates/` for a real check.
+- **Flag order matters** (v0.4.2): flags must come **before** the pack path. `nomad-pack render . -var-file X` fails; `nomad-pack render -var-file X .` works. All README/AGENTS.md examples with trailing flags are wrong — use flags-first form.
+- **Dead variables** (define in `variables.hcl`, used in 0 templates): `autoscaler_cooldown`, `aws_batch_vault_aws_role`, `db_csi_plugin_id`, `redis_csi_plugin_id`, `vault_*_role` variables, `web_background_autoscaling_*`, `web_background_count`, `web_background_max/min_replicas`. Setting these does nothing.
+- **`deployment_marker` is hardcoded** to `"openstack-aurora-179d"` in `web.nomad.tpl`, `redis.nomad.tpl`, `rserve.nomad.tpl`, `db.nomad.tpl`. It is not driven by a variable.
+- **`docs/` path table in AGENTS.md is wrong**: actual paths use `docs/modelers/` and `docs/infrastructure/` subdirectories, not `docs/` directly. `docs/variables.md` and `docs/compatibility.md` are the only files at the root docs level.
+
 ## Build, test, and lint commands
 
 ```bash
 # Format-check all HCL files (non-destructive)
-nomad-pack fmt --check .
+# NOTE: use -check templates/ not -check -recursive . (recursive is a v0.4.2 no-op)
+nomad-pack fmt -check templates/
 nomad fmt -check policies/
 for script in vagrant/provision/*.sh; do bash -n "$script"; done
 
@@ -15,6 +28,7 @@ for script in vagrant/provision/*.sh; do bash -n "$script"; done
 ./scripts/run-batch-verification.sh                       # ping/TCP-check all services
 
 # Render templates to stdout and inspect output
+# IMPORTANT: flags must come BEFORE the pack path (nomad-pack v0.4.2 requirement)
 nomad-pack render .
 nomad-pack render -var-file examples/quickstart/minimal-dev.hcl .
 nomad-pack render -var "enable_batch_verification=true" .
@@ -22,17 +36,17 @@ nomad-pack validate .
 
 # Plan/dry-run (requires Nomad agent)
 nomad agent -dev -bind=127.0.0.1 -log-level=ERROR &
-nomad-pack plan . --name openstudio-server
-nomad-pack plan . --name openstudio-server-minimal-dev -var-file examples/quickstart/minimal-dev.hcl
-nomad-pack plan . --name openstudio-server-production-ha -var-file examples/advanced/production-ha.hcl
-nomad-pack plan . --name openstudio-server-airgapped -var-file examples/advanced/airgapped.hcl
+nomad-pack plan --name openstudio-server .
+nomad-pack plan --name openstudio-server-minimal-dev -var-file examples/quickstart/minimal-dev.hcl .
+nomad-pack plan --name openstudio-server-production-ha -var-file examples/advanced/production-ha.hcl .
+nomad-pack plan --name openstudio-server-airgapped -var-file examples/advanced/airgapped.hcl .
 
 # Integration tests (render + plan across all key scenarios)
 bash scripts/test_nomad_pack_integration.sh
 
 # Targeted single-scenario render (fastest way to verify a template change)
-nomad-pack render . -var "enable_vector_collection=false"
-nomad-pack render . -var "web_image=nrel/openstudio-server:3.8.0"
+nomad-pack render -var "enable_vector_collection=false" .
+nomad-pack render -var "web_image=nrel/openstudio-server:3.8.0" .
 
 # Version-bump helper test (uses tests/fixtures/metadata.sample.hcl as isolated fixture)
 ./scripts/test_bump_metadata_version.sh
