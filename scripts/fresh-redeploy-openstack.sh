@@ -1208,6 +1208,10 @@ EOF
   DETACHED_POSTDEPLOY_RECONCILER_EVENTS="${events_file}"
   DETACHED_POSTDEPLOY_RECONCILER_METADATA="${metadata_file}"
   printf "pid=%s\nstatus_file=%s\nevents_file=%s\nlog_file=%s\n" "${DETACHED_POSTDEPLOY_RECONCILER_PID}" "${status_file}" "${events_file}" "${log_file}" > "${metadata_file}"
+  # LT-6: also write to a stable, well-known path so operators can find the
+  # reconciler log/status even after the terminal that ran the deploy is closed.
+  local stable_meta="/tmp/openstudio-reconciler-${JOB_NAME}.metadata"
+  cp -f "${metadata_file}" "${stable_meta}" 2>/dev/null || true
 }
 
 stop_prepull_job_if_running() {
@@ -1576,15 +1580,32 @@ run_pack_with_guard() {
   rm -f "${run_log}"
 }
 
+deploy_permanent_sentinel_quietly() {
+  # Deploy the permanent system-hooks sentinel so Docker doesn't GC the worker
+  # image alias after the prewarm job is purged. Called in error-exit paths
+  # where the reconciler's Phase 3 won't run. Failures are non-fatal.
+  [[ "${enable_image_prepull}" == "true" ]] || return 0
+  local sentinel_spec
+  sentinel_spec="$(render_system_hooks_spec "${JOB_NAME}" "true" "false" 2>/dev/null)" || return 0
+  nomad job run -namespace "${NOMAD_NAMESPACE}" "${sentinel_spec}" >/dev/null 2>&1 || true
+  rm -f "${sentinel_spec}" 2>/dev/null || true
+}
+
 cleanup_background_jobs() {
   local exit_code="$?"
   if [[ -n "${DETACHED_POSTDEPLOY_RECONCILER_PID}" ]]; then
     if [[ "${SCRIPT_COMPLETED_SUCCESSFULLY}" != "true" ]]; then
       kill "${DETACHED_POSTDEPLOY_RECONCILER_PID}" >/dev/null 2>&1 || true
       wait "${DETACHED_POSTDEPLOY_RECONCILER_PID}" >/dev/null 2>&1 || true
+      # Deploy permanent sentinel before purging the prewarm job so Docker GC
+      # does not evict openstudio-worker:local. The reconciler won't reach
+      # Phase 3 since we are aborting.
+      deploy_permanent_sentinel_quietly
       stop_prepull_job_if_running
     fi
   else
+    # Script failed before reconciler was started; prewarm may still be running.
+    deploy_permanent_sentinel_quietly
     stop_prepull_job_if_running
   fi
   stop_core_prepull_job_if_running
@@ -1792,6 +1813,30 @@ DB_CSI_PLUGIN_ID="${ACTIVE_DB_CSI_PLUGIN_ID:-${DB_CSI_PLUGIN_ID}}" \
 echo ""
 run_system_hooks_phase
 
+# LT-1 gate: confirm sentinel is running on every eligible node before
+# proceeding to Phase 2. If any node is missing the image alias, worker allocs
+# will fail with "pull access denied" at scale-up time. Blocking here catches
+# the failure at a safe point — no workers have been launched yet.
+if [[ "${enable_image_prepull}" == "true" ]]; then
+  echo ""
+  echo "==> Verifying image pre-pull sentinel health on all nodes"
+  VERIFY_ARGS=(
+    --job-name "${JOB_NAME}"
+    --namespace "${NOMAD_NAMESPACE}"
+    --timeout 600
+  )
+  if [[ -n "${worker_runtime_image:-}" ]]; then
+    VERIFY_ARGS+=(--worker-image "${worker_runtime_image}")
+  fi
+  if ! "${REPO_ROOT}/scripts/verify-prepull.sh" "${VERIFY_ARGS[@]}"; then
+    echo ""
+    echo "✗ verify-prepull.sh reported unhealthy nodes — aborting deploy." >&2
+    echo "  Fix: ensure system-hooks sentinel is running on all nodes, then retry." >&2
+    exit 1
+  fi
+  echo "  ✓ Sentinel healthy on all target nodes"
+fi
+
 WORKER_EXCLUDED_NODE_IDS_JSON="$(build_combined_worker_exclusions_json "${PREPULL_NOT_READY_NODE_IDS}")"
 if [[ -n "${WORKER_EXCLUDED_NODE_IDS_JSON}" ]]; then
   echo "  - worker exclusions (CSI + pre-pull not-ready): ${WORKER_EXCLUDED_NODE_IDS_JSON}"
@@ -1839,6 +1884,8 @@ if [[ -n "${DETACHED_POSTDEPLOY_RECONCILER_PID}" ]]; then
   echo "  events_file=${DETACHED_POSTDEPLOY_RECONCILER_EVENTS}"
   echo "  log_file=${DETACHED_POSTDEPLOY_RECONCILER_LOG}"
   echo "  metadata_file=${DETACHED_POSTDEPLOY_RECONCILER_METADATA}"
+  echo "  stable_metadata=/tmp/openstudio-reconciler-${JOB_NAME}.metadata"
+  echo "  (stable_metadata survives terminal closure; use 'cat' to find log path)"
 fi
 
 SCRIPT_COMPLETED_SUCCESSFULLY=true

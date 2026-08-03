@@ -160,16 +160,19 @@ worker_autoscaling_enabled       = true
 worker_autoscaling_cpu_enabled   = false
 worker_autoscaling_queue_enabled = true   # Scale on Redis queue depth via Prometheus
 worker_min_replicas              = 2
-worker_max_replicas              = 10000    # Live-tested cap: fast ramp without allocation failures
+# Physical ceiling: floor((node_ram_mb - 2048) / worker_memory) × compute_node_count
+# floor((79872 - 2048) / 1250) = 62 allocs/node × 110 compute nodes = 6820
+# Setting above physical ceiling wastes scheduler cycles on permanently unplaceable allocs.
+worker_max_replicas              = 6800
 
 # 60 % CPU target: conservative threshold to trigger scale-out before iowait spikes.
 worker_cpu_target_utilization = 60
 
-# Queue-depth targets:
-# - simulations: ~1 worker per 20 queued jobs (throughput-oriented)
-# - requeued:    ~1 worker per queued retry job (recovery-oriented)
-# Lower target => more aggressive scale-out. Raise if storage pressure appears.
-worker_queue_simulations_target = 3   # ceil(32000/3)=10667 → hits worker_max_replicas ceiling; was 6
+# Queue-depth target: ceil(queue_depth / target) = desired workers, clamped to [min, max].
+# Formula: choose target ≤ ceil(expected_peak_queue / worker_max_replicas)
+# At 32k queue and 6800 max: target ≤ ceil(32000 / 6800) = 5. Use 3 for headroom.
+# - requeued: 1 worker per queued retry (recovery-oriented; keep at 1)
+worker_queue_simulations_target = 3   # ceil(32000/3)=10667 → clamped to worker_max_replicas
 worker_queue_requeued_target    = 1
 
 # Scale-up cooldown: 2 min keeps queue bursts from waiting on long cooldown windows.

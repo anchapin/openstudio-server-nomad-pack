@@ -341,7 +341,51 @@ will still return `job scaling blocked due to active deployment`.
      -d @/tmp/worker_payload.json
    ```
 
-### After any auto-revert event
+### Autoscaler blocked — force immediate scale-up with `max_parallel=0`
+
+> **Root cause (2026-08-03 incident, repeated):** The Nomad Autoscaler will not evaluate
+> scaling policies while a deployment is `running`. With `max_parallel=1` (the normal safe
+> setting), a rolling update of N workers takes N × `min_healthy_time` minutes.
+
+When you need workers to scale up immediately and an active deployment is blocking the
+autoscaler:
+
+1. **Confirm autoscaler is blocked:**
+   ```bash
+   nomad job deployments openstudio-server-worker | head -5
+   # Should show a deployment in "running" state
+   ```
+
+2. **Push a new version with `max_parallel=0`** (unlimited parallel — all allocs replaced
+   simultaneously) and the desired seed count:
+   ```bash
+   NOMAD_ADDR=http://<nomad-server>:4646 nomad-pack render \
+     --var-file examples/advanced/openstack-production.hcl \
+     --var-file examples/advanced/openstack-site-local.hcl \
+     --var "enable_image_prepull=false" \
+     --var "worker_count=2000" \
+     --name openstudio-server . | grep -A9999 "openstudio-server/worker.nomad:" | tail -n +2 \
+     | nomad job run -
+   ```
+
+   Alternatively, inspect the current spec, patch `MaxParallel=0` and `Count`, then
+   submit via the API (same as the "stuck deployment" procedure above).
+
+3. **Immediately restore `max_parallel=1`** once the autoscaler fires (check `nomad job
+   deployments` — a new one should appear within 30 s):
+   ```bash
+   # Render and push the normal worker spec with max_parallel=1
+   NOMAD_ADDR=http://<nomad-server>:4646 nomad-pack run \
+     --var-file examples/advanced/openstack-production.hcl \
+     --var-file examples/advanced/openstack-site-local.hcl \
+     --var "enable_image_prepull=false" \
+     --name openstudio-server .
+   ```
+
+> ⚠️ Never leave `max_parallel=0` in place. A future rolling update will replace all
+> running workers simultaneously, causing a complete worker outage during the transition.
+
+
 
 **Always verify the image immediately after an auto-revert:**
 
@@ -483,3 +527,7 @@ is needed, making this approach cleaner and more reliable than the Helm equivale
 - [Consul documentation](https://developer.hashicorp.com/consul/docs)
 - [Vault documentation](https://developer.hashicorp.com/vault/docs)
 - [OpenStudio Server (upstream)](https://github.com/NREL/openstudio-server)
+
+## Incident Post-Mortems
+
+- [2026-08-03 Incident B — Worker Image-Cache Sentinel Failure (32k-DP run)](post-mortem-2026-08-03-b.md)
