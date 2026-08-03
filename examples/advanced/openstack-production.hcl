@@ -69,6 +69,18 @@ web_priority = 80
 web_cpu      = 6000   # MHz — sufficient for Passenger + request routing
 web_memory   = 51200  # MB  — covers Passenger workers + upload buffer
 web_memory_max = 61440
+web_constraints = [
+  {
+    attribute = "$${meta.node_role}"
+    operator  = "="
+    value     = "web"
+  },
+  {
+    attribute = "$${attr.driver.docker}"
+    operator  = "="
+    value     = "1"
+  }
+]
 
 # Traefik Host rule — must match the DNS name or IP/hostname used to reach the cluster.
 # SITE-SPECIFIC: set this in openstack-site-local.hcl.
@@ -157,7 +169,7 @@ worker_cpu_target_utilization = 60
 # - simulations: ~1 worker per 20 queued jobs (throughput-oriented)
 # - requeued:    ~1 worker per queued retry job (recovery-oriented)
 # Lower target => more aggressive scale-out. Raise if storage pressure appears.
-worker_queue_simulations_target = 6
+worker_queue_simulations_target = 3   # ceil(32000/3)=10667 → hits worker_max_replicas ceiling; was 6
 worker_queue_requeued_target    = 1
 
 # Scale-up cooldown: 2 min keeps queue bursts from waiting on long cooldown windows.
