@@ -615,8 +615,8 @@ variable "prometheus_alert_failed_jobs_minutes" {
 
 variable "worker_queue_requeued_query" {
   type        = string
-  description = "Prometheus query for requeued backlog depth. Uses 'or vector(0)' so the series always resolves to 0 (not empty/error) when the queue key does not yet exist in Redis, which allows scale-to-zero when both queues are idle. This query should return raw queue depth; worker count math is applied in the worker template via a pass-through strategy."
-  default     = "(sum(redis_key_size{key=\"resque:queue:requeued\"}) or vector(0))"
+  description = "Prometheus instant-vector selector for the requeued queue depth. Must be a bare vector selector (metric name + labels only) — do not include range brackets, sum(), or or vector(0). The template wraps this in max_over_time(...[window]) and appends 'or vector(0)' so the series always resolves to 0 (not empty/error) when the queue key does not yet exist in Redis, enabling scale-to-zero. Worker count math is applied via a pass-through strategy."
+  default     = "redis_key_size{key=\"resque:queue:requeued\"}"
 }
 
 variable "worker_queue_query_window" {
@@ -633,8 +633,8 @@ variable "worker_queue_requeued_target" {
 
 variable "worker_queue_simulations_query" {
   type        = string
-  description = "Prometheus query for simulations backlog depth. or vector(0) ensures the series always resolves even when the queue key doesn't exist yet in Redis. This query should return raw queue depth; worker count math is applied in the worker template via a pass-through strategy."
-  default     = "(sum(redis_key_size{key=\"resque:queue:simulations\"}) or vector(0))"
+  description = "Prometheus instant-vector selector for the simulations queue depth. Must be a bare vector selector (metric name + labels only) — do not include range brackets, sum(), or or vector(0). The template wraps this in max_over_time(...[window]) and appends 'or vector(0)' so the series always resolves to 0 (not empty/error) when the queue key doesn't exist yet in Redis, enabling scale-to-zero. Worker count math is applied via a pass-through strategy."
+  default     = "redis_key_size{key=\"resque:queue:simulations\"}"
 }
 
 variable "worker_queue_simulations_target" {
