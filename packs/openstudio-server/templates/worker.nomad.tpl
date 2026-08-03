@@ -131,7 +131,7 @@ job "[[ var "job_name" . ]]-worker" {
         command      = "sh"
         args = [
           "-ec",
-          "until wget -qO- \"http://[[ var "consul_address" . ]]/v1/health/service/openstudio-db?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-db\"'; do sleep 2; done; until wget -qO- \"http://[[ var "consul_address" . ]]/v1/health/service/openstudio-redis?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-redis\"'; do sleep 2; done",
+          "until wget -qO- -T 2 \"http://[[ var "consul_address" . ]]/v1/health/service/openstudio-db?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-db\"'; do sleep 10; done; until wget -qO- -T 2 \"http://[[ var "consul_address" . ]]/v1/health/service/openstudio-redis?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-redis\"'; do sleep 10; done",
         ]
       }
 

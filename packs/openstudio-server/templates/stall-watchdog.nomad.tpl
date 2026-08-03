@@ -171,6 +171,9 @@ def main():
 
     # 4. Stalled DPs detected
     log(f"stall_watchdog_alert stalled_count={len(stalled)} restart_allocs={RESTART_ALLOCS}")
+    # Emit a distinct structured alert for monitoring: Mongo says 'started' but no
+    # active Resque worker entry exists — classic Mongo/Redis queue divergence.
+    log(f"queue_divergence_alert stale_started={len(stalled)} threshold={MAX_STALL}s action={'restart_workers' if RESTART_ALLOCS else 'alert_only'}")
 
     if not RESTART_ALLOCS:
         log("stall_watchdog_alert_only msg=restart_allocs_disabled set stall_watchdog_restart_allocs=true to auto-recover")

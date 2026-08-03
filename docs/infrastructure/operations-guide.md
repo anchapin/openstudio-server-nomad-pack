@@ -233,6 +233,185 @@ Before running `nomad-pack run` for the first time:
 
 ---
 
+## Disk Reservation — Automatic Node Ineligibility
+
+> **Root cause (2026-08-03 incident):** Two Nomad client nodes filled their 242 GiB disks
+> entirely (ENOSPC) during a single large simulation run. Nomad continued scheduling allocs
+> onto them until all disk writes failed. No automatic ineligibility was triggered.
+
+### Configure `reserved.disk` on every Nomad client
+
+Add (or update) the following in each client's Nomad configuration file
+(typically `/etc/nomad.d/client.hcl`):
+
+```hcl
+client {
+  reserved {
+    # 20 GiB in MiB — Nomad stops scheduling new allocs when free disk drops below this.
+    # Set to the minimum headroom required for OS/system operation plus one alloc worth
+    # of ephemeral scratch space.
+    disk = 20480
+  }
+}
+```
+
+After editing, reload the Nomad agent:
+
+```bash
+systemctl reload nomad
+# or (if reload is not supported)
+systemctl restart nomad
+```
+
+**Verify the threshold is active:**
+
+```bash
+# Check the node's reserved disk field
+nomad node status -json <node_id> | jq '{
+  disk_free_mb: .NodeResources.Disk.DiskMB,
+  reserved_disk_mb: .Reserved.DiskMB
+}'
+```
+
+> **Nomad Vagrant cluster:** Update `vagrant/provision/nomad-client.sh` to include the
+> `client.reserved.disk` stanza in the generated `client.hcl` so new nodes provisioned
+> by Vagrant inherit this setting automatically.
+
+### Disk sizing recommendation
+
+For large simulation runs (100,000+ data points), 250 GiB per node is insufficient.
+See [storage.md — Disk Sizing for Large Simulation Runs](./storage.md#disk-sizing-for-large-simulation-runs)
+for per-DP footprint estimates and recommended node sizes.
+
+---
+
+## Scaling Workers When a Deployment Is Stuck
+
+> **Root cause (2026-08-03 incident):** `nomad job scale` is blocked when an active
+> deployment is in-flight. The correct workaround is non-obvious and critical.
+
+### Do NOT use `nomad deployment pause`
+
+`pause` suspends health evaluation but does **not** release the scaling lock. `nomad job scale`
+will still return `job scaling blocked due to active deployment`.
+
+### Correct procedure
+
+1. **Identify the stuck deployment:**
+   ```bash
+   nomad job deployments openstudio-server-worker
+   ```
+
+2. **Fail the deployment** (releases the scaling lock immediately):
+   ```bash
+   nomad deployment fail <deployment_id>
+   ```
+
+3. **Snapshot the current job spec:**
+   ```bash
+   nomad job inspect -json openstudio-server-worker > /tmp/worker_job.json
+   ```
+
+4. **Edit the desired count:**
+   ```bash
+   # Set TaskGroups[0].Count to the desired scale (e.g. 250)
+   python3 -c "
+   import json, sys
+   j = json.load(open('/tmp/worker_job.json'))
+   j['TaskGroups'][0]['Count'] = 250
+   json.dump(j, sys.stdout)
+   " > /tmp/worker_job_scaled.json
+   ```
+
+5. **Strip read-only fields** (Nomad rejects them on submit):
+   ```bash
+   python3 -c "
+   import json, sys
+   j = json.load(open('/tmp/worker_job_scaled.json'))
+   for field in ['CreateIndex','ModifyIndex','JobModifyIndex','Version','SubmitTime','Status','StatusDescription','Stable']:
+       j.pop(field, None)
+   json.dump({'Job': j}, sys.stdout)
+   " > /tmp/worker_payload.json
+   ```
+
+6. **Submit via the Nomad API:**
+   ```bash
+   curl -X POST ${NOMAD_ADDR}/v1/jobs \
+     -H 'Content-Type: application/json' \
+     -d @/tmp/worker_payload.json
+   ```
+
+### After any auto-revert event
+
+**Always verify the image immediately after an auto-revert:**
+
+```bash
+nomad job inspect openstudio-server-worker | grep -i image
+```
+
+Auto-revert restores the last *stable* version — the version that was marked stable
+before the current deployment started. If the stable baseline was pinned to an old or
+wrong image (e.g. `openstudio-worker:local` absent on most nodes), the revert silently
+restores a broken state.
+
+**To update the stable baseline:** deploy the correct image, wait for `min_healthy_time`
+to elapse with all allocs healthy, then confirm:
+
+```bash
+nomad job history openstudio-server-worker | grep -E "Version|Stable"
+```
+
+---
+
+## Pending Application-Level Fixes (openstudio-server repo)
+
+The following bugs were identified during the 2026-08-03 incident. They require changes
+in the **`openstudio-server`** application repository (not this pack). Track them as
+pull requests against `NREL/openstudio-server`.
+
+### 1. Nil guard in `RunSimulateDataPoint#perform`
+
+**File:** `app/jobs/resque_jobs/run_simulate_data_point.rb`
+
+**Symptom:** If a Resque payload uses the wrong arg format (`args: [analysis_id, dp_id]`
+instead of `args: [dp_id]`), `DataPoint.find(analysis_id)` returns `nil`, execution
+continues silently, and the DP stays at `na` forever with no error in any log.
+
+**Required change:**
+
+```ruby
+# Resque payload format: {"class": "ResqueJobs::RunSimulateDataPoint", "args": ["<data_point_id>"]}
+# IMPORTANT: args must contain exactly ONE element (the data_point_id string).
+# Passing [analysis_id, data_point_id] causes DataPoint.find(analysis_id) => nil => silent skip.
+def self.perform(data_point_id, options = {})
+  data_point = DataPoint.find(data_point_id)
+  raise ArgumentError, "DataPoint '#{data_point_id}' not found — check Resque payload arg format (must be single dp_id string)" if data_point.nil?
+  # ... rest of method unchanged
+```
+
+### 2. `batch_run.rb` nil `end_time=` / BSON document key bug
+
+**File:** `app/lib/analysis_library/batch_run.rb` (lines 28 and 82)
+
+**Symptoms:**
+- `undefined method 'end_time=' for nil:NilClass` at line 82
+- `NilClass instances are not allowed as keys in a BSON document` at line 28
+
+**Suspected root cause:** The `Job` or `Analysis` record is `nil` at line 82. This
+likely occurs when the analysis is in a partially-initialized state (e.g., submitted but
+not yet persisted, or deleted between enqueue and execution).
+
+**Required change:** Add nil guards before line 82:
+
+```ruby
+# In batch_run.rb around line 82:
+raise ArgumentError, "Job record is nil in batch_run at end_time assignment" if job.nil?
+job.end_time = Time.now
+```
+
+**Live cluster impact:** Analysis `0a6703b4` on the live cluster is permanently failed
+due to this bug. Its results are unavailable. Re-initiate from the web UI if required.
+
 ---
 
 ## Teardown Order

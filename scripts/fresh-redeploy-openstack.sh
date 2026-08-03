@@ -1014,7 +1014,9 @@ PREFLIGHT_ARGS=(
 if [[ -n "${CSI_PLUGIN_ID}" ]]; then
   PREFLIGHT_ARGS+=(--csi-plugin-id "${CSI_PLUGIN_ID}")
 fi
-"${REPO_ROOT}/scripts/preflight-storage.sh" "${PREFLIGHT_ARGS[@]}"
+DB_CSI_PLUGIN_ID="${ACTIVE_DB_CSI_PLUGIN_ID:-${DB_CSI_PLUGIN_ID}}" \
+  REDIS_CSI_PLUGIN_ID="${ACTIVE_REDIS_CSI_PLUGIN_ID:-${REDIS_CSI_PLUGIN_ID}}" \
+  "${REPO_ROOT}/scripts/preflight-storage.sh" "${PREFLIGHT_ARGS[@]}"
 
 echo ""
 run_system_hooks_phase

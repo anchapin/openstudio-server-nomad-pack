@@ -1324,6 +1324,18 @@ variable "queue_sweeper_memory" {
   default     = 64
 }
 
+variable "queue_sweeper_replay_dirty_exit" {
+  type        = bool
+  description = "When true, the queue-sweeper automatically replays Resque failed-queue entries whose exception is PruneDeadWorkerDirtyExit or TermException for ResqueJobs::RunSimulateDataPoint. These failures are 100% infra-recoverable (worker killed mid-job during scale-down or node drain) and should never require manual intervention. Replayed jobs are re-enqueued using the correct single-arg format (args: [dp_id]). Requires enable_queue_sweeper = true."
+  default     = true
+}
+
+variable "queue_sweeper_replay_delay_seconds" {
+  type        = number
+  description = "Seconds to wait between individual re-enqueues when replaying PruneDeadWorkerDirtyExit failures. Use staggered enqueue (≥5s) to avoid overwhelming the queue and causing bulk-push silent drops. Only used when queue_sweeper_replay_dirty_exit = true."
+  default     = 10
+}
+
 # ── Stall watchdog ──────────────────────────────────────────────────────────
 variable "enable_stall_watchdog" {
   type        = bool

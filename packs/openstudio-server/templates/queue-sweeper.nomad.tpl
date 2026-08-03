@@ -89,7 +89,80 @@ for key in $(redis_cmd --scan --pattern 'resque:analysis:*:queuing' 2>/dev/null)
   fi
 done
 
-echo "queue_sweeper_summary found=${stale} cleared=${cleared}"
+echo "queue_sweeper_lock_summary found=${stale} cleared=${cleared}"
+
+replayed=0
+
+[[ if var "queue_sweeper_replay_dirty_exit" . ]]
+# --- Section 2: Auto-replay PruneDeadWorkerDirtyExit / TermException failures ---
+# Workers killed mid-job during scale-down or node drain always produce
+# PruneDeadWorkerDirtyExit. These are 100% infra-recoverable and must never require
+# manual intervention.
+#
+# CRITICAL: Resque payload MUST use single-arg format:
+#   {"class":"ResqueJobs::RunSimulateDataPoint","args":["<dp_id>"]}
+# Passing [analysis_id, dp_id] causes DataPoint.find(analysis_id) => nil => SILENT SKIP.
+# The DP stays at 'na' forever with no error in any log. Do NOT add a second arg.
+
+REPLAY_DELAY=[[ var "queue_sweeper_replay_delay_seconds" . ]]
+replayed=0
+replay_skipped=0
+
+failed_len=$(redis_cmd LLEN resque:failed 2>/dev/null | tr -d '[:space:]')
+echo "queue_sweeper_failed_queue_check len=${failed_len:-0}"
+
+if echo "${failed_len:-0}" | grep -qE '^[0-9]+$' && [ "${failed_len:-0}" -gt 0 ]; then
+  # Read all entries at once to avoid index-shift problems during removal.
+  # redis-cli outputs one list element per line.
+  all_failed=$(redis_cmd LRANGE resque:failed 0 -1 2>/dev/null)
+
+  while IFS= read -r entry; do
+    [ -z "$entry" ] && continue
+
+    # Only auto-replay PruneDeadWorkerDirtyExit and TermException for RunSimulateDataPoint
+    is_infra_recoverable=false
+    if echo "$entry" | grep -q '"exception":"PruneDeadWorkerDirtyExit"' || \
+       echo "$entry" | grep -q '"exception":"TermException"'; then
+      if echo "$entry" | grep -q '"class":"ResqueJobs::RunSimulateDataPoint"'; then
+        is_infra_recoverable=true
+      fi
+    fi
+
+    if [ "$is_infra_recoverable" != "true" ]; then
+      replay_skipped=$((replay_skipped + 1))
+      continue
+    fi
+
+    # Extract dp_id — must be the ONLY element in args (single-arg format).
+    # Matches:  "args":["<uuid>"]            — correct; replay
+    # Skips:    "args":["<id1>","<id2>"]     — two-arg bug; do not replay silently
+    dp_id=$(printf '%s' "$entry" | sed -n 's/.*"args":\["\([0-9a-fA-F-]*\)"\].*/\1/p')
+    if [ -z "$dp_id" ]; then
+      echo "queue_sweeper_replay_skip reason=could_not_extract_dp_id"
+      replay_skipped=$((replay_skipped + 1))
+      continue
+    fi
+
+    # Re-enqueue with correct single-arg format
+    payload="{\"class\":\"ResqueJobs::RunSimulateDataPoint\",\"args\":[\"${dp_id}\"]}"
+    queue_len=$(redis_cmd RPUSH resque:queue:simulations "$payload" 2>/dev/null | tr -d '[:space:]')
+
+    # Remove replayed entry from failed queue by value (not index — avoids shift bugs)
+    redis_cmd LREM resque:failed 1 "$entry" >/dev/null 2>&1 || true
+
+    echo "queue_sweeper_replayed dp_id=${dp_id} queue_len=${queue_len}"
+    replayed=$((replayed + 1))
+
+    [ "$REPLAY_DELAY" -gt 0 ] && sleep "$REPLAY_DELAY"
+  done <<REPLAY_EOF
+$all_failed
+REPLAY_EOF
+
+  echo "queue_sweeper_replay_summary replayed=${replayed} skipped=${replay_skipped}"
+fi
+[[ end ]]
+
+echo "queue_sweeper_summary locks_cleared=${cleared} replayed=${replayed}"
 EOH
       }
 

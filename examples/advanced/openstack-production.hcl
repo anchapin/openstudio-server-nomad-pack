@@ -39,7 +39,7 @@ verification_image   = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/registry
 poststop_cleanup_image = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/registry.k8s.io/e2e-test-images/busybox:1.29-2"
 vector_image              = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/timberio/vector:0.30.0-alpine"
 # Disabled until the Pulp-mirrored vector image is verified amd64 (exec format error otherwise)
-enable_vector_collection  = false
+enable_vector_collection  = true
 prometheus_image       = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/prom/prometheus:v2.53.2"
 redis_exporter_image   = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/oliver006/redis_exporter:v1.62.0"
 nomad_autoscaler_image = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/hashicorp/nomad-autoscaler:0.5.0"

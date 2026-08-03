@@ -713,6 +713,66 @@ See **[docs/openstack-storage-provisioning.md](./openstack-storage-provisioning.
 
 ---
 
+## Disk Sizing for Large Simulation Runs
+
+> **Root cause (2026-08-03 incident):** Two `azimuth.compute1-179d-250disk` nodes
+> (242 GiB usable) were completely exhausted during a single 243,500-DP run. ENOSPC
+> caused silent alloc failures and required manual node cleanup.
+
+### Per-DP disk footprint
+
+| Component | Estimated size per DP |
+|---|---|
+| EnergyPlus simulation output (IDF, ESO, SQL, reports) | 40–120 MiB (varies by model complexity) |
+| Nomad alloc directory overhead | 2–5 MiB per alloc |
+| Worker container overlay filesystem | ~1–2 GiB per node (shared across all worker allocs on that node) |
+| Docker image layers (worker image) | ~3–6 GiB per node (pre-pulled, shared) |
+
+**Observed peak during the 243,500-DP run:** nodes with 64 workers processed
+roughly 2,000–4,000 DPs before alloc rotation. At ~80 MiB average per DP,
+a node processing 3,000 DPs generates ~240 GiB of simulation output alone —
+enough to exhaust a 242 GiB disk if Nomad does not clean up completed alloc
+directories promptly.
+
+### Recommended node disk size
+
+| Run scale | Minimum disk | Recommended disk | Notes |
+|---|---|---|---|
+| < 10,000 DPs | 100 GiB | 200 GiB | Standard dev/test |
+| 10,000–100,000 DPs | 200 GiB | 500 GiB | Set `reserved.disk = 20480` |
+| > 100,000 DPs | 500 GiB | 1 TiB | Swift object storage strongly preferred |
+
+> For runs over 100,000 DPs, consider using Swift object storage for simulation
+> artifacts. See [ADR-001](./adr-001-storage-architecture.md) and
+> [docs/swift-artifact-backend.md](./swift-artifact-backend.md).
+
+### Preventing ENOSPC failures
+
+1. **Set `client.reserved.disk = 20480`** in Nomad client config so Nomad stops
+   scheduling allocs when free disk drops below 20 GiB:
+   See [operations-guide.md — Disk Reservation](./operations-guide.md#disk-reservation--automatic-node-ineligibility).
+
+2. **Monitor disk usage during runs:**
+   ```bash
+   # Check disk on all nodes via SSH or node status
+   nomad node status -json | jq -r '.[] |
+     select(.Status == "ready") |
+     "\(.Name): disk=\(.NodeResources.Disk.DiskMB)MiB"'
+   ```
+
+3. **Clean up stale alloc directories** after a run:
+   ```bash
+   # On each node:
+   nomad system gc
+   # If directories persist, remove manually (after confirming no live allocs):
+   rm -rf /var/lib/nomad/alloc/<stale_alloc_id>/
+   ```
+
+4. **Pre-run checklist:** See [pre-run-checklist.md](./pre-run-checklist.md) for the
+   full disk headroom verification step.
+
+---
+
 ## Further Reading
 
 - [Nomad Host Volumes](https://developer.hashicorp.com/nomad/docs/configuration/client#host_volume-stanza)
