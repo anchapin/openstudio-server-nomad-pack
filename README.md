@@ -94,13 +94,12 @@ Before your first `nomad-pack run`, confirm:
 For OpenStack deployments, run the storage preflight before `nomad-pack run`:
 
 ```bash
-NOMAD_ADDR=http://10.60.126.125:4646 \
-./scripts/preflight-storage.sh --var-file examples/advanced/openstack.hcl
+./scripts/preflight-storage.sh --var-file examples/advanced/openstack-production.hcl
 ```
 
 The OpenStack deploy helper (`scripts/deploy-openstack.sh --deploy`) runs this preflight automatically and, by default, attempts to create missing MongoDB/Redis CSI volumes before `nomad-pack run`. It also gates rollout on system-hooks pre-pull readiness, supports quorum gating via `OS_PREPULL_MIN_READY_PERCENT` (default `10`), and derives `worker_excluded_node_ids` from CSI topology plus not-yet-prepulled worker nodes so workers only land on warmed nodes. Set `OS_CREATE_MISSING_CSI=false` to disable auto-creation.
 
-To mirror stack images into Pulp ahead of deploys, use `scripts/mirror-images-to-pulp.sh` (reads image tags from your var-file and skips tags already present in Pulp).
+To mirror stack images into a private registry ahead of deploys, use `scripts/mirror-images-to-pulp.sh` (reads image tags from your var-file and skips tags already present). This is only needed for air-gapped clusters — see `examples/advanced/airgapped.hcl` and `examples/advanced/openstack-site-local.hcl.template` for the private-registry image override pattern.
 
 For role-isolated CSI on OpenStack, deploy separate hostpath plugin instances with `scripts/deploy-hostpath-csi-role-plugins.sh`, then export `DB_CSI_PLUGIN_ID` and `REDIS_CSI_PLUGIN_ID` (or `CSI_PLUGIN_ID`) before running storage preflight/deploy helpers so DB/Redis volumes bind to the intended plugin.
 
@@ -254,7 +253,19 @@ Annotated `override.hcl` files for common deployment scenarios are in the [`exam
 |---|---|
 | [`examples/quickstart/minimal-dev.hcl`](./examples/quickstart/minimal-dev.hcl) | Single-node, minimal resources, ephemeral storage — CI and local dev |
 | [`examples/advanced/production-ha.hcl`](./examples/advanced/production-ha.hcl) | Multi-datacenter, HA resources, Vault enabled |
+| [`examples/advanced/openstack-production.hcl`](./examples/advanced/openstack-production.hcl) | Portable OpenStack production profile — public images, Consul DNS, node-class constraints |
+| [`examples/advanced/openstack-site-local.hcl.template`](./examples/advanced/openstack-site-local.hcl.template) | Site-specific overlay (ingress domain, datacenter, private registry) — copy and fill per deployment |
 | [`examples/advanced/airgapped.hcl`](./examples/advanced/airgapped.hcl) | Private registry image overrides, no Vault |
+
+For OpenStack, use the two-file layered pattern so site-specific values stay out of version control:
+```bash
+cp examples/advanced/openstack-site-local.hcl.template openstack-site-local.hcl
+# edit openstack-site-local.hcl, then:
+nomad-pack run \
+  -var-file examples/advanced/openstack-production.hcl \
+  -var-file openstack-site-local.hcl \
+  .
+```
 
 The raw variable declarations and defaults live in [`variables.hcl`](./variables.hcl).
 

@@ -23,3 +23,8 @@ AUDIT-REPORT.md
 # Generated/CI artifacts that must not be committed
 docs/variables.generated.md
 benchmark-results/
+
+# Site-local OpenStack deployment overrides (contain cluster-specific IPs/hostnames)
+# Copy from examples/advanced/openstack-site-local.hcl.template to create this file
+openstack-site-local.hcl
+examples/advanced/openstack-site-local.hcl

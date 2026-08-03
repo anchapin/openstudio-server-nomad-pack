@@ -3,7 +3,22 @@
 # Tuned against staged rollout evidence (see docs/openstack-staged-rollout-runbook.md).
 # Typical target node flavour: 8 vCPU / 16 GB RAM compute nodes.
 #
-# Usage:
+# SITE-SPECIFIC OVERRIDES
+# -----------------------
+# This file contains portable defaults. Values that differ per OpenStack deployment
+# (ingress IP/hostname, datacenter name, private registry, etc.) must be supplied
+# in a separate site-local override file. Copy the template and fill in your values:
+#
+#   cp examples/advanced/openstack-site-local.hcl.template openstack-site-local.hcl
+#   # edit openstack-site-local.hcl, then deploy with:
+#   nomad-pack run \
+#     -var-file examples/advanced/openstack-production.hcl \
+#     -var-file openstack-site-local.hcl .
+#
+# The site-local file takes precedence (last -var-file wins) and should NOT be
+# committed to source control.
+#
+# Usage (without site-local):
 #   nomad-pack run -var-file examples/advanced/openstack-production.hcl .
 #
 # Prerequisites:
@@ -20,29 +35,31 @@
 # ---------- Identity ----------
 job_name    = "openstudio-server"
 app_version = "3.10.0"
-region      = "global"   # OpenStack region; update to match your deployment
-datacenters = ["dc1"]       # Update to match your Nomad datacenter name(s)
+region      = "global"
+# SITE-SPECIFIC: Override datacenters in openstack-site-local.hcl.
+# Use your actual Nomad datacenter name(s); "dc1" is the Nomad default.
+datacenters = ["dc1"]
 
 # ---------- Images ----------
-# All images pulled from the internal Pulp registry to avoid Docker Hub rate limits.
-# NOTE: pulp-dev.hpc.nlr.gov is an NREL-internal registry. If you are deploying
-# outside of NREL, replace these image references with public images (e.g.,
-# "nrel/openstudio-server:<version>") or your own internal registry mirror.
-web_image            = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/nrel/openstudio-server:179-flock"
-web_background_image = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/nrel/openstudio-server:179-flock"
-worker_image         = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/nrel/openstudio-server:179-flock"
-worker_runtime_image = "openstudio-worker:local"
-rserve_image         = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/nrel/openstudio-rserve:179-flock"
-db_image             = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/nrel/mongo:8.0.12"
-redis_image          = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/nrel/redis:6.0.9"
-verification_image   = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/registry.k8s.io/e2e-test-images/busybox:1.29-2"
-poststop_cleanup_image = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/registry.k8s.io/e2e-test-images/busybox:1.29-2"
-vector_image              = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/timberio/vector:0.30.0-alpine"
-# Disabled until the Pulp-mirrored vector image is verified amd64 (exec format error otherwise)
+# Public DockerHub images. If your cluster cannot reach DockerHub (air-gapped),
+# override these in openstack-site-local.hcl using your internal registry mirror.
+# See examples/advanced/openstack-site-local.hcl.template for the override pattern.
+web_image            = "nrel/openstudio-server:3.10.0"
+web_background_image = "nrel/openstudio-server:3.10.0"
+worker_image         = "nrel/openstudio-server:3.10.0"
+# worker_runtime_image: leave empty to pull worker_image directly.
+# Set only when using a registry-prefetch alias to avoid TLS timeouts (see variables.hcl).
+worker_runtime_image = ""
+rserve_image         = "nrel/openstudio-rserve:3.10.0"
+db_image             = "mongo:8.0"
+redis_image          = "redis:6.0.9-alpine"
+verification_image   = "busybox:1.36"
+poststop_cleanup_image = "alpine:3.20"
+vector_image              = "timberio/vector:0.30.0-alpine"
 enable_vector_collection  = true
-prometheus_image       = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/prom/prometheus:v2.53.2"
-redis_exporter_image   = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/oliver006/redis_exporter:v1.62.0"
-nomad_autoscaler_image = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/hashicorp/nomad-autoscaler:0.5.0"
+prometheus_image       = "prom/prometheus:v2.53.2"
+redis_exporter_image   = "oliver006/redis_exporter:v1.62.0"
+nomad_autoscaler_image = "hashicorp/nomad-autoscaler:0.5.0"
 
 # ---------- Web ----------
 # web_count MUST remain 1 — NFS does not provide distributed file-locking.
@@ -53,8 +70,9 @@ web_cpu      = 6000   # MHz — sufficient for Passenger + request routing
 web_memory   = 51200  # MB  — covers Passenger workers + upload buffer
 web_memory_max = 61440
 
-# Traefik Host rule — must match the IP/hostname used to reach the cluster.
-ingress_domain = "10.60.126.125"
+# Traefik Host rule — must match the DNS name or IP/hostname used to reach the cluster.
+# SITE-SPECIFIC: set this in openstack-site-local.hcl.
+# ingress_domain = "openstudio.yourdomain.com"
 
 # ---------- Web-background ----------
 # Keep singleton: web-background is fixed at one allocation in the template.
@@ -101,17 +119,24 @@ worker_kill_timeout = "5400s"
 prometheus_enabled       = true
 nomad_autoscaler_enabled = true
 
-# Direct IP addresses — Consul DNS (*.service.consul) is unreliable on worker nodes.
-autoscaler_nomad_address      = "http://192.168.100.87:4646"
-autoscaler_prometheus_address = "http://192.168.100.92:9090"
+# Autoscaler and Prometheus addresses — use Consul DNS (the variable defaults).
+# Only override these in openstack-site-local.hcl when Consul DNS is unavailable
+# on your cluster (e.g. Consul not running on worker nodes):
+#   autoscaler_nomad_address      = "http://<nomad-server-ip>:4646"
+#   autoscaler_prometheus_address = "http://<prometheus-ip>:9090"
+#
+# Default: autoscaler_nomad_address      = "http://nomad.service.consul:4646"
+# Default: autoscaler_prometheus_address = "http://openstudio-prometheus.service.consul:9090"
 
-# Pin prometheus to the web/CSI node — the only node with reliable Pulp access
-# for the prometheus and redis_exporter images.
+# Pin Prometheus to "system" class nodes — these handle infrastructure workloads
+# (db, redis, monitoring) and are distinct from "compute" worker nodes.
+# Ensure your Nomad clients have node_class = "system" set in their client.hcl,
+# or remove this constraint to allow Prometheus to schedule anywhere.
 prometheus_constraints = [
   {
-    attribute = "$${attr.unique.hostname}"
+    attribute = "$${attr.nomad.node.class}"
     operator  = "="
-    value     = "nomad-client-259"
+    value     = "system"
   }
 ]
 
@@ -230,7 +255,10 @@ enable_stall_watchdog            = true
 stall_watchdog_cron              = "*/15 * * * *"
 stall_watchdog_max_stall_seconds = 3600   # 60 min — above longest normal sim
 stall_watchdog_restart_allocs    = true
-stall_watchdog_nomad_address     = "http://192.168.100.87:4646"
+# stall_watchdog_nomad_address: uses http://localhost:4646 by default (via network_mode=host).
+# Override in openstack-site-local.hcl only if Nomad is not reachable at localhost from
+# within the task (e.g. NAT environments, non-host network mode):
+#   stall_watchdog_nomad_address = "http://<nomad-server-ip>:4646"
 
 # ---------- Image pre-pull ----------
 # Pre-pulls all images on every compute node to eliminate cold-start delays.

@@ -31,7 +31,7 @@ The scale-to-max program addressed the three main bottlenecks that prevented Ope
 | 10 | [#362](https://github.com/anchapin/openstudio-server-nomad-pack/issues/362) Benchmark and tune Rserve horizontal scaling | [#370](https://github.com/anchapin/openstudio-server-nomad-pack/pull/370) | Open | `docs/rserve-horizontal-scaling.md` benchmark guide |
 | 11 | [#363](https://github.com/anchapin/openstudio-server-nomad-pack/issues/363) `deploy_traefik` go/no-go decision for OpenStack | [#369](https://github.com/anchapin/openstudio-server-nomad-pack/pull/369) | ✅ Merged | `docs/traefik-openstack-decision.md` ADR |
 | 12 | [#364](https://github.com/anchapin/openstudio-server-nomad-pack/issues/364) Traefik upload/body-size/timeout tuning | [#368](https://github.com/anchapin/openstudio-server-nomad-pack/pull/368) | ✅ Merged | `traefik_request_timeout`, `traefik_read_timeout`, `traefik_write_timeout`, `traefik_max_request_body_size` variables |
-| 13 | [#365](https://github.com/anchapin/openstudio-server-nomad-pack/issues/365) Staged production rollout + finalized defaults | [#367](https://github.com/anchapin/openstudio-server-nomad-pack/pull/367) | ✅ Merged | `docs/openstack-staged-rollout-runbook.md`; `examples/openstack-production.hcl` |
+| 13 | [#365](https://github.com/anchapin/openstudio-server-nomad-pack/issues/365) Staged production rollout + finalized defaults | [#367](https://github.com/anchapin/openstudio-server-nomad-pack/pull/367) | ✅ Merged | `docs/infrastructure/openstack-staged-rollout-runbook.md`; `examples/advanced/openstack-production.hcl` |
 
 ---
 
@@ -59,7 +59,7 @@ The scale-to-max program addressed the three main bottlenecks that prevented Ope
 | File | Description | PR |
 |------|------------|-----|
 | `docs/traefik-openstack-decision.md` | ADR: use Octavia LBaaS in production; Traefik only for dev | #369 |
-| `docs/openstack-staged-rollout-runbook.md` | Staged worker ramp procedure with gate criteria and rollback | #367 |
+| `docs/infrastructure/openstack-staged-rollout-runbook.md` | Staged worker ramp procedure with gate criteria and rollback | #367 |
 | `docs/rserve-horizontal-scaling.md` | Rserve scaling benchmark methodology and operating-point table | #370 |
 | Storage ADR | Architecture decision record for storage backend selection | #377 |
 | Storage benchmark methodology | How to measure and reproduce NFS saturation benchmarks | #378 |
@@ -76,7 +76,7 @@ The scale-to-max program addressed the three main bottlenecks that prevented Ope
 
 | File | Purpose | PR |
 |------|---------|-----|
-| `examples/openstack-production.hcl` | Finalized tuned defaults for OpenStack production | #367 |
+| `examples/advanced/openstack-production.hcl` | Portable finalized tuned defaults for OpenStack production (public images, Consul DNS defaults) | #367 |
 
 ---
 
@@ -92,7 +92,7 @@ Apply changes in this order to minimize risk and validate each layer before proc
 6. **Traefik decision** — Follow `docs/traefik-openstack-decision.md`: set `deploy_traefik = false` for production and configure OpenStack Octavia LBaaS. If using Traefik, set the tuning variables from PR #368.
 7. **Rserve scaling** — Start with `rserve_count = 1`. After multi-replica routing (PR #371) is merged and deployed, increase per the operating-point table in `docs/rserve-horizontal-scaling.md`.
 8. **Staged rollout** — Follow `docs/openstack-staged-rollout-runbook.md`: ramp workers in steps (5→10→20→max), checking gate criteria (p95 latency < 30 s, iowait% < 20%, queue lag < 2×, failure rate < 2%) at each stage.
-9. **Finalize defaults** — Copy finalized values into `examples/openstack-production.hcl` for reproducible deploys.
+9. **Finalize defaults** — Copy finalized values into `examples/advanced/openstack-production.hcl` for reproducible deploys. Supply site-specific values (ingress domain, datacenter) via `openstack-site-local.hcl` (see `examples/advanced/openstack-site-local.hcl.template`).
 
 ---
 

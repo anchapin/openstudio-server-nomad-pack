@@ -3,7 +3,18 @@
 This runbook describes the staged rollout procedure for deploying OpenStudio Server on
 OpenStack-hosted Nomad clusters, including gate criteria, abort/rollback procedures, and
 evidence collection checklists. Finalized recommended defaults are documented at the end
-and implemented in `examples/openstack-production.hcl`.
+and implemented in `examples/advanced/openstack-production.hcl`.
+
+> **Site-local values:** IP addresses, ingress domain, datacenter name, and any private
+> registry image overrides must be supplied in a separate site-local override file.
+> See `examples/advanced/openstack-site-local.hcl.template` for the template and
+> instructions. Deploy with both var-files:
+> ```bash
+> nomad-pack run \
+>   -var-file examples/advanced/openstack-production.hcl \
+>   -var-file openstack-site-local.hcl \
+>   .
+> ```
 
 ---
 
@@ -87,9 +98,12 @@ Measured on each Nomad compute node hosting worker allocations.
 
 ```bash
 # Deploy with Stage 1 settings
+# Replace openstack-site-local.hcl with your site-specific override file.
+# See examples/advanced/openstack-site-local.hcl.template for the template.
 nomad-pack run \
   --name openstudio-server \
-  -var-file examples/openstack-production.hcl \
+  -var-file examples/advanced/openstack-production.hcl \
+  -var-file openstack-site-local.hcl \
   -var "worker_count=2" \
   -var "worker_autoscaling_enabled=false" \
   .
@@ -111,7 +125,8 @@ Advance to Stage 2 only if all gate criteria pass.
 ```bash
 nomad-pack run \
   --name openstudio-server \
-  -var-file examples/openstack-production.hcl \
+  -var-file examples/advanced/openstack-production.hcl \
+  -var-file openstack-site-local.hcl \
   -var "worker_count=5" \
   -var "worker_autoscaling_enabled=false" \
   .
@@ -128,7 +143,8 @@ nomad job status openstudio-server-worker | grep running
 ```bash
 nomad-pack run \
   --name openstudio-server \
-  -var-file examples/openstack-production.hcl \
+  -var-file examples/advanced/openstack-production.hcl \
+  -var-file openstack-site-local.hcl \
   -var "worker_count=10" \
   -var "worker_autoscaling_enabled=false" \
   .
@@ -143,7 +159,8 @@ nomad-pack run \
 # Enable autoscaling — autoscaler manages count between min/max replicas
 nomad-pack run \
   --name openstudio-server \
-  -var-file examples/openstack-production.hcl \
+  -var-file examples/advanced/openstack-production.hcl \
+  -var-file openstack-site-local.hcl \
   .
 
 # Ramp queue to 100 % of target load
@@ -245,7 +262,8 @@ redis-cli -h <redis-host> get resque:stat:failed
 ```bash
 # Save Nomad job plan diff to confirm no unintended changes before advancing
 nomad-pack plan --name openstudio-server \
-  -var-file examples/openstack-production.hcl \
+  -var-file examples/advanced/openstack-production.hcl \
+  -var-file openstack-site-local.hcl \
   . \
   > evidence/stage-<N>-plan-output.txt
 
@@ -259,7 +277,7 @@ redis-cli -h <redis-host> info stats >> evidence/stage-<N>-redis-info.txt
 
 The following values are the result of staged rollout tuning and represent the recommended
 baseline for an OpenStack-hosted Nomad cluster with typical VM flavours (8 vCPU / 16 GB RAM
-compute nodes). They are committed in `examples/openstack-production.hcl`.
+compute nodes). They are committed in `examples/advanced/openstack-production.hcl`.
 
 | Variable | Value | Rationale |
 |---|---|---|

@@ -1,0 +1,71 @@
+# openstack-site-local.hcl.template — Site-specific overrides for OpenStack deployments.
+#
+# INSTRUCTIONS
+# ------------
+# 1. Copy this file:
+#      cp examples/advanced/openstack-site-local.hcl.template openstack-site-local.hcl
+#
+# 2. Fill in the values below for your specific OpenStack cluster.
+#
+# 3. Deploy using both var-files (site-local takes precedence — last wins):
+#      nomad-pack run \
+#        -var-file examples/advanced/openstack-production.hcl \
+#        -var-file openstack-site-local.hcl \
+#        .
+#
+# 4. Do NOT commit openstack-site-local.hcl to source control — add it to .gitignore.
+#    It contains cluster-specific IP addresses and hostnames.
+#
+# All other tuning lives in openstack-production.hcl and does not need to change
+# between deployments of the same OpenStack configuration profile.
+
+# ---------- Identity ----------
+# The Nomad datacenter(s) your cluster uses. Check with: nomad node status
+# Common values: ["dc1"], ["openstack-prod"], ["us-east-1"]
+datacenters = ["dc1"]
+
+# ---------- Ingress ----------
+# DNS name or IP address used to reach the OpenStudio Server web UI.
+# This becomes the Traefik Host() routing rule.
+# Examples:
+#   ingress_domain = "openstudio.yourdomain.com"
+#   ingress_domain = "10.60.126.125"
+ingress_domain = "REPLACE_WITH_YOUR_INGRESS_IP_OR_HOSTNAME"
+
+# ---------- Autoscaler addresses ----------
+# By default, the autoscaler resolves Nomad and Prometheus via Consul DNS:
+#   autoscaler_nomad_address      = "http://nomad.service.consul:4646"
+#   autoscaler_prometheus_address = "http://openstudio-prometheus.service.consul:9090"
+#
+# Override below ONLY if Consul DNS is not available on your cluster.
+# Find the Nomad server IP with: nomad server members
+# Find the Prometheus IP with: consul catalog nodes -service=openstudio-prometheus
+#
+# autoscaler_nomad_address      = "http://REPLACE_WITH_NOMAD_SERVER_IP:4646"
+# autoscaler_prometheus_address = "http://REPLACE_WITH_PROMETHEUS_IP:9090"
+
+# ---------- Stall watchdog address ----------
+# By default: http://localhost:4646 (works when tasks use network_mode = host).
+# Override only if Nomad is not reachable at localhost from within a container.
+#
+# stall_watchdog_nomad_address = "http://REPLACE_WITH_NOMAD_SERVER_IP:4646"
+
+# ---------- Private image registry (air-gapped clusters) ----------
+# If your cluster cannot reach DockerHub, set image overrides to your
+# internal mirror. Replace "your-registry.example.com/mirror" with your prefix.
+#
+# web_image            = "your-registry.example.com/mirror/nrel/openstudio-server:3.10.0"
+# web_background_image = "your-registry.example.com/mirror/nrel/openstudio-server:3.10.0"
+# worker_image         = "your-registry.example.com/mirror/nrel/openstudio-server:3.10.0"
+# rserve_image         = "your-registry.example.com/mirror/nrel/openstudio-rserve:3.10.0"
+# db_image             = "your-registry.example.com/mirror/mongo:8.0"
+# redis_image          = "your-registry.example.com/mirror/redis:6.0.9-alpine"
+# verification_image   = "your-registry.example.com/mirror/busybox:1.36"
+# poststop_cleanup_image = "your-registry.example.com/mirror/alpine:3.20"
+# vector_image         = "your-registry.example.com/mirror/timberio/vector:0.30.0-alpine"
+# prometheus_image     = "your-registry.example.com/mirror/prom/prometheus:v2.53.2"
+# redis_exporter_image = "your-registry.example.com/mirror/oliver006/redis_exporter:v1.62.0"
+# nomad_autoscaler_image = "your-registry.example.com/mirror/hashicorp/nomad-autoscaler:0.5.0"
+#
+# For the registry-prefetch pattern (avoids TLS timeouts on worker nodes), also set:
+# worker_runtime_image = "openstudio-worker:local"
