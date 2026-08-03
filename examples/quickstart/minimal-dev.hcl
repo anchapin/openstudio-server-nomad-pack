@@ -4,7 +4,7 @@
 # allocation restarts.  No Vault, no Consul Connect, no autoscaling.
 #
 # Usage:
-#   nomad-pack run -var-file examples/minimal-dev.hcl .
+#   nomad-pack run -var-file examples/quickstart/minimal-dev.hcl .
 
 job_name    = "openstudio-server-dev"
 datacenters = ["dc1"]

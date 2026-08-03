@@ -95,7 +95,7 @@ For OpenStack deployments, run the storage preflight before `nomad-pack run`:
 
 ```bash
 NOMAD_ADDR=http://10.60.126.125:4646 \
-./scripts/preflight-storage.sh --var-file examples/openstack.hcl
+./scripts/preflight-storage.sh --var-file examples/advanced/openstack.hcl
 ```
 
 The OpenStack deploy helper (`scripts/deploy-openstack.sh --deploy`) runs this preflight automatically and, by default, attempts to create missing MongoDB/Redis CSI volumes before `nomad-pack run`. It also gates rollout on system-hooks pre-pull readiness, supports quorum gating via `OS_PREPULL_MIN_READY_PERCENT` (default `10`), and derives `worker_excluded_node_ids` from CSI topology plus not-yet-prepulled worker nodes so workers only land on warmed nodes. Set `OS_CREATE_MISSING_CSI=false` to disable auto-creation.
@@ -252,9 +252,9 @@ Annotated `override.hcl` files for common deployment scenarios are in the [`exam
 
 | File | Use case |
 |---|---|
-| [`examples/minimal-dev.hcl`](./examples/minimal-dev.hcl) | Single-node, minimal resources, ephemeral storage — CI and local dev |
-| [`examples/production-ha.hcl`](./examples/production-ha.hcl) | Multi-datacenter, HA resources, Vault enabled |
-| [`examples/airgapped.hcl`](./examples/airgapped.hcl) | Private registry image overrides, no Vault |
+| [`examples/quickstart/minimal-dev.hcl`](./examples/quickstart/minimal-dev.hcl) | Single-node, minimal resources, ephemeral storage — CI and local dev |
+| [`examples/advanced/production-ha.hcl`](./examples/advanced/production-ha.hcl) | Multi-datacenter, HA resources, Vault enabled |
+| [`examples/advanced/airgapped.hcl`](./examples/advanced/airgapped.hcl) | Private registry image overrides, no Vault |
 
 The raw variable declarations and defaults live in [`variables.hcl`](./variables.hcl).
 

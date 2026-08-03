@@ -14,7 +14,7 @@ Bring the OpenStack Nomad deployment to a clean, production-like state so analys
 - MongoDB and Redis use persistent storage
 - Web/worker share NFS-backed storage for analysis artifacts
 - `web_count = 1`
-- Pack redeployed from `examples/openstack.hcl`
+- Pack redeployed from `examples/advanced/openstack.hcl`
 - One smoke analysis completes successfully
 
 ## Recommended execution order
@@ -78,7 +78,7 @@ Run the automated preflight check:
 
 ```bash
 NOMAD_ADDR=http://10.60.126.125:4646 \
-./scripts/preflight-storage.sh --var-file examples/openstack.hcl
+./scripts/preflight-storage.sh --var-file examples/advanced/openstack.hcl
 ```
 
 The check fails fast when required CSI plugins/volumes are missing or when required
@@ -88,7 +88,7 @@ To auto-create missing MongoDB/Redis CSI volumes (when the CSI plugin is already
 
 ```bash
 NOMAD_ADDR=http://10.60.126.125:4646 \
-./scripts/preflight-storage.sh --var-file examples/openstack.hcl --create-missing-csi
+./scripts/preflight-storage.sh --var-file examples/advanced/openstack.hcl --create-missing-csi
 ```
 
 ### 5. Redeploy the pack
@@ -96,7 +96,7 @@ NOMAD_ADDR=http://10.60.126.125:4646 \
 Deploy the current OpenStack profile:
 
 ```bash
-nomad-pack run -var-file examples/openstack.hcl .
+nomad-pack run -var-file examples/advanced/openstack.hcl .
 ```
 
 ### 6. Verify health

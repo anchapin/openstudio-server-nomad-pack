@@ -47,7 +47,7 @@ deployment issue and confirm the stack is stable before any additional scale-out
 
 - Purge the `openstudio-server-web` job cleanly.
 - Confirm no `web` allocs remain in running or pending state.
-- Redeploy from scratch with the current `examples/openstack.hcl`.
+- Redeploy from scratch with the current `examples/advanced/openstack.hcl`.
 
 ### 4. Verify web health, not just task start
 
@@ -79,4 +79,3 @@ deployment issue and confirm the stack is stable before any additional scale-out
 - `nomad job status openstudio-server-web` shows both `web` and `web-background` healthy.
 - No delayed reschedule or stale alloc-failure eval is blocking the next deployment.
 - The deployment is stable long enough to proceed with any further scaling.
-

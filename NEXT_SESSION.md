@@ -28,7 +28,7 @@ submit analyses reliably.
    - `nfs_shared_volume_enabled = true`
    - `nfs_volume_type = "host_volume"`
    - `nfs_volume_source = "openstudio-nfs"`
-5. Redeploy with `nomad-pack run -var-file examples/openstack.hcl .`
+5. Redeploy with `nomad-pack run -var-file examples/advanced/openstack.hcl .`
 6. Verify `openstudio-db`, `openstudio-redis`, `openstudio-rserve`,
    `openstudio-web`, and `openstudio-worker` are all healthy.
 7. Submit a smoke analysis and confirm it completes using the shared NFS path.

@@ -194,7 +194,7 @@ is drained.
 
 ## 6. OpenStack / Airgapped Deployment Notes
 
-The `examples/openstack.hcl` var-file targets airgapped OpenStack deployments where the Nomad
+The `examples/advanced/openstack.hcl` var-file targets airgapped OpenStack deployments where the Nomad
 cluster may have a small number of compute nodes. For these environments:
 
 - **Default `rserve_count = 1`** is appropriate — OpenStack research clusters typically run

@@ -81,12 +81,54 @@ EOT
 global:
   scrape_interval: [[ var "prometheus_scrape_interval" . ]]
 
+[[ if var "prometheus_alert_rules_enabled" . ]]
+rule_files:
+  - /local/openstudio-alerts.yml
+
+[[ end ]]
 scrape_configs:
   - job_name: 'openstudio-redis-exporter'
     static_configs:
       - targets: ['127.0.0.1:9121']
 EOH
       }
+
+[[ if var "prometheus_alert_rules_enabled" . ]]
+      template {
+        destination = "local/openstudio-alerts.yml"
+        data        = <<EOH
+groups:
+  - name: openstudio-alerts
+    rules:
+      - alert: OpenStudioSimulationsQueueBacklog
+        expr: (sum(redis_key_size{key="resque:queue:simulations"}) or vector(0)) > 0
+        for: [[ var "prometheus_alert_simulations_queue_minutes" . ]]m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OpenStudio simulations queue backlog is not draining"
+          description: "resque:queue:simulations has remained non-empty for more than [[ var "prometheus_alert_simulations_queue_minutes" . ]] minutes."
+
+      - alert: OpenStudioRequeuedQueueBacklog
+        expr: (sum(redis_key_size{key="resque:queue:requeued"}) or vector(0)) > 0
+        for: [[ var "prometheus_alert_requeued_queue_minutes" . ]]m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OpenStudio requeued jobs are backing up"
+          description: "resque:queue:requeued has remained non-empty for more than [[ var "prometheus_alert_requeued_queue_minutes" . ]] minutes."
+
+      - alert: OpenStudioFailedJobs
+        expr: (sum(redis_key_size{key="resque:failed"}) or vector(0)) > 0
+        for: [[ var "prometheus_alert_failed_jobs_minutes" . ]]m
+        labels:
+          severity: critical
+        annotations:
+          summary: "OpenStudio failed jobs queue is non-empty"
+          description: "resque:failed has remained non-empty for more than [[ var "prometheus_alert_failed_jobs_minutes" . ]] minutes."
+EOH
+      }
+[[ end ]]
 
       service {
         name     = "openstudio-prometheus"

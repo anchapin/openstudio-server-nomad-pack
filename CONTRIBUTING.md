@@ -39,7 +39,7 @@ nomad-pack fmt --check templates/
 nomad-pack render .
 
 # Render with an example var-file override
-nomad-pack render -var-file examples/minimal-dev.hcl .
+nomad-pack render -var-file examples/quickstart/minimal-dev.hcl .
 
 # Validate the rendered job spec against a live Nomad cluster
 nomad-pack validate .

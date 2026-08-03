@@ -24,7 +24,7 @@ OpenStack environment has specific ingress requirements:
 | **Operator observability** | Ingress access logs must be available without SSH to compute nodes |
 
 The pack ships an **optional in-pack Traefik job** (`deploy_traefik = true`) that reads
-routing rules from Consul service tags. The existing `examples/openstack.hcl` sets
+routing rules from Consul service tags. The existing `examples/advanced/openstack.hcl` sets
 `ingress_domain = "10.60.126.125"` (jump-host IP) but does not currently set
 `deploy_traefik`.
 
@@ -132,7 +132,7 @@ OpenStack Octavia (LBaaS v2) provides a managed L4/L7 load balancer that:
 
 **Option C (Hybrid) is adopted.**
 
-For the **OpenStack production profile** (`examples/openstack.hcl`):
+For the **OpenStack production profile** (`examples/advanced/openstack.hcl`):
 
 ```hcl
 # Do NOT enable in-pack Traefik for production.
@@ -185,7 +185,7 @@ ingress_domain          = "localhost"
 
 ### Immediate (no code changes required beyond this PR)
 
-- `examples/openstack.hcl` records `deploy_traefik = false` explicitly with a
+- `examples/advanced/openstack.hcl` records `deploy_traefik = false` explicitly with a
   comment directing operators to provision Octavia.
 - `deploy_traefik = false` is already the pack default — production is safe today.
 

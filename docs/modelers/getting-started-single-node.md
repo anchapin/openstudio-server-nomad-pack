@@ -44,7 +44,7 @@ make down   # Stops the job, removes containers + volumes
 | Tool | Minimum Version | Install |
 |---|---|---|
 | [Docker Desktop](https://docs.docker.com/get-docker/) | **24.0** (with Compose v2) | Docker Desktop for macOS or Docker Engine for Linux |
-| [nomad-pack](https://developer.hashicorp.com/nomad/tools/nomad-pack) | **0.1.2** | `brew install hashicorp/tap/nomad-pack` |
+| [nomad-pack](https://developer.hashicorp.com/nomad/tools/nomad-pack) | **0.4.2+** | `brew install hashicorp/tap/nomad-pack` |
 | `curl` + `python3` | system | Pre-installed on macOS/Linux (used by `make status`) |
 
 > **macOS note**: Requires Docker Desktop **4.29+** for host-networking support. On older versions, use the detailed walkthrough below.  
@@ -73,7 +73,7 @@ make down     # Stop everything + clean volumes
 make redeploy # Re-deploy after config changes
 ```
 
-> For a full description of every variable and override option, see [docs/variables.md](./variables.md).
+> For a full description of every variable and override option, see [docs/variables.md](../variables.md).
 
 ---
 
@@ -105,7 +105,7 @@ Install and verify the following before continuing.
 | [Consul](https://developer.hashicorp.com/consul/install) | **1.17.0** | `brew install hashicorp/tap/consul` |
 | [Docker](https://docs.docker.com/get-docker/) | **24.0** | Docker Desktop (macOS) or Docker Engine (Linux) |
 | [CNI plugins](https://github.com/containernetworking/plugins) | **1.4.0** | See below |
-| [nomad-pack](https://developer.hashicorp.com/nomad/tools/nomad-pack) | **0.1.2** | `brew install hashicorp/tap/nomad-pack` |
+| [nomad-pack](https://developer.hashicorp.com/nomad/tools/nomad-pack) | **0.4.2+** | `brew install hashicorp/tap/nomad-pack` |
 
 ### Install CNI plugins (Linux)
 
@@ -130,7 +130,7 @@ ls /opt/cni/plugins/bridge
 nomad version          # Nomad v1.7.x
 consul version         # Consul v1.17.x
 docker version --format '{{.Server.Version}}'
-nomad-pack version     # nomad-pack v0.1.x
+nomad-pack version     # nomad-pack v0.4.x
 ```
 
 ### Apple Silicon / ARM
@@ -344,7 +344,7 @@ cd openstudio-server-nomad-pack
 
 ## Step 4 — Create an Override File
 
-The repository ships with `examples/minimal-dev.hcl` which is ready to use out of the box for a single-node dev cluster with ephemeral storage.
+The repository ships with `examples/quickstart/minimal-dev.hcl` which is ready to use out of the box for a single-node dev cluster with ephemeral storage.
 
 If you want persistent storage (data survives allocation restarts), use the following override instead. Save it as `my-override.hcl` in the repo root:
 
@@ -393,7 +393,7 @@ For the fastest zero-to-running experience (no persistent volumes needed), use t
 
 ```bash
 # Use the bundled minimal-dev.hcl (ephemeral storage, no host_volume setup needed)
-cp examples/minimal-dev.hcl my-override.hcl
+cp examples/quickstart/minimal-dev.hcl my-override.hcl
 ```
 
 ---
@@ -547,7 +547,7 @@ docker pull mongo:4.2
 docker pull redis:6.2-alpine
 ```
 
-If you are behind a proxy or firewall, see `examples/airgapped.hcl` for private-registry overrides.
+If you are behind a proxy or firewall, see `examples/advanced/airgapped.hcl` for private-registry overrides.
 
 ### Consul service not registered
 
@@ -595,11 +595,11 @@ sudo rm -rf /opt/nomad/volumes/mongodb /opt/nomad/volumes/redis
 
 ## Next Steps
 
-- **Production deployment**: see `examples/production-ha.hcl` for a multi-datacenter, HA configuration.
-- **Air-gapped environments**: see `examples/airgapped.hcl` for private registry image overrides.
-- **Variable reference**: see [docs/variables.md](./variables.md) for all configurable options.
-- **Vault integration**: see [docs/vault-policies.md](./vault-policies.md) for secret management setup.
-- **Kubernetes migration**: see [docs/migration-k8s-to-nomad.md](./migration-k8s-to-nomad.md) if you are moving from Helm.
+- **Production deployment**: see `examples/advanced/production-ha.hcl` for a multi-datacenter, HA configuration.
+- **Air-gapped environments**: see `examples/advanced/airgapped.hcl` for private registry image overrides.
+- **Variable reference**: see [docs/variables.md](../variables.md) for all configurable options.
+- **Vault integration**: see [docs/infrastructure/vault-policies.md](../infrastructure/vault-policies.md) for secret management setup.
+- **Kubernetes migration**: see [docs/infrastructure/migration-k8s-to-nomad.md](../infrastructure/migration-k8s-to-nomad.md) if you are moving from Helm.
 
 ---
 
@@ -612,7 +612,7 @@ To enable it, set `deploy_traefik = true`:
 ```bash
 nomad-pack run -var "deploy_traefik=true" .
 # or with a var-file:
-nomad-pack run -var-file examples/minimal-dev.hcl -var "deploy_traefik=true" .
+nomad-pack run -var-file examples/quickstart/minimal-dev.hcl -var "deploy_traefik=true" .
 ```
 
 This renders and deploys an additional `<job_name>-traefik` job with:

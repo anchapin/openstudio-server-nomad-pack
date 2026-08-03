@@ -16,3 +16,6 @@ benchmark-results/**
 !benchmark-results/
 !benchmark-results/tier-*/
 !benchmark-results/tier-*/summary.json
+
+# Session-specific agent output artifacts
+.agents/results/*.json

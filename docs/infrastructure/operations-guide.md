@@ -66,7 +66,7 @@ application, keep `web_count = 1`.
 
 ### 🚀 Getting Started: Single-Node Dev Cluster
 
-**[docs/getting-started-single-node.md](./getting-started-single-node.md)**
+**[docs/modelers/getting-started-single-node.md](../modelers/getting-started-single-node.md)**
 
 Start here if you are deploying for the first time on a developer laptop or a single-node test
 environment. Covers:
@@ -82,7 +82,7 @@ environment. Covers:
 
 ### 💾 Storage Preparation
 
-**[docs/storage.md](./storage.md)**
+**[docs/infrastructure/storage.md](./storage.md)**
 
 Covers everything you need to provision persistent storage *before* running `nomad-pack run`:
 
@@ -96,7 +96,7 @@ Covers everything you need to provision persistent storage *before* running `nom
 
 ### 📋 Variable Reference
 
-**[docs/variables.md](./variables.md)**
+**[docs/variables.md](../variables.md)**
 
 Full reference for every pack variable sourced directly from `variables.hcl`:
 
@@ -108,7 +108,7 @@ Full reference for every pack variable sourced directly from `variables.hcl`:
 
 ### 🔐 Nomad ACL Policy Setup
 
-**[docs/acl-policies.md](./acl-policies.md)**
+**[docs/infrastructure/acl-policies.md](./acl-policies.md)**
 
 Minimum ACL capabilities required to deploy and manage this pack:
 
@@ -120,7 +120,7 @@ Minimum ACL capabilities required to deploy and manage this pack:
 
 ### 🔑 Vault Policy Setup
 
-**[docs/vault-policies.md](./vault-policies.md)**
+**[docs/infrastructure/vault-policies.md](./vault-policies.md)**
 
 HashiCorp Vault integration for secrets management:
 
@@ -134,7 +134,7 @@ HashiCorp Vault integration for secrets management:
 
 ### 🔄 Kubernetes-to-Nomad Migration
 
-**[docs/migration-k8s-to-nomad.md](./migration-k8s-to-nomad.md)**
+**[docs/infrastructure/migration-k8s-to-nomad.md](./migration-k8s-to-nomad.md)**
 
 Step-by-step migration from the [NREL openstudio-server Helm chart](https://github.com/NREL/openstudio-server):
 

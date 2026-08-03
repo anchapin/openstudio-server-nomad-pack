@@ -6,7 +6,7 @@
 # Nomad's encrypted variables or pre-seeded environment variables instead.
 #
 # Usage:
-#   nomad-pack run -var-file examples/airgapped.hcl .
+#   nomad-pack run -var-file examples/advanced/airgapped.hcl .
 
 # ---------- Identity ----------
 job_name    = "openstudio-server"

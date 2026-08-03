@@ -193,7 +193,7 @@ Use when: production deployments with 20–200 concurrent workers on a stable Ma
 | `sync` | not set (default) | Client-side write aggregation enabled by kernel; server export still uses `sync` |
 | `async` export | no | |
 
-This profile matches what the `docs/storage.md §5.1` recommended `/etc/fstab` entry should
+This profile matches what the `docs/infrastructure/storage.md §5.1` recommended `/etc/fstab` entry should
 evolve toward. It replaces the previous 64 KiB buffer recommendation.
 
 **Expected throughput**: ~800 MB/s–1.5 GB/s aggregate write (kernel-aggregated writes,
@@ -433,7 +433,7 @@ nomad node status -verbose <node-id> | grep openstudio-nfs
 ### 7.4 Pack Variables (variables.hcl)
 
 With the host volume registered on all client nodes, enable shared NFS in your var-file
-(e.g. `examples/openstack.hcl`):
+(e.g. `examples/advanced/openstack.hcl`):
 
 ```hcl
 nfs_shared_volume_enabled = true

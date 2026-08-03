@@ -207,7 +207,7 @@ variable "web_background_mongoid_pool_size" {
 
 variable "web_count" {
   type        = number
-  description = "The number of web task group allocations. MUST remain 1 (the default). The OpenStudio Server web process writes uploaded analysis artefacts to local container filesystem without a distributed file-locking scheme. When nfs_shared_volume_enabled = true, NFS provides a shared filesystem but does NOT guarantee POSIX file-locking across multiple simultaneous web writers — each allocation still has its own isolated view of open file handles. Setting web_count > 1 therefore causes split-brain: requests routed to replica B cannot find files written by replica A. This mirrors the Kubernetes Helm chart constraint (web-hpa.yaml maxReplicas: 1). To safely run web_count > 1 you must first implement either: (a) a distributed lock manager such as Redlock via Redis wrapping every filesystem operation, or (b) stateless file handling by moving all persistent artefacts to object storage (e.g. S3/MinIO). See docs/storage.md §'Web Replica Constraint' for details."
+  description = "The number of web task group allocations. MUST remain 1 (the default). The OpenStudio Server web process writes uploaded analysis artefacts to local container filesystem without a distributed file-locking scheme. When nfs_shared_volume_enabled = true, NFS provides a shared filesystem but does NOT guarantee POSIX file-locking across multiple simultaneous web writers — each allocation still has its own isolated view of open file handles. Setting web_count > 1 therefore causes split-brain: requests routed to replica B cannot find files written by replica A. This mirrors the Kubernetes Helm chart constraint (web-hpa.yaml maxReplicas: 1). To safely run web_count > 1 you must first implement either: (a) a distributed lock manager such as Redlock via Redis wrapping every filesystem operation, or (b) stateless file handling by moving all persistent artefacts to object storage (e.g. S3/MinIO). See docs/infrastructure/storage.md §'Web Replica Constraint' for details."
   default     = 1
 }
 
@@ -699,7 +699,7 @@ variable "web_background_worker_count" {
 
 variable "db_image" {
   type        = string
-  description = "The MongoDB database image name and tag. BREAKING UPGRADE NOTE: persisted data volumes created on mongo:4.2 must be migrated in sequence 4.2 -> 4.4 -> 5.0 -> 6.0.7; do not skip major versions. See docs/upgrading.md for the full procedure."
+  description = "The MongoDB database image name and tag. BREAKING UPGRADE NOTE: persisted data volumes created on mongo:4.2 must be migrated in sequence 4.2 -> 4.4 -> 5.0 -> 6.0.7; do not skip major versions. See docs/infrastructure/upgrading.md for the full procedure."
   default     = "mongo:6.0.7"
 }
 

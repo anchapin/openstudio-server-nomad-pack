@@ -43,7 +43,7 @@ nomad_autoscaler_image = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/hashic
 
 # ---------- Web ----------
 # web_count MUST remain 1 — NFS does not provide distributed file-locking.
-# See docs/operations-guide.md §'Web Replica Constraint'.
+# See docs/infrastructure/operations-guide.md §'Web Replica Constraint'.
 web_count    = 1
 web_priority = 80
 web_cpu      = 6000   # MHz — sufficient for Passenger + request routing
@@ -163,7 +163,7 @@ redis_config_tcp_keepalive = 60
 
 # ---------- Shared NFS (web + worker) ----------
 # Recommended: OS-level NFS mount registered as a Nomad host_volume.
-# See docs/storage.md for fstab + client.hcl setup instructions.
+# See docs/infrastructure/storage.md for fstab + client.hcl setup instructions.
 nfs_shared_volume_enabled = true
 nfs_volume_source         = "openstudio-nfs"
 nfs_volume_mount_path     = "/mnt/openstudio"
