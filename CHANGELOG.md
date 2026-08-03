@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `scripts/provision-worker-nodes.sh`: idempotent helper to provision new `azimuth.compute1-179d-250disk` OpenStack instances and bootstrap them into the Nomad cluster. Includes quota pre-flight check, auto-detected start index, dry-run mode, and a `--bootstrap-only --ips` path for re-bootstrapping existing nodes. Capacity reference: each node adds up to 45 workers (80 GB RAM / 1,750 MB each); 7,296 vCPUs of quota headroom permit ~117 more nodes → ~10,620 workers cluster-wide.
 
 ### Changed
+- Lowered `worker_memory` in `examples/advanced/openstack-production.hcl` from `1750` to `1250` MB based on observed p99 container RSS of ~1,080 MiB on a fully-loaded node (45 workers sampled); 16 % headroom above observed max; increases scheduler capacity from 45 to 64 allocs/node (119 nodes × 64 × 3 processes = **22,848 concurrent simulations**, up from 16,065). `worker_memory_max` remains 4,000 MB (OOM kill ceiling unchanged). Live cluster updated.
 - Raised `worker_process_count` in `examples/advanced/openstack-production.hcl` from `"2"` to `"3"`, increasing concurrent simulations per alloc by 50 % (10,710 → 16,065 cluster-wide) with no change to memory reservation. Live cluster updated.
 - Lowered `worker_queue_simulations_target` in `examples/advanced/openstack-production.hcl` from `20` to `6` so the autoscaler targets ~1 worker per 6 queued simulations (cluster capacity of ~5,355 workers saturates at ~32,000 queued simulations rather than 107,000).
 
