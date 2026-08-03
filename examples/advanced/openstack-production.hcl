@@ -19,7 +19,7 @@
 
 # ---------- Identity ----------
 job_name    = "openstudio-server"
-app_version = "3.11.0"
+app_version = "3.10.0"
 region      = "global"   # OpenStack region; update to match your deployment
 datacenters = ["dc1"]       # Update to match your Nomad datacenter name(s)
 
@@ -128,7 +128,7 @@ worker_cpu_target_utilization = 60
 # - simulations: ~1 worker per 20 queued jobs (throughput-oriented)
 # - requeued:    ~1 worker per queued retry job (recovery-oriented)
 # Lower target => more aggressive scale-out. Raise if storage pressure appears.
-worker_queue_simulations_target = 20
+worker_queue_simulations_target = 6
 worker_queue_requeued_target    = 1
 
 # Scale-up cooldown: 2 min keeps queue bursts from waiting on long cooldown windows.

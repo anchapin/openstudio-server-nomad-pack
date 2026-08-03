@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added `scripts/provision-worker-nodes.sh`: idempotent helper to provision new `azimuth.compute1-179d-250disk` OpenStack instances and bootstrap them into the Nomad cluster. Includes quota pre-flight check, auto-detected start index, dry-run mode, and a `--bootstrap-only --ips` path for re-bootstrapping existing nodes. Capacity reference: each node adds up to 45 workers (80 GB RAM / 1,750 MB each); 7,296 vCPUs of quota headroom permit ~117 more nodes → ~10,620 workers cluster-wide.
+
+### Changed
+- Lowered `worker_queue_simulations_target` in `examples/advanced/openstack-production.hcl` from `20` to `6` so the autoscaler targets ~1 worker per 6 queued simulations (cluster capacity of ~5,355 workers saturates at ~32,000 queued simulations rather than 107,000).
+
 ### Fixed
 - Fixed `scripts/deploy-openstack.sh` Phase 3 permanently carrying pre-pull not-ready node exclusions into production: Phase 2 correctly restricts workers to pre-pulled nodes (topology + pre-pull-not-ready), but Phase 3 re-passed the same combined list, permanently locking workers off the majority of the cluster after bootstrap. Phase 3 now only retains CSI topology node exclusions (DB/Redis pinning); pre-pull exclusions are cleared so workers can spread to all eligible nodes. Also fixed Phase 3 never being triggered when bootstrap autoscaling bounds matched production bounds — added a third trigger condition (`worker_excluded_node_ids_json != topology_only_exclusion_json`) so Phase 3 always fires when there are pre-pull exclusions to drop, regardless of whether the autoscaling bounds changed.
 - Fixed `release.yml` creating releases on wrong commit: `tag_name` was sourced from `metadata.hcl` at checkout time rather than the triggering tag; changed to `github.ref_name` and removed now-unused "Read pack version" step.
