@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `docs/infrastructure/pre-run-checklist.md`: operator checklist covering disk headroom, pre-pull completeness, deployment state, failed queue depth, stale started DPs, worker count verification, stable baseline image check, and connectivity smoke test — encoding lessons from the 2026-08-03 incident.
 - Added `queue_sweeper_replay_dirty_exit` variable (default `true`): enables auto-replay of `PruneDeadWorkerDirtyExit` and `TermException` failures from `resque:failed` in the queue-sweeper. Replayed jobs use the correct single-arg format (`args: [dp_id]`). Previously required ~1,847 manual replays.
 - Added `queue_sweeper_replay_delay_seconds` variable (default `10`): stagger interval between individual re-enqueues when auto-replaying failed jobs. Prevents bulk-push silent drops under high load.
+- Added Terratest integration suite (`tests/terratest`) for rendering and planning Nomad Pack template scenarios, migrating integration tests from shell scripts (#407).
 
 ### Changed
 - Hardened OpenStack production placement defaults in `examples/advanced/openstack-production.hcl`: added explicit role/disk constraints for `db`, `redis`, `rserve`, `worker`, and `nomad-autoscaler` groups so stateful services stay on web-role infrastructure nodes and workers stay isolated on worker-role nodes.
