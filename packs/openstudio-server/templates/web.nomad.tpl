@@ -189,7 +189,7 @@ RUNTIME_RESOLUTION_ENABLED=[[ var "web_worker_runtime_service_resolution_enabled
 CONSUL_ADDR=[[ var "consul_address" . ]]
 
 if [ "$RUNTIME_RESOLUTION_ENABLED" != "true" ]; then
-  echo "web_runtime_resolution_disabled" >&2
+  echo "web_runtime_resolution_disabled legacy_template_watch_mode_removed=true" >&2
   exit 0
 fi
 
@@ -465,7 +465,7 @@ RUNTIME_RESOLUTION_ENABLED=[[ var "web_worker_runtime_service_resolution_enabled
 CONSUL_ADDR=[[ var "consul_address" . ]]
 
 if [ "$RUNTIME_RESOLUTION_ENABLED" != "true" ]; then
-  echo "web_background_runtime_resolution_disabled" >&2
+  echo "web_background_runtime_resolution_disabled legacy_template_watch_mode_removed=true" >&2
   exit 0
 fi
 
