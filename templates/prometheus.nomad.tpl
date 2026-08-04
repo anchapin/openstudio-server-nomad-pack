@@ -90,6 +90,15 @@ scrape_configs:
   - job_name: 'openstudio-redis-exporter'
     static_configs:
       - targets: ['127.0.0.1:9121']
+[[ if var "prometheus_scrape_nomad_enabled" . ]]
+  - job_name: 'nomad'
+    honor_labels: true
+    metrics_path: '/v1/metrics'
+    params:
+      format: ['prometheus']
+    static_configs:
+      - targets: ['[[ var "prometheus_nomad_scrape_target" . ]]']
+[[ end ]]
 EOH
       }
 
@@ -126,6 +135,44 @@ groups:
         annotations:
           summary: "OpenStudio failed jobs queue is non-empty"
           description: "resque:failed has remained non-empty for more than [[ var "prometheus_alert_failed_jobs_minutes" . ]] minutes."
+[[ if var "prometheus_scrape_nomad_enabled" . ]]
+      - alert: OpenStudioWorkerAllocHighFailureRate
+        expr: |
+          (
+            sum(nomad_nomad_job_summary_failed{job="[[ var "job_name" . ]]-worker"})
+            /
+            (sum(nomad_nomad_job_summary_running{job="[[ var "job_name" . ]]-worker"}) + 1)
+          ) > 0.5
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Worker alloc failure rate > 50 %"
+          description: "More than half of [[ var "job_name" . ]]-worker allocations are failing. Most likely cause: openstudio-worker:local image alias missing on worker nodes. Run: ./scripts/verify-prepull.sh"
+
+      - alert: OpenStudioSystemHooksSentinelFailing
+        expr: sum(nomad_nomad_job_summary_failed{job="[[ var "job_name" . ]]-system-hooks"}) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "system-hooks sentinel has failed allocations"
+          description: "One or more [[ var "job_name" . ]]-system-hooks allocations are failing. The image-cache-ready sentinel keeps Docker from evicting openstudio-worker:local. Check: nomad job status [[ var "job_name" . ]]-system-hooks"
+
+      - alert: OpenStudioQueueHighNoScaleUp
+        expr: |
+          (
+            (sum(redis_key_size{key="resque:queue:simulations"}) or vector(0)) > 5000
+            and
+            delta(sum(nomad_nomad_job_summary_running{job="[[ var "job_name" . ]]-worker"})[10m:1m]) < 10
+          )
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Queue depth > 5000 with no worker scale-up for 10 min"
+          description: "Simulation queue > 5000 but worker count is not increasing. Check for a stuck deployment: nomad job deployments [[ var "job_name" . ]]-worker"
+[[ end ]]
 EOH
       }
 [[ end ]]

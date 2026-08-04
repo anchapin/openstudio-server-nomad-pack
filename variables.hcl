@@ -613,6 +613,18 @@ variable "prometheus_alert_failed_jobs_minutes" {
   default     = 5
 }
 
+variable "prometheus_scrape_nomad_enabled" {
+  type        = bool
+  description = "Add a Nomad telemetry scrape target to the in-pack Prometheus job. When true, Prometheus scrapes the Nomad metrics endpoint at prometheus_nomad_scrape_target and enables worker alloc failure rate and system-hooks sentinel alert rules. Requires prometheus_enabled = true and Nomad prometheus_metrics = true in Nomad server config."
+  default     = false
+}
+
+variable "prometheus_nomad_scrape_target" {
+  type        = string
+  description = "Host:port of the Nomad server telemetry endpoint to scrape. Used only when prometheus_scrape_nomad_enabled = true. Format: host:port (no scheme). Prometheus appends metrics_path=/v1/metrics?format=prometheus automatically."
+  default     = "nomad.service.consul:4646"
+}
+
 variable "worker_queue_requeued_query" {
   type        = string
   description = "Prometheus instant-vector selector for the requeued queue depth. Must be a bare vector selector (metric name + labels only) — do not include range brackets, sum(), or or vector(0). The template wraps this in max_over_time(...[window]) and appends 'or vector(0)' so the series always resolves to 0 (not empty/error) when the queue key does not yet exist in Redis, enabling scale-to-zero. Worker count math is applied via a pass-through strategy."
@@ -1247,6 +1259,18 @@ variable "prepull_restart_attempts" {
   type        = number
   description = "Number of times each image pre-pull task group will retry on failure before the alloc is marked failed. Registry TLS handshake timeouts under concurrent cluster-wide pulls are transient; 10 retries over a 1-hour window absorbs the congestion without permanently bricking nodes."
   default     = 10
+}
+
+variable "prepull_worker_enabled" {
+  type        = bool
+  description = "Enable the worker-node image pre-pull group in the system-hooks job."
+  default     = true
+}
+
+variable "prepull_core_enabled" {
+  type        = bool
+  description = "Enable the core-service image pre-pull group in the system-hooks job."
+  default     = true
 }
 
 variable "poststop_cleanup_image" {

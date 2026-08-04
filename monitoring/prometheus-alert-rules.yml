@@ -105,7 +105,7 @@ groups:
           (
             openstudio_queue_simulations_queued > 5000
             and
-            delta(sum(nomad_nomad_job_summary_running{exported_job="openstudio-server-worker"})[10m]) < 10
+            delta(sum(nomad_nomad_job_summary_running{exported_job="openstudio-server-worker"})[10m:1m]) < 10
           )
         for: 10m
         labels:
