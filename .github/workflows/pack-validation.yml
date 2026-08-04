@@ -67,6 +67,10 @@ jobs:
         run: |
           ./scripts/test_migration_doc_variable_mapping.sh
 
+      - name: Check OpenStack autoscaler render invariants
+        run: |
+          ./scripts/test_openstack_autoscaler_render.sh
+
       - name: Check variables.md is up-to-date
         run: |
           GENERATED_DOC=docs/variables.generated.md

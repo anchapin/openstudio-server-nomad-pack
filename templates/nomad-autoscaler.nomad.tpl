@@ -4,6 +4,14 @@ job "[[ var "job_name" . ]]-autoscaler" {
   datacenters = [[ var "datacenters" . | toJson ]]
   namespace   = "[[ var "nomad_namespace" . ]]"
   type        = "service"
+  update {
+    max_parallel      = 1
+    health_check      = "task_states"
+    min_healthy_time  = "10s"
+    healthy_deadline  = "5m"
+    progress_deadline = "10m"
+    auto_revert       = false
+  }
 
   group "autoscaler" {
     count = 1

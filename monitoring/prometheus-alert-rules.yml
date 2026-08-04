@@ -121,6 +121,49 @@ groups:
             stuck deployment.  See docs/infrastructure/operations-guide.md for the
             max_parallel=0 emergency procedure.
 
+      # -----------------------------------------------------------------------
+      # Autoscaler daemon not running
+      # Fires when the autoscaler job has no running allocations for >2 minutes.
+      # -----------------------------------------------------------------------
+      - alert: OpenStudioAutoscalerJobDead
+        expr: |
+          sum(nomad_nomad_job_summary_running{exported_job="openstudio-server-autoscaler"}) < 1
+        for: 2m
+        labels:
+          severity: critical
+          team: infra
+        annotations:
+          summary: "Nomad autoscaler daemon is not running"
+          description: |
+            openstudio-server-autoscaler has no running allocations.
+            Action:
+              1. nomad job status openstudio-server-autoscaler
+              2. nomad job deployments openstudio-server-autoscaler
+              3. nomad alloc logs -stderr <alloc-id> autoscaler
+
+      # -----------------------------------------------------------------------
+      # Autoscaler deployment unhealthy/blocked
+      # Fires when autoscaler is queued/failed and has no running alloc.
+      # -----------------------------------------------------------------------
+      - alert: OpenStudioAutoscalerDeploymentBlocked
+        expr: |
+          (
+            (sum(nomad_nomad_job_summary_queued{exported_job="openstudio-server-autoscaler"})
+             + sum(nomad_nomad_job_summary_failed{exported_job="openstudio-server-autoscaler"})) > 0
+          )
+          and
+          (sum(nomad_nomad_job_summary_running{exported_job="openstudio-server-autoscaler"}) < 1)
+        for: 3m
+        labels:
+          severity: warning
+          team: infra
+        annotations:
+          summary: "Nomad autoscaler deployment is blocked"
+          description: |
+            openstudio-server-autoscaler has queued/failed allocations and no
+            running instance. Check placement constraints and update health mode.
+            Action: nomad job deployments openstudio-server-autoscaler
+
   - name: openstudio_resources
     rules:
 

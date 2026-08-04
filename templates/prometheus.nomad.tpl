@@ -172,6 +172,30 @@ groups:
         annotations:
           summary: "Queue depth > 5000 with no worker scale-up for 10 min"
           description: "Simulation queue > 5000 but worker count is not increasing. Check for a stuck deployment: nomad job deployments [[ var "job_name" . ]]-worker"
+
+      - alert: OpenStudioAutoscalerJobDead
+        expr: sum(nomad_nomad_job_summary_running{job="[[ var "job_name" . ]]-autoscaler"}) < 1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Nomad autoscaler daemon is not running"
+          description: "No running allocations for [[ var "job_name" . ]]-autoscaler. Check: nomad job status [[ var "job_name" . ]]-autoscaler && nomad job deployments [[ var "job_name" . ]]-autoscaler"
+
+      - alert: OpenStudioAutoscalerDeploymentBlocked
+        expr: |
+          (
+            (sum(nomad_nomad_job_summary_queued{job="[[ var "job_name" . ]]-autoscaler"})
+             + sum(nomad_nomad_job_summary_failed{job="[[ var "job_name" . ]]-autoscaler"})) > 0
+          )
+          and
+          (sum(nomad_nomad_job_summary_running{job="[[ var "job_name" . ]]-autoscaler"}) < 1)
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Nomad autoscaler deployment is blocked"
+          description: "[[ var "job_name" . ]]-autoscaler has queued/failed allocations and no running instance. Check placement constraints and deployment status."
 [[ end ]]
 EOH
       }

@@ -172,10 +172,10 @@ worker_autoscaling_cpu_enabled = false
 worker_min_replicas        = 0      # Allow scale-to-zero when both queues are empty
 worker_max_replicas        = 10000
 # Queue depth from redis_exporter key sizes (exposed via in-pack Prometheus job).
-worker_queue_simulations_query = "(sum(redis_key_size{key=\"resque:queue:simulations\"}) or vector(0))"
+worker_queue_simulations_query = "redis_key_size{key=\"resque:queue:simulations\"}"
 # Keep the requeued check neutral when that queue is empty so it doesn't
 # suppress scale-out driven by the simulations queue.
-worker_queue_requeued_query    = "(sum(redis_key_size{key=\"resque:queue:requeued\"}) or vector(0))"
+worker_queue_requeued_query    = "redis_key_size{key=\"resque:queue:requeued\"}"
 # Scale out earlier: tolerate at most 2 queued simulation jobs per worker before
 # adding more allocations (default is 5 — too permissive for burst workloads).
 worker_queue_simulations_target = 2
@@ -183,8 +183,9 @@ worker_queue_requeued_target    = 1
 # Process simulations before retries — fresh jobs take priority over requeued ones.
 worker_queues = "simulations,requeued"
 # Prometheus endpoint used by queue-depth checks in worker.nomad.tpl.
-# Autoscaler is host-networked and should co-locate with Prometheus on web nodes.
-autoscaler_prometheus_address = "http://127.0.0.1:9090"
+# Keep this on a stable service address so autoscaler does not depend on
+# Prometheus being co-located on the same node.
+autoscaler_prometheus_address = "http://openstudio-prometheus.service.consul:9090"
 
 # ── Scheduling ────────────────────────────────────────────────────────────────
 # Enforce linux/amd64 constraint (all OpenStack nodes are Ubuntu x86_64).
@@ -227,6 +228,8 @@ enable_image_prepull = true
 
 # Deploy in-pack Prometheus + Redis exporter for queue-depth autoscaling metrics.
 prometheus_enabled = true
+prometheus_alert_rules_enabled = true
+prometheus_scrape_nomad_enabled = true
 prometheus_constraints = [
 {
   attribute = "$${meta.node_role}"
@@ -240,14 +243,21 @@ prometheus_constraints = [
 }]
 
 autoscaler_constraints = [{
-  attribute = "$${meta.node_role}"
-  operator  = "="
-  value     = "web"
-},
-{
   attribute = "$${attr.driver.docker}"
   operator  = "="
   value     = "1"
+}]
+autoscaler_affinities = [{
+  attribute = "$${meta.node_role}"
+  operator  = "="
+  value     = "web"
+  weight    = 100
+},
+{
+  attribute = "$${meta.disk_type}"
+  operator  = "="
+  value     = "local-large"
+  weight    = 60
 }]
 
 # Keep non-worker services on web-role nodes.
@@ -358,7 +368,7 @@ restore_enabled = false
 
 # ── Nomad Autoscaler (CPU-based worker scaling) ───────────────────────────────
 nomad_autoscaler_enabled   = true
-autoscaler_nomad_address   = "http://127.0.0.1:4646"
+autoscaler_nomad_address   = "http://nomad.service.consul:4646"
 nomad_autoscaler_image     = "hashicorp/nomad-autoscaler:0.5.0"
 
 # Storage-aware ramp guardrails (see docs/autoscaling-storage-ramp-policy.md).

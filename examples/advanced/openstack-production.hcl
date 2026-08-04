@@ -60,6 +60,7 @@ enable_vector_collection  = true
 prometheus_image       = "prom/prometheus:v2.53.2"
 redis_exporter_image   = "oliver006/redis_exporter:v1.62.0"
 nomad_autoscaler_image = "hashicorp/nomad-autoscaler:0.5.0"
+prometheus_alert_rules_enabled = true
 
 # Scrape Nomad telemetry for worker alloc failure rate and sentinel alerts.
 # Requires Nomad server config: telemetry { prometheus_metrics = true }
@@ -222,6 +223,8 @@ nomad_autoscaler_enabled = true
 #
 # Default: autoscaler_nomad_address      = "http://nomad.service.consul:4646"
 # Default: autoscaler_prometheus_address = "http://openstudio-prometheus.service.consul:9090"
+autoscaler_nomad_address      = "http://nomad.service.consul:4646"
+autoscaler_prometheus_address = "http://openstudio-prometheus.service.consul:9090"
 
 # Place Prometheus on web-role infrastructure nodes (same placement domain as
 # db/redis in this OpenStack profile). This cluster uses Nomad node metadata
@@ -246,25 +249,32 @@ prometheus_constraints = [
 
 autoscaler_constraints = [
   {
-    attribute = "$${meta.node_role}"
-    operator  = "="
-    value     = "web"
-  },
-  {
     attribute = "$${attr.driver.docker}"
     operator  = "="
     value     = "1"
+  }
+]
+# Keep autoscaler schedulable during web-node drains; prefer (don't require) web-role nodes.
+autoscaler_affinities = [
+  {
+    attribute = "$${meta.node_role}"
+    operator  = "="
+    value     = "web"
+    weight    = 100
   },
   {
     attribute = "$${meta.disk_type}"
     operator  = "="
     value     = "local-large"
+    weight    = 60
   }
 ]
 
 worker_autoscaling_enabled       = true
 worker_autoscaling_cpu_enabled   = false
 worker_autoscaling_queue_enabled = true   # Scale on Redis queue depth via Prometheus
+worker_queue_requeued_query      = "redis_key_size{key=\"resque:queue:requeued\"}"
+worker_queue_simulations_query   = "redis_key_size{key=\"resque:queue:simulations\"}"
 worker_min_replicas              = 2
 # Physical ceiling: floor((node_ram_mb - 2048) / worker_memory) × compute_node_count
 # floor((79872 - 2048) / 1250) = 62 allocs/node × 110 compute nodes = 6820
