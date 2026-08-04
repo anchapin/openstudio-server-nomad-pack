@@ -168,9 +168,15 @@ worker_autoscaling_queue_enabled = true   # Scale on Redis queue depth via Prome
 worker_min_replicas              = 2
 # Physical ceiling: floor((node_ram_mb - 2048) / worker_memory) × compute_node_count
 # floor((79872 - 2048) / 1250) = 62 allocs/node × 110 compute nodes = 6820
-# Setting above physical ceiling wastes scheduler cycles on permanently unplaceable allocs.
-# Observed practical capacity: 6521 (headroom below theoretical 6820 due to OS/system overhead).
-worker_max_replicas              = 6521
+# Observed practical capacity: 6521 (below theoretical due to OS/system overhead).
+#
+# Memory oversubscription cap (Mode 3 OOM protection):
+#   Cluster RAM: 110 nodes × 79872 MB = 8,585,920 MB total
+#   80% utilization target: 8,585,920 × 0.80 = 6,868,736 MB
+#   At worker_memory=1250 MB: 6,868,736 / 1250 = 5,495 → 5,500
+#   Leaves ~1,715 GB cluster-wide headroom for workers bursting above reservation.
+#   Reducing further only if mass-OOM events (>500 workers) recur in production.
+worker_max_replicas              = 5500
 
 # 60 % CPU target: conservative threshold to trigger scale-out before iowait spikes.
 worker_cpu_target_utilization = 60
