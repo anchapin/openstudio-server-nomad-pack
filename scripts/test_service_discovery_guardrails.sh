@@ -40,17 +40,22 @@ nomad-pack render "${PACK_PATH}" > "${TMP_RENDER}"
 awk '/^openstudio-server\/web\.nomad:/{flag=1;next}/^openstudio-server\/.*\.nomad:/{if(flag)exit}flag' "${TMP_RENDER}" > "${WEB_SPEC}"
 awk '/^openstudio-server\/worker\.nomad:/{flag=1;next}/^openstudio-server\/.*\.nomad:/{if(flag)exit}flag' "${TMP_RENDER}" > "${WORKER_SPEC}"
 
+if ! grep -q 'wait_for_deps_timeout' "${WEB_SPEC}"; then
+  echo "ERROR: rendered web spec is missing bounded wait_for_deps timeout logging: ${WEB_SPEC}"
+  exit 1
+fi
+
+if ! grep -q 'preflight_check service=.*attempts=\$MAX_ATTEMPTS proceeding=\$PROCEED_ON_TIMEOUT' "${WORKER_SPEC}"; then
+  echo "ERROR: rendered worker spec is missing bounded preflight timeout logging: ${WORKER_SPEC}"
+  exit 1
+fi
+
 for spec in "${WEB_SPEC}" "${WORKER_SPEC}"; do
-  if ! grep -q 'wait_for_deps_timeout' "${spec}"; then
-    echo "ERROR: rendered spec is missing bounded wait_for_deps timeout logging: ${spec}"
+  if ! grep -q 'MAX_ATTEMPTS=' "${spec}"; then
+    echo "ERROR: rendered spec is missing bounded retry budget for startup scripts: ${spec}"
     exit 1
   fi
 done
-
-if ! grep -q 'MAX_ATTEMPTS=' "${WEB_SPEC}"; then
-  echo "ERROR: rendered web spec is missing bounded retry budget for startup scripts."
-  exit 1
-fi
 
 if ! grep -q 'runtime_resolution_disabled legacy_template_watch_mode_removed=true' "${WEB_SPEC}"; then
   echo "ERROR: web runtime resolver guardrail marker is missing."
