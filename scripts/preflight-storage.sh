@@ -20,6 +20,12 @@
 #                              db_csi_topology_node_id=<uuid>
 #                              redis_csi_topology_node_id=<uuid>
 #                            Intended for capture by deploy-openstack.sh via eval.
+#   --csi-topology-key <key> Exact topology segment key to look up when resolving a CSI
+#                            volume's node UUID (default: "topology.hostpath.csi/node").
+#                            Override per-volume via DB_CSI_TOPOLOGY_KEY /
+#                            REDIS_CSI_TOPOLOGY_KEY env vars.  If the resolved value is not
+#                            a 36-char hyphenated UUID a warning is printed and the pin is
+#                            skipped rather than emitting an unsatisfiable constraint.
 #
 # Exit codes:
 #   0  All required volumes are present, correctly registered, and healthy.
@@ -28,8 +34,12 @@
 #   2  Invalid arguments.
 #
 # Environment:
-#   DB_CSI_PLUGIN_ID     CSI plugin ID for the MongoDB volume (overrides --csi-plugin-id)
-#   REDIS_CSI_PLUGIN_ID  CSI plugin ID for the Redis volume (overrides --csi-plugin-id)
+#   DB_CSI_PLUGIN_ID       CSI plugin ID for the MongoDB volume (overrides --csi-plugin-id)
+#   REDIS_CSI_PLUGIN_ID    CSI plugin ID for the Redis volume (overrides --csi-plugin-id)
+#   DB_CSI_TOPOLOGY_KEY    Exact topology segment key for MongoDB volume node resolution
+#                          (overrides --csi-topology-key; default: topology.hostpath.csi/node)
+#   REDIS_CSI_TOPOLOGY_KEY Exact topology segment key for Redis volume node resolution
+#                          (overrides --csi-topology-key; default: topology.hostpath.csi/node)
 #   DB_CSI_CAPACITY_MIN / DB_CSI_CAPACITY_MAX    Capacity range for auto-created MongoDB volume
 #   REDIS_CSI_CAPACITY_MIN / REDIS_CSI_CAPACITY_MAX  Capacity range for auto-created Redis volume
 set -euo pipefail
@@ -47,6 +57,9 @@ EMIT_TOPOLOGY_VARS=false
 CSI_PLUGIN_ID="${CSI_PLUGIN_ID:-nfs}"
 DB_CSI_PLUGIN_ID="${DB_CSI_PLUGIN_ID:-}"
 REDIS_CSI_PLUGIN_ID="${REDIS_CSI_PLUGIN_ID:-}"
+CSI_TOPOLOGY_KEY="${CSI_TOPOLOGY_KEY:-topology.hostpath.csi/node}"
+DB_CSI_TOPOLOGY_KEY="${DB_CSI_TOPOLOGY_KEY:-}"
+REDIS_CSI_TOPOLOGY_KEY="${REDIS_CSI_TOPOLOGY_KEY:-}"
 DB_CSI_CAPACITY_MIN="${DB_CSI_CAPACITY_MIN:-10GiB}"
 DB_CSI_CAPACITY_MAX="${DB_CSI_CAPACITY_MAX:-50GiB}"
 REDIS_CSI_CAPACITY_MIN="${REDIS_CSI_CAPACITY_MIN:-1GiB}"
@@ -87,12 +100,16 @@ while [ $# -gt 0 ]; do
       CSI_PLUGIN_ID="$2"
       shift 2
       ;;
+    --csi-topology-key)
+      CSI_TOPOLOGY_KEY="$2"
+      shift 2
+      ;;
     *)
       echo "Unknown arg: $1" >&2
       cat >&2 <<'USAGE'
 Usage: preflight-storage.sh [--var-file <path> ...] [--nomad-addr <url>] [--namespace <ns>]
                              [--create-missing-csi] [--rebind-stale] [--emit-topology-vars]
-                             [--csi-plugin-id <id>]
+                             [--csi-plugin-id <id>] [--csi-topology-key <key>]
 USAGE
       exit 2
       ;;
@@ -179,6 +196,17 @@ if [ ${#required_csi[@]} -gt 0 ]; then
     fi
   }
 
+  topology_key_for_volume() {
+    local vol="$1"
+    if [ "${vol}" = "${db_volume_source}" ]; then
+      echo "${DB_CSI_TOPOLOGY_KEY:-${CSI_TOPOLOGY_KEY}}"
+    elif [ "${vol}" = "${redis_volume_source}" ]; then
+      echo "${REDIS_CSI_TOPOLOGY_KEY:-${CSI_TOPOLOGY_KEY}}"
+    else
+      echo "${CSI_TOPOLOGY_KEY}"
+    fi
+  }
+
   plugin_output="$(NOMAD_ADDR="${NOMAD_ADDR}" NOMAD_NAMESPACE="${NOMAD_NAMESPACE}" nomad plugin status -type csi 2>/dev/null || true)"
   plugin_json="$(NOMAD_ADDR="${NOMAD_ADDR}" NOMAD_NAMESPACE="${NOMAD_NAMESPACE}" nomad plugin status -type csi -json 2>/dev/null || true)"
   plugin_rows="$(echo "${plugin_output}" | awk 'NF && $0 !~ /Container Storage Interface/ && $0 !~ /^No CSI plugins/ && $0 !~ /^ID[[:space:]]+/')"
@@ -188,42 +216,64 @@ if [ ${#required_csi[@]} -gt 0 ]; then
   fi
 
   # Helper: resolve the Nomad node UUID that owns a CSI volume's topology.
+  # Uses the exact topology segment key specified by _TOPO_KEY (env var).
   # Returns empty string if topology is absent or unresolvable.
+  # Warns and returns empty string if resolved value does not look like a UUID.
   _csi_volume_topology_node_id() {
     local vol_json="$1"
     python3 - <<'PY'
-import json, os, sys
+import json, os, re, sys
 
 raw = os.environ.get("_VOL_JSON", "")
+topo_key = os.environ.get("_TOPO_KEY", "topology.hostpath.csi/node")
+
 try:
     data = json.loads(raw)
 except Exception:
     sys.exit(0)
 
-# Walk Topologies → Segments and look for keys ending in /node or containing "node"
+UUID_RE = re.compile(
+    r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+    re.IGNORECASE
+)
+
+# Walk Topologies → Segments and look for the exact key
 for topo in (data.get("Topologies") or []):
     segs = topo.get("Segments") or {}
-    for k, v in segs.items():
-        if v and ("node" in k.lower()):
-            # This is a hostname/node-name segment; resolve to Nomad node UUID via the API
-            import urllib.request
-            addr = os.environ.get("NOMAD_ADDR", "http://127.0.0.1:4646").rstrip("/")
-            ns   = os.environ.get("NOMAD_NAMESPACE", "default")
-            try:
-                req = urllib.request.Request(f"{addr}/v1/nodes")
-                with urllib.request.urlopen(req, timeout=10) as r:
-                    nodes = json.load(r)
-                for n in nodes:
-                    name = (n.get("Name") or "")
-                    nid  = (n.get("ID")   or "")
-                    if name == v or nid.startswith(v) or v.startswith(nid[:8]):
-                        print(nid)
-                        sys.exit(0)
-            except Exception:
-                pass
-            # Fallback: print the segment value as-is (may be UUID already)
-            print(v)
-            sys.exit(0)
+    if topo_key not in segs:
+        continue
+    v = segs[topo_key]
+    if not v:
+        continue
+
+    # Try to resolve to a Nomad node UUID via the API
+    import urllib.request
+    addr = os.environ.get("NOMAD_ADDR", "http://127.0.0.1:4646").rstrip("/")
+    resolved = v
+    try:
+        req = urllib.request.Request(f"{addr}/v1/nodes")
+        with urllib.request.urlopen(req, timeout=10) as r:
+            nodes = json.load(r)
+        for n in nodes:
+            name = (n.get("Name") or "")
+            nid  = (n.get("ID")   or "")
+            if name == v or nid.startswith(v) or v.startswith(nid[:8]):
+                resolved = nid
+                break
+    except Exception:
+        pass
+
+    # UUID validation: must be 36-char hyphenated hex
+    if UUID_RE.match(resolved):
+        print(resolved)
+        sys.exit(0)
+    else:
+        print(
+            f"warn: topology segment '{topo_key}' resolved to '{resolved}' which is not a "
+            f"Nomad UUID — skipping node pin to avoid unsatisfiable constraint",
+            file=sys.stderr
+        )
+        sys.exit(0)
 PY
   }
 
@@ -422,12 +472,27 @@ PY
 
     # ── Topology node ID extraction ────────────────────────────────────────────
     if [ "${EMIT_TOPOLOGY_VARS}" = "true" ] && [ -n "${vol_json}" ]; then
-      topology_node_id="$(_VOL_JSON="${vol_json}" NOMAD_ADDR="${NOMAD_ADDR}" NOMAD_NAMESPACE="${NOMAD_NAMESPACE}" _csi_volume_topology_node_id "${vol_json}" 2>/dev/null || true)"
+      topo_key="$(topology_key_for_volume "${vol}")"
+      topology_node_id=""
+      topo_warn=""
+      # Capture stdout (UUID or empty) and stderr (warning if non-UUID) in one pass
+      topo_out="$(
+        _VOL_JSON="${vol_json}" _TOPO_KEY="${topo_key}" \
+          NOMAD_ADDR="${NOMAD_ADDR}" NOMAD_NAMESPACE="${NOMAD_NAMESPACE}" \
+          _csi_volume_topology_node_id "${vol_json}" 2>/dev/null || true
+      )"
+      topo_warn="$(
+        _VOL_JSON="${vol_json}" _TOPO_KEY="${topo_key}" \
+          NOMAD_ADDR="${NOMAD_ADDR}" NOMAD_NAMESPACE="${NOMAD_NAMESPACE}" \
+          _csi_volume_topology_node_id "${vol_json}" 2>&1 >/dev/null || true
+      )"
+      topology_node_id="${topo_out}"
       if [ -n "${topology_node_id}" ]; then
         _topology_node_ids["${vol}"]="${topology_node_id}"
-        echo "✓ CSI topology node for '${vol}': ${topology_node_id}"
+        echo "✓ CSI topology node for '${vol}': ${topology_node_id} (key=${topo_key})"
       else
-        echo "  (no topology node ID resolvable for '${vol}' — constraint will not be emitted)"
+        [ -n "${topo_warn}" ] && echo "⚠ ${topo_warn}" >&2
+        echo "  (no topology node ID resolvable for '${vol}' via key '${topo_key}' — constraint will not be emitted)"
       fi
     fi
   done
