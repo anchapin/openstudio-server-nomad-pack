@@ -170,7 +170,9 @@ jobs:
           # All main service tasks must include a docker_user variable at the task level.
           # Service-specific overrides (e.g. db_docker_user, redis_docker_user) are accepted.
           # Lifecycle tasks (wait-for-deps, vector, cleanup-poststop) are intentionally excluded.
-          for tpl in templates/web.nomad.tpl templates/worker.nomad.tpl templates/db.nomad.tpl templates/redis.nomad.tpl templates/rserve.nomad.tpl; do
+          # worker.nomad.tpl is an architecture marker file (worker consolidated into web.nomad.tpl,
+          # fix #405); the worker task group is covered by the web.nomad.tpl entry below.
+          for tpl in templates/web.nomad.tpl templates/db.nomad.tpl templates/redis.nomad.tpl templates/rserve.nomad.tpl; do
             if ! grep -qE 'var "(db_|redis_)?docker_user"' "${tpl}"; then
               echo "ERROR: ${tpl} is missing docker_user non-root hardening"
               FAIL=1

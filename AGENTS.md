@@ -114,8 +114,8 @@ Each Nomad job is a separate `.nomad.tpl` file under `templates/`. The pack rend
 | Template | Nomad job rendered | Conditional |
 |---|---|---|
 | `openstudio-server.nomad.tpl` | Architecture marker file (intentionally renders no job) | always |
-| `web.nomad.tpl` | `<job_name>-web` | always |
-| `worker.nomad.tpl` | `<job_name>-worker` | always |
+| `web.nomad.tpl` | `<job_name>-web` (task groups: `web`, `web-background`, `worker`) | always |
+| `worker.nomad.tpl` | Architecture marker file (consolidated into `web.nomad.tpl`) | always |
 | `db.nomad.tpl` | `<job_name>-db` (MongoDB) | always |
 | `redis.nomad.tpl` | `<job_name>-redis` | always |
 | `rserve.nomad.tpl` | `<job_name>-rserve` | always |
@@ -124,8 +124,8 @@ Each Nomad job is a separate `.nomad.tpl` file under `templates/`. The pack rend
 | `batch-verification.nomad.tpl` | `<job_name>-batch-verify` | `enable_batch_verification = true` |
 | `traefik.nomad.tpl` | Traefik ingress job | `deploy_traefik = true` |
 | `prometheus.nomad.tpl` | `<job_name>-prometheus` (Prometheus + redis_exporter sidecar) | `prometheus_enabled = true` |
-| `queue-sweeper.nomad.tpl` | `<job_name>-queue-sweeper` | `enable_queue_sweeper = true` |
-| `stall-watchdog.nomad.tpl` | `<job_name>-stall-watchdog` | `enable_stall_watchdog = true` |
+| `queue-sweeper.nomad.tpl` | `<job_name>-queue-sweeper` (task groups: `queue-sweeper`, `stall-watchdog`) | `enable_queue_sweeper` or `enable_stall_watchdog` |
+| `stall-watchdog.nomad.tpl` | Architecture marker file (consolidated into `queue-sweeper.nomad.tpl`) | `enable_stall_watchdog = true` |
 | `nomad-batch-worker.nomad.tpl` | `<job_name>-nomad-batch-worker` | `batch_engine == "nomad_batch"` |
 | `state-backup.nomad.tpl` | `<job_name>-state-backup` (periodic batch) | `backup_enabled = false` (default) |
 | `state-restore.nomad.tpl` | `<job_name>-state-restore` (on-demand batch) | `restore_enabled = false` (default) |

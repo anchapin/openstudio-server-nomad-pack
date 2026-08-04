@@ -4,6 +4,7 @@ This matrix documents known-good version combinations for this Nomad pack.
 
 | Pack Version | OpenStudio Server (`app_version`) | Nomad ≥ | Consul ≥ | Notes |
 |---|---|---|---|---|
+| `0.2.68` | `3.11.0` | `1.7.0` | `1.12.0` | Upcoming release; worker group consolidated into `web.nomad.tpl` (#405) requires per-group `update` stanzas (Nomad ≥ 1.7.0). |
 | `0.2.67` | `3.11.0` | `1.4.0` | `1.12.0` | Current release; `web_image` pinned to `nrel/openstudio-server:179-flock`. CI uses Nomad `1.7.7`. |
 | `0.2.66` | `3.11.0` | `1.4.0` | `1.12.0` | |
 | `0.2.65` | `3.11.0` | `1.4.0` | `1.12.0` | |
