@@ -9,7 +9,7 @@ job "[[ var "job_name" . ]]-worker" {
     deployment_marker = "[[ var "deployment_marker" . ]]"
   }
 
-  [[ template "openstudio_server.update_block" (dict "max_parallel" (var "worker_update_max_parallel" .) "health_check" (var "worker_update_health_check" .) "min_healthy_time" (var "worker_update_min_healthy_time" .) "healthy_deadline" (var "worker_update_healthy_deadline" .) "progress_deadline" (var "worker_update_progress_deadline" .) "auto_revert" (var "worker_update_auto_revert" .)) ]]
+  [[ template "openstudio_server.update_block" (dict "max_parallel" (var "worker_update_max_parallel" .) "canary" (var "worker_update_canary" .) "auto_promote" (var "worker_update_auto_promote" .) "stagger" (var "worker_update_stagger" .) "health_check" (var "worker_update_health_check" .) "min_healthy_time" (var "worker_update_min_healthy_time" .) "healthy_deadline" (var "worker_update_healthy_deadline" .) "progress_deadline" (var "worker_update_progress_deadline" .) "auto_revert" (var "worker_update_auto_revert" .)) ]]
 
   group "worker" {
     count = [[ var "worker_count" . ]]
@@ -57,7 +57,7 @@ job "[[ var "job_name" . ]]-worker" {
         [[ if var "worker_autoscaling_queue_enabled" . ]]
         check "queue-requeued-depth" {
           source = "prometheus"
-          query  = [[ printf "ceil(clamp_min((max_over_time(%s[%s]) or vector(0)) / %v, 0))" (var "worker_queue_requeued_query" .) (var "worker_queue_query_window" .) (var "worker_queue_requeued_target" .) | toJson ]]
+          query  = [[ printf "ceil(clamp_min((sum(max_over_time(%s[%s])) or vector(0)) / %v, 0))" (var "worker_queue_requeued_query" .) (var "worker_queue_query_window" .) (var "worker_queue_requeued_target" .) | toJson ]]
 
           config {
             prometheus_address = "[[ var "autoscaler_prometheus_address" . ]]"
@@ -68,7 +68,7 @@ job "[[ var "job_name" . ]]-worker" {
 
         check "queue-simulations-depth" {
           source = "prometheus"
-          query  = [[ printf "ceil(clamp_min((max_over_time(%s[%s]) or vector(0)) / %v, 0))" (var "worker_queue_simulations_query" .) (var "worker_queue_query_window" .) (var "worker_queue_simulations_target" .) | toJson ]]
+          query  = [[ printf "ceil(clamp_min((sum(max_over_time(%s[%s])) or vector(0)) / %v, 0))" (var "worker_queue_simulations_query" .) (var "worker_queue_query_window" .) (var "worker_queue_simulations_target" .) | toJson ]]
 
           config {
             prometheus_address = "[[ var "autoscaler_prometheus_address" . ]]"
@@ -107,30 +107,7 @@ job "[[ var "job_name" . ]]-worker" {
     [[ template "openstudio_server.arch_constraint" . ]]
     [[ end ]]
 
-    # Prestart: wait for MongoDB and Redis to be registered and healthy in Consul
-    task "wait-for-deps" {
-      lifecycle {
-        hook    = "prestart"
-        sidecar = false
-      }
-
-      driver = "docker"
-
-      config {
-        image        = "[[ var "verification_image" . ]]"
-        network_mode = "host"
-        command      = "sh"
-        args = [
-          "-ec",
-          "until wget -qO- -T 2 \"http://[[ var "consul_address" . ]]/v1/health/service/openstudio-db?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-db\"'; do sleep 10; done; until wget -qO- -T 2 \"http://[[ var "consul_address" . ]]/v1/health/service/openstudio-redis?passing=true\" | tr -d '[:space:]' | grep -q '\"Service\":\"openstudio-redis\"'; do sleep 10; done",
-        ]
-      }
-
-      resources {
-        cpu    = 50
-        memory = 32
-      }
-    }
+    [[ template "openstudio_server.wait_for_deps_task" (dict "root" . "include_rserve" false "proceed_on_timeout" (var "worker_wait_for_deps_proceed_on_timeout" .)) ]]
 
     task "worker" {
       driver = "docker"
@@ -242,24 +219,10 @@ EOT
           command       = "/bin/sh"
           args          = ["-c", "grep -vE ' (db|queue|rserve|web)$' /etc/hosts > /alloc/hosts.tmp 2>/dev/null; cat /alloc/hosts.tmp > /etc/hosts; sh /local/patch-hosts.sh"]
           timeout       = "30s"
-          fail_on_error = false
+          fail_on_error = true
         }
-        left_delimiter  = "{{"
-        right_delimiter = "}}"
         data            = <<-EOT
-#!/bin/sh
-{{ range service "openstudio-db" -}}
-echo "{{ .Address }} db" >> /etc/hosts
-{{ end -}}
-{{ range service "openstudio-redis" -}}
-echo "{{ .Address }} queue" >> /etc/hosts
-{{ end -}}
-{{ range service "openstudio-rserve" -}}
-echo "{{ .Address }} rserve" >> /etc/hosts
-{{ end -}}
-{{ range service "openstudio-web" -}}
-echo "{{ .Address }} web" >> /etc/hosts
-{{ end -}}
+[[ template "openstudio_server.runtime_hosts_patch_script" (dict "root" . "include_web_alias" true "log_prefix" "worker") ]]
 EOT
       }
 

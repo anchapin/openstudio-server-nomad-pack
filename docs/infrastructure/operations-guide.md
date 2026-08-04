@@ -247,6 +247,15 @@ make os-conformance-audit
 
 # Report low-disk Nomad clients before ENOSPC causes allocation failures
 make os-disk-audit
+
+# Audit legacy/orphan jobs that can trigger pack metadata drift
+make os-legacy-job-audit
+
+# Verify required ingress + periodic OpenStudio alert rules are loaded
+PROMETHEUS_URL=http://<prometheus-host>:9090 make os-alerts-check
+
+# Check recent queue-sweeper/watchdog Consul transient warning rate
+make os-consul-transient-check
 ```
 
 To automatically quarantine low-disk nodes, run:
@@ -664,6 +673,62 @@ is needed, making this approach cleaner and more reliable than the Helm equivale
 
 ---
 
+## Queue-Sweeper / Watchdog Rollout Safety
+
+Use the dedicated runbook for periodic-job rollout checks, forced-run validation, alert
+signals, and short-lived allocation forensics:
+
+- [queue-sweeper-watchdog-rollout.md](./queue-sweeper-watchdog-rollout.md)
+
+Critical invariants enforced by the pack:
+
+1. `stall-watchdog` runs only as a task group inside `<job_name>-queue-sweeper` (no standalone job).
+2. If both `enable_queue_sweeper` and `enable_stall_watchdog` are true, cron values must match.
+3. Transient Consul control-plane throttling (429/5xx) is handled as skip-cycle (exit 0), not hard failure.
+
+---
+
+### Periodic-job operational helpers
+
+```bash
+# Capture short-lived periodic alloc evidence before GC removes it
+./scripts/capture-periodic-forensics.sh --job-name openstudio-server --namespace default
+
+# Count recent Consul transient warnings in queue-sweeper/watchdog logs
+./scripts/check-queue-sweeper-consul-transient-rate.sh --job-name openstudio-server --namespace default
+```
+
+---
+
+## `nomad-pack run` Deployment Metadata Drift (`pack.deployment_name`)
+
+Some upgraded environments retain legacy jobs that can break `nomad-pack run` lookups with:
+
+- `Failed To Query For Previously Deployed Jobs`
+- `pack.deployment_name` query failures
+
+Safest remediation path implemented in repo scripts:
+
+1. Enforce consolidated scheduler source by purging known legacy standalone job IDs (notably `<job_name>-stall-watchdog`).
+2. Retry `nomad-pack run` once after purge.
+3. If metadata query still fails but core jobs register successfully, continue with explicit warning.
+
+One-time manual cleanup command (if needed):
+
+```bash
+nomad job stop -purge <job_name>-stall-watchdog
+```
+
+One-time prefix audit helper (dry-run by default):
+
+```bash
+NOMAD_ADDR=http://<nomad-host>:4646 ./scripts/audit-legacy-pack-jobs.sh --job-name <job_name> --namespace <ns>
+# Apply safe known-legacy purge set:
+NOMAD_ADDR=http://<nomad-host>:4646 ./scripts/audit-legacy-pack-jobs.sh --job-name <job_name> --namespace <ns> --apply
+```
+
+---
+
 ## Ingress Alerts
 
 The `openstudio_ingress` group in `monitoring/prometheus-alert-rules.yml` provides continuous alerting for Traefik route and backend health.  These fire automatically — no manual `check-openstack-ingress.sh` run required.
@@ -808,6 +873,41 @@ curl -s http://<prometheus-host>:9090/api/v1/rules | \
 ```
 
 Expected output includes: `TraefikRouterMissing`, `TraefikIngressHighErrorRate`, `TraefikBackendUnhealthy`, `OpenStudioTraefikConfigReloadFailed`, `OpenStudioIngressNoHealthyBackend`, `OpenStudioIngressHigh404Ratio`.
+
+Validate all required OpenStudio alert rules (ingress + periodic watchdog/sweeper):
+
+```bash
+./scripts/check-prometheus-openstudio-rules.sh --prometheus-url http://<prometheus-host>:9090
+```
+
+---
+
+## High-scale worker rollout guardrails (5k+ workers)
+
+Use the staged procedure in
+[`openstack-staged-rollout-runbook.md`](./openstack-staged-rollout-runbook.md),
+including the **runtime discovery canary-first** gate before worker expansion.
+
+Recommended high-scale worker update controls:
+
+- `worker_update_canary=25`
+- `worker_update_max_parallel=100`
+- `worker_update_stagger="15s"`
+- `worker_update_auto_promote=false`
+- `worker_update_auto_revert=true`
+
+Required observability signals during rollout:
+
+- Deployment health: `nomad job deployments <job>-worker`
+- Allocation stability: failed/unhealthy alloc rate, restart bursts
+- Startup guardrails: `wait_for_deps_timeout`, `*_runtime_resolve_failed`
+- Control-plane stress indicators: Consul 429 / template failure recurrences
+
+Rollback path:
+
+1. `nomad job scale <job>-worker 0`
+2. `nomad job revert <job>-worker 0` (optional fast rollback)
+3. `nomad-pack run --name <job> -var-file <previous-verified-vars> packs/openstudio-server`
 
 ---
 

@@ -137,6 +137,31 @@ func TestNomadPackIntegrationScenarios(t *testing.T) {
 				packPath,
 			},
 		},
+		{
+			name: "runtime-service-resolution-enabled",
+			args: []string{
+				"render",
+				"--var", "web_worker_runtime_service_resolution_enabled=true",
+				packPath,
+			},
+		},
+		{
+			name: "stall-watchdog-only-schedule",
+			args: []string{
+				"render",
+				"--var", "enable_queue_sweeper=false",
+				"--var", "enable_stall_watchdog=true",
+				packPath,
+			},
+		},
+		{
+			name: "runtime-discovery-canary-test-enabled",
+			args: []string{
+				"render",
+				"--var", "enable_runtime_discovery_canary_test=true",
+				packPath,
+			},
+		},
 	}
 
 	for _, sc := range scenarios {
@@ -170,6 +195,8 @@ func TestNomadPackIntegrationScenarios(t *testing.T) {
 				assert.Contains(t, output, `job "openstudio-server-redis"`)
 				assert.Contains(t, output, `job "openstudio-server-rserve"`)
 				assert.Contains(t, output, `task "vector"`)
+				assert.NotContains(t, output, `{{ range service`)
+				assert.Contains(t, output, "wait_for_deps_timeout")
 
 			case "vector-disabled":
 				assert.NotContains(t, output, `task "vector"`)
@@ -186,9 +213,42 @@ func TestNomadPackIntegrationScenarios(t *testing.T) {
 
 			case "batch-verification-enabled":
 				assert.Contains(t, output, `job "openstudio-server-batch-verify"`)
+
+			case "runtime-service-resolution-enabled":
+				assert.Contains(t, output, "web_runtime_resolve_failed")
+				assert.Contains(t, output, "worker_runtime_resolve_failed")
+
+			case "stall-watchdog-only-schedule":
+				assert.Contains(t, output, `job "openstudio-server-queue-sweeper"`)
+				assert.Contains(t, output, `cron             = "*/15 * * * *"`)
+				assert.NotContains(t, output, `job "openstudio-server-stall-watchdog"`)
+
+			case "runtime-discovery-canary-test-enabled":
+				assert.Contains(t, output, `task "runtime-discovery-canary"`)
 			}
 		})
 	}
+}
+
+func TestQueueSweeperWatchdogCronInvariant(t *testing.T) {
+	t.Parallel()
+
+	repoRoot, err := filepath.Abs("../../")
+	require.NoError(t, err)
+	packPath := filepath.Join(repoRoot, "packs/openstudio-server")
+
+	args := []string{
+		"render",
+		"--var", "enable_queue_sweeper=true",
+		"--var", "enable_stall_watchdog=true",
+		"--var", "queue_sweeper_cron=*/2 * * * *",
+		"--var", "stall_watchdog_cron=*/15 * * * *",
+		packPath,
+	}
+
+	output, err := runCommand(args...)
+	require.Error(t, err)
+	assert.Contains(t, output, "queue_sweeper_cron == stall_watchdog_cron")
 }
 
 func TestNomadPackPlanScenarios(t *testing.T) {
@@ -232,4 +292,3 @@ func TestNomadPackPlanScenarios(t *testing.T) {
 		})
 	}
 }
-

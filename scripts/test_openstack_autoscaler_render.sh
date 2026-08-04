@@ -23,8 +23,8 @@ WORKER_SCALING_SPEC="$(mktemp)"
 trap 'rm -f "${TMP_RENDER}" "${AUTOSCALER_SPEC}" "${WORKER_SCALING_SPEC}"' EXIT
 
 awk '/^openstudio-server\/nomad-autoscaler\.nomad:/{flag=1;next}/^openstudio-server\/.*\.nomad:/{if(flag)exit}flag' "${TMP_RENDER}" > "${AUTOSCALER_SPEC}"
-# Worker task group scaling config now lives in web.nomad (consolidated in #405)
-awk '/^openstudio-server\/web\.nomad:/{flag=1;next}/^openstudio-server\/.*\.nomad:/{if(flag)exit}flag' "${TMP_RENDER}" > "${WORKER_SCALING_SPEC}"
+# Worker autoscaling config is rendered in worker.nomad.
+awk '/^openstudio-server\/worker\.nomad:/{flag=1;next}/^openstudio-server\/.*\.nomad:/{if(flag)exit}flag' "${TMP_RENDER}" > "${WORKER_SCALING_SPEC}"
 
 if ! grep -q 'health_check      = "task_states"' "${AUTOSCALER_SPEC}"; then
   echo "ERROR: autoscaler job must use update.health_check = \"task_states\"."
@@ -41,12 +41,12 @@ if grep -q 'prometheus_address = "http://127.0.0.1:9090"' "${WORKER_SCALING_SPEC
   exit 1
 fi
 
-if ! grep -Fq 'max_over_time(redis_key_size{key=\"resque:queue:requeued\"}[1m])' "${WORKER_SCALING_SPEC}"; then
+if ! grep -Fq 'sum(max_over_time(redis_key_size{key=\"resque:queue:requeued\"}[1m]))' "${WORKER_SCALING_SPEC}"; then
   echo "ERROR: requeued queue query is not rendered in safe selector form."
   exit 1
 fi
 
-if ! grep -Fq 'max_over_time(redis_key_size{key=\"resque:queue:simulations\"}[1m])' "${WORKER_SCALING_SPEC}"; then
+if ! grep -Fq 'sum(max_over_time(redis_key_size{key=\"resque:queue:simulations\"}[1m]))' "${WORKER_SCALING_SPEC}"; then
   echo "ERROR: simulations queue query is not rendered in safe selector form."
   exit 1
 fi
@@ -60,8 +60,8 @@ nomad-pack render --name openstudio-server \
   --var-file "${LEGACY_VARS}" \
   "${PACK_PATH}" > "${TMP_RENDER}"
 
-# Worker scaling config is now in web.nomad post-consolidation (#405)
-awk '/^openstudio-server\/web\.nomad:/{flag=1;next}/^openstudio-server\/.*\.nomad:/{if(flag)exit}flag' "${TMP_RENDER}" > "${WORKER_SCALING_SPEC}"
+# Worker autoscaling config is rendered in worker.nomad.
+awk '/^openstudio-server\/worker\.nomad:/{flag=1;next}/^openstudio-server\/.*\.nomad:/{if(flag)exit}flag' "${TMP_RENDER}" > "${WORKER_SCALING_SPEC}"
 
 if grep -q 'prometheus_address = "http://127.0.0.1:9090"' "${WORKER_SCALING_SPEC}"; then
   echo "ERROR: legacy OpenStack profile must not hardcode localhost Prometheus."

@@ -91,9 +91,51 @@ Measured on each Nomad compute node hosting worker allocations.
 | Nomad allocation restart rate | ≤ 1 restart per worker per hour | > 3 restarts per worker per hour |
 | HTTP 5xx error rate | ≤ 0.5 % | > 2 % sustained > 5 min |
 
+### Control-plane pressure indicators (Consul/Nomad)
+
+| Signal | Pass threshold | Abort threshold |
+|---|---|---|
+| `wait_for_deps_timeout` (`proceeding=false`) | 0 sustained | Any sustained burst > 5 min |
+| `web_runtime_resolve_failed`, `web_background_runtime_resolve_failed`, `worker_runtime_resolve_failed` | 0 sustained | Any sustained burst > 5 min |
+| Consul 429 indicators (`Template failed`, `429`) in alloc logs | 0 | Any recurrence during soak |
+| Unhealthy worker allocs during deployment | < 0.5 % of allocs | > 2 % sustained > 10 min |
+
 ---
 
 ## Stage Procedure
+
+### Runtime discovery canary-first procedure (before Stage 1)
+
+Run this once per release candidate that changes startup scripts, host aliasing, or
+template-discovery behavior:
+
+```bash
+# 1) Render + plan with runtime discovery canary enabled
+nomad-pack plan \
+  --name openstudio-server \
+  -var-file examples/advanced/openstack-production.hcl \
+  -var-file openstack-site-local.hcl \
+  -var "enable_runtime_discovery_canary_test=true" \
+  .
+
+# 2) Deploy with canary task included in openstudio-test
+nomad-pack run \
+  --name openstudio-server \
+  -var-file examples/advanced/openstack-production.hcl \
+  -var-file openstack-site-local.hcl \
+  -var "enable_runtime_discovery_canary_test=true" \
+  .
+
+# 3) Dispatch canary and verify PASS markers
+nomad job dispatch openstudio-server-test
+nomad alloc logs -stderr <alloc-id> runtime-discovery-canary | tail -n 80
+```
+
+Gate to proceed:
+
+1. `runtime_discovery_canary: PASS` present in canary logs.
+2. No `runtime_discovery_canary_alias_failed` lines.
+3. No sustained `wait_for_deps_timeout ... proceeding=false` on web/web-background.
 
 ### Stage 1 — Canary (2 workers)
 
@@ -203,23 +245,26 @@ or if any of the following occur:
 # 1. Scale workers to zero immediately to halt queue consumption
 nomad job scale openstudio-server-worker 0
 
-# 2. Redeploy prior var-file (saved before rollout)
+# 2. Optional immediate worker rollback to previous stable deployment
+nomad job revert openstudio-server-worker 0 || true
+
+# 3. Redeploy prior var-file (saved before rollout)
 nomad-pack run \
   --name openstudio-server \
   -var-file <path-to-prior-var-file> \
   .
 
-# 3. Verify all services return to healthy
+# 4. Verify all services return to healthy
 consul catalog services | grep openstudio
 nomad job status openstudio-server-web
 nomad job status openstudio-server-worker
 
-# 4. Confirm queue drain rate returns to baseline
+# 5. Confirm queue drain rate returns to baseline
 redis-cli -h <redis-host> llen resque:queue:analyses
 
-# 5. Capture post-rollback evidence (see §Evidence Collection)
+# 6. Capture post-rollback evidence (see §Evidence Collection)
 
-# 6. File incident report and do not re-attempt rollout until root cause resolved
+# 7. File incident report and do not re-attempt rollout until root cause resolved
 ```
 
 ---
@@ -303,11 +348,21 @@ compute nodes). They are committed in `examples/advanced/openstack-production.hc
 | `worker_autoscaling_scale_up_cooldown` | `2m` | Eliminates long cooldown plateaus (e.g., stuck at 14 workers) |
 | `worker_autoscaling_scale_down_cooldown` | `10m` | Prevents rapid oscillation once bursts begin draining |
 | `worker_kill_timeout` | `5400` s (90 min) | Covers longest observed OpenStack analysis runtime |
+| `worker_update_canary` | `25` | Canary-first worker updates at high scale |
+| `worker_update_max_parallel` | `100` | Retires bad worker versions faster than `max_parallel=1` |
+| `worker_update_stagger` | `15s` | Smooths allocation turnover to reduce control-plane spikes |
+| `worker_update_auto_promote` | `false` | Requires explicit canary promotion before full rollout |
 | `db_cpu` | `4000` MHz | Keeps MongoDB stable under large queue bursts |
 | `db_memory` | `22528` MB | Holds larger working set in memory on OpenStack nodes |
 | `web_cpu` | `6000` MHz | Supports high-concurrency request routing and uploads |
 | `web_memory` | `51200` MB | Supports Passenger workers plus large upload buffers |
 | `web_background_worker_count` | `56` | Per-replica Resque worker count used in production tuning |
+| `wait_for_deps_max_attempts` | `120` | Bounded startup dependency checks (no silent hangs) |
+| `wait_for_deps_sleep_seconds` | `3` | Retry cadence for bounded dependency checks |
+| `wait_for_deps_connect_timeout_seconds` | `2` | Fast per-attempt dependency timeout |
+| `web_wait_for_deps_proceed_on_timeout` | `false` | Keep web startup strict and explicit |
+| `worker_wait_for_deps_proceed_on_timeout` | `true` | Let workers proceed through transient dependency instability |
+| `enable_runtime_discovery_canary_test` | `true` during rollout only | Enables pre-rollout runtime discovery smoke gate |
 
 ### Rollback Guidance
 
