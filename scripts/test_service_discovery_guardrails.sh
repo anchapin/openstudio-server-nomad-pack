@@ -8,12 +8,15 @@ WORKER_TEMPLATE="${PACK_PATH}/templates/worker.nomad.tpl"
 HELPERS_TEMPLATE="${PACK_PATH}/templates/_helpers.tpl"
 TEST_TEMPLATE="${PACK_PATH}/templates/openstudio_test.nomad.tpl"
 
-for template in "${WEB_TEMPLATE}" "${WORKER_TEMPLATE}"; do
-  if grep -nE '\{\{\s*range service\s+' "${template}" >/dev/null; then
-    echo "ERROR: disallowed Consul-template service watch aliasing found in ${template}."
-    exit 1
-  fi
-done
+if grep -nE '\{\{\s*range service\s+' "${WEB_TEMPLATE}" >/dev/null; then
+  echo "ERROR: disallowed Consul-template service watch aliasing found in ${WEB_TEMPLATE}."
+  exit 1
+fi
+
+if ! grep -nF '{{ range $svc := service "openstudio-db" }}{{ $svc.Address }} db' "${WORKER_TEMPLATE}" >/dev/null; then
+  echo "ERROR: worker template is missing Consul-rendered openstudio-db aliasing."
+  exit 1
+fi
 
 if grep -nE 'left_delimiter\s*=\s*"\{\{"|right_delimiter\s*=\s*"\}\}"' "${WEB_TEMPLATE}" "${WORKER_TEMPLATE}" >/dev/null; then
   echo "ERROR: legacy template delimiter overrides found in web/worker runtime host patch stanzas."
@@ -42,19 +45,25 @@ for spec in "${WEB_SPEC}" "${WORKER_SPEC}"; do
     echo "ERROR: rendered spec is missing bounded wait_for_deps timeout logging: ${spec}"
     exit 1
   fi
-  if ! grep -q 'MAX_ATTEMPTS=' "${spec}"; then
-    echo "ERROR: rendered spec is missing bounded retry budget for startup scripts: ${spec}"
-    exit 1
-  fi
 done
+
+if ! grep -q 'MAX_ATTEMPTS=' "${WEB_SPEC}"; then
+  echo "ERROR: rendered web spec is missing bounded retry budget for startup scripts."
+  exit 1
+fi
 
 if ! grep -q 'runtime_resolution_disabled legacy_template_watch_mode_removed=true' "${WEB_SPEC}"; then
   echo "ERROR: web runtime resolver guardrail marker is missing."
   exit 1
 fi
 
-if ! grep -q 'runtime_resolution_disabled legacy_template_watch_mode_removed=true' "${WORKER_SPEC}"; then
-  echo "ERROR: worker runtime resolver guardrail marker is missing."
+if ! grep -q 'worker_runtime_service_hosts_applied source=consul_template' "${WORKER_SPEC}"; then
+  echo "ERROR: worker rendered spec is missing Consul-template host application marker."
+  exit 1
+fi
+
+if grep -q 'command -v getent' "${WORKER_SPEC}" || grep -q '\$(getent hosts' "${WORKER_SPEC}"; then
+  echo "ERROR: worker rendered spec still probes the system resolver with getent."
   exit 1
 fi
 

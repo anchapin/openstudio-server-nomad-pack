@@ -237,19 +237,19 @@ variable "web_redis_url" {
 
 variable "web_worker_runtime_service_resolution_enabled" {
   type        = bool
-  description = "Controls startup-time runtime DNS alias resolution for web, web-background, and worker tasks. Keep true (default). The legacy Consul-template `{{ range service ... }}` alias-watch path is intentionally removed to prevent control-plane watch pressure during large worker churn events."
+  description = "Controls startup-time runtime DNS alias resolution for the web and web-background tasks. Worker startup now renders Consul service aliases directly via a Nomad template, so this toggle does not affect worker dependency resolution."
   default     = true
 }
 
 variable "web_worker_runtime_service_resolution_attempts" {
   type        = number
-  description = "Maximum DNS resolution attempts per service alias when web_worker_runtime_service_resolution_enabled = true. Uses exponential backoff and fails task startup if any required alias is unresolved."
+  description = "Maximum DNS resolution attempts per service alias for the web and web-background runtime resolvers when web_worker_runtime_service_resolution_enabled = true. Uses exponential backoff and fails task startup if any required alias is unresolved."
   default     = 5
 }
 
 variable "web_worker_runtime_service_resolution_backoff_seconds" {
   type        = number
-  description = "Initial backoff in seconds for runtime DNS alias resolution retries when web_worker_runtime_service_resolution_enabled = true. Delay doubles each retry (capped in-template)."
+  description = "Initial backoff in seconds for web and web-background runtime DNS alias resolution retries when web_worker_runtime_service_resolution_enabled = true. Delay doubles each retry (capped in-template)."
   default     = 1
 }
 

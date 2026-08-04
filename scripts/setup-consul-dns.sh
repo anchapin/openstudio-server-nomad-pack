@@ -108,12 +108,14 @@ if command -v nslookup >/dev/null 2>&1; then
     warn "  nslookup nomad.service.consul"
     warn "  dig nomad.service.consul"
   fi
-elif command -v getent >/dev/null 2>&1; then
-  if getent hosts consul.service.consul >/dev/null 2>&1; then
+elif command -v dig >/dev/null 2>&1; then
+  if dig consul.service.consul +time=3 +tries=1 +short >/dev/null 2>&1; then
     success "consul.service.consul resolves via OS resolver."
   else
     warn "consul.service.consul did not resolve yet (may need services to register first)."
   fi
+else
+  warn "nslookup/dig unavailable; skipping OS-resolver verification for consul.service.consul."
 fi
 
 echo ""

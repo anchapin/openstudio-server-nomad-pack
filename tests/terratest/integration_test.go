@@ -195,7 +195,8 @@ func TestNomadPackIntegrationScenarios(t *testing.T) {
 				assert.Contains(t, output, `job "openstudio-server-redis"`)
 				assert.Contains(t, output, `job "openstudio-server-rserve"`)
 				assert.Contains(t, output, `task "vector"`)
-				assert.NotContains(t, output, `{{ range service`)
+				assert.Contains(t, output, `{{ range $svc := service "openstudio-db" }}`)
+				assert.NotContains(t, output, `getent hosts`)
 				assert.Contains(t, output, "wait_for_deps_timeout")
 
 			case "vector-disabled":
@@ -271,13 +272,14 @@ func TestWorkerStartupDNSResolution(t *testing.T) {
 	assert.Contains(t, workerSpec, `check_service "openstudio-db"`)
 	assert.Contains(t, workerSpec, `check_service "openstudio-redis"`)
 
-	assert.Contains(t, workerSpec, `http://${CONSUL_ADDR}/v1/catalog/service/${service}`)
-	assert.Contains(t, workerSpec, `resolve_alias "openstudio-db" "db"`)
-	assert.Contains(t, workerSpec, `resolve_alias "openstudio-redis" "queue"`)
-	assert.Contains(t, workerSpec, `resolve_alias "openstudio-rserve" "rserve"`)
+	assert.Contains(t, workerSpec, `{{ range $svc := service "openstudio-db" }}{{ $svc.Address }} db`)
+	assert.Contains(t, workerSpec, `{{ range $svc := service "openstudio-redis" }}{{ $svc.Address }} queue`)
+	assert.Contains(t, workerSpec, `{{ range $svc := service "openstudio-rserve" }}{{ $svc.Address }} rserve`)
+	assert.Contains(t, workerSpec, `worker_runtime_service_hosts_applied source=consul_template`)
 
-	assert.NotContains(t, workerSpec, `getent hosts`)
-	assert.NotContains(t, workerSpec, `.service.consul`)
+	assert.NotContains(t, workerSpec, `command -v getent`)
+	assert.NotContains(t, workerSpec, `$(getent hosts`)
+	assert.NotContains(t, workerSpec, `http://${CONSUL_ADDR}/v1/catalog/service/${service}`)
 }
 
 func TestNomadPackPlanScenarios(t *testing.T) {

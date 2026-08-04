@@ -119,6 +119,11 @@ Run the local lint before opening a PR:
 ./scripts/lint-posix-shell.sh packs/openstudio-server
 ```
 
+### Consul-native service discovery
+
+For worker startup dependency aliases (`db`, `queue`, `rserve`, `web`), the authoritative source is **Consul-native discovery rendered by Nomad templates**.
+Do **not** switch worker startup scripts to `getent hosts` for `openstudio-db`, `openstudio-redis`, or `openstudio-rserve` — those names live in Consul's service catalog and are only resolvable through the OS resolver when Consul DNS forwarding has been configured explicitly on the client node.
+
 ### Nomad HCL heredoc interpolation
 
 Inside Nomad `data = <<-EOT` blocks, avoid shell parameter expansions such as `${VAR:-default}` and `${VAR:=default}`.

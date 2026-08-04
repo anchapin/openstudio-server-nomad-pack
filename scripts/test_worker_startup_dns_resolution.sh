@@ -47,12 +47,13 @@ assert_contains "${worker_spec}" 'http://$CONSUL_ADDR/v1/health/service/$service
 assert_contains "${worker_spec}" 'check_service "openstudio-db"' "worker prestart checks openstudio-db health"
 assert_contains "${worker_spec}" 'check_service "openstudio-redis"' "worker prestart checks openstudio-redis health"
 
-assert_contains "${worker_spec}" 'http://${CONSUL_ADDR}/v1/catalog/service/${service}' "worker runtime aliasing uses the Consul catalog API"
-assert_contains "${worker_spec}" 'resolve_alias "openstudio-db" "db"' "worker runtime aliasing resolves openstudio-db"
-assert_contains "${worker_spec}" 'resolve_alias "openstudio-redis" "queue"' "worker runtime aliasing resolves openstudio-redis"
-assert_contains "${worker_spec}" 'resolve_alias "openstudio-rserve" "rserve"' "worker runtime aliasing resolves openstudio-rserve"
+assert_contains "${worker_spec}" '{{ range $svc := service "openstudio-db" }}{{ $svc.Address }} db' "worker runtime aliasing renders openstudio-db from Consul"
+assert_contains "${worker_spec}" '{{ range $svc := service "openstudio-redis" }}{{ $svc.Address }} queue' "worker runtime aliasing renders openstudio-redis from Consul"
+assert_contains "${worker_spec}" '{{ range $svc := service "openstudio-rserve" }}{{ $svc.Address }} rserve' "worker runtime aliasing renders openstudio-rserve from Consul"
+assert_contains "${worker_spec}" 'worker_runtime_service_hosts_applied source=consul_template' "worker runtime aliasing applies rendered Consul aliases"
 
-assert_not_contains "${worker_spec}" 'getent hosts' "worker runtime aliasing does not fall back to system-resolver-only getent hosts"
-assert_not_contains "${worker_spec}" '.service.consul' "worker runtime aliasing does not depend on direct Consul DNS host lookups"
+assert_not_contains "${worker_spec}" "command -v getent" "worker runtime aliasing does not probe the system resolver with getent"
+assert_not_contains "${worker_spec}" '$(getent hosts' "worker runtime aliasing does not shell out to getent hosts"
+assert_not_contains "${worker_spec}" 'http://${CONSUL_ADDR}/v1/catalog/service/${service}' "worker runtime aliasing no longer shells out to the Consul catalog API"
 
 echo "Worker startup DNS/service resolution checks passed."
