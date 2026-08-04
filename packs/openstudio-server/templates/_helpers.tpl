@@ -177,6 +177,7 @@ set -eu
 MAX_ATTEMPTS=[[ var "wait_for_deps_max_attempts" .root ]]
 SLEEP_SECONDS=[[ var "wait_for_deps_sleep_seconds" .root ]]
 CONNECT_TIMEOUT=[[ var "wait_for_deps_connect_timeout_seconds" .root ]]
+CONSUL_ADDR="[[ var "consul_address" .root ]]"
 PROCEED_ON_TIMEOUT="[[ if .proceed_on_timeout ]]true[[ else ]]false[[ end ]]"
 
 if [ "$MAX_ATTEMPTS" -lt 1 ]; then
@@ -196,30 +197,30 @@ fi
 
 check_service() {
   service="$1"
-  host="$2"
-  port="$3"
   attempt=1
   while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
-    if nc -z -w "$CONNECT_TIMEOUT" "$host" "$port" >/dev/null 2>&1; then
-      echo "wait_for_deps_ready service=${service} host=${host} port=${port} attempt=${attempt}"
+    if wget -qO- -T "$CONNECT_TIMEOUT" \
+        "http://${CONSUL_ADDR}/v1/health/service/${service}?passing=true" \
+        2>/dev/null | tr -d '[:space:]' | grep -q "\"Service\":\"${service}\""; then
+      echo "wait_for_deps_ready service=${service} attempt=${attempt}"
       return 0
     fi
-    echo "wait_for_deps_retry service=${service} host=${host} port=${port} attempt=${attempt}" >&2
+    echo "wait_for_deps_retry service=${service} attempt=${attempt}" >&2
     sleep "$SLEEP_SECONDS"
     attempt=$((attempt + 1))
   done
 
-  echo "wait_for_deps_timeout service=${service} host=${host} port=${port} attempts=${MAX_ATTEMPTS} proceeding=${PROCEED_ON_TIMEOUT}" >&2
+  echo "wait_for_deps_timeout service=${service} attempts=${MAX_ATTEMPTS} proceeding=${PROCEED_ON_TIMEOUT}" >&2
   if [ "$PROCEED_ON_TIMEOUT" = "true" ]; then
     return 0
   fi
   return 1
 }
 
-check_service "openstudio-db" "openstudio-db.service.consul" "[[ var "db_static_port" .root ]]"
-check_service "openstudio-redis" "openstudio-redis.service.consul" "[[ var "redis_static_port" .root ]]"
+check_service "openstudio-db"
+check_service "openstudio-redis"
 [[ if .include_rserve -]]
-check_service "openstudio-rserve" "openstudio-rserve.service.consul" "[[ var "rserve_static_port" .root ]]"
+check_service "openstudio-rserve"
 [[ end -]]
 EOT
     ]
