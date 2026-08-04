@@ -68,7 +68,7 @@
 | `worker_runtime_image` | `string` | `""` | Optional host-local image alias used by worker allocations at runtime instead of worker_image. When set, system-hooks uses raw_exec to run 'docker pull worker_image && docker tag worker_image worker_runtime_image' on every eligible node. Worker allocations then reference this short unqualified name so Docker never contacts the upstream registry at alloc start — eliminating TLS handshake timeouts (e.g. Pulp). Requires raw_exec driver enabled on worker nodes. Leave empty to use worker_image directly. |
 | `worker_command` | `string` | `"/usr/local/bin/start-workers"` | Command used to start the worker task. |
 | `worker_args` | `list(string)` | `[]` | Optional args passed to worker_command. |
-| `worker_health_check_command` | `string` | `"pgrep -f resque > /dev/null"` | Shell command used by the worker service health check. |
+| `worker_health_check_command` | `string` | `"for target in 'db 27017' 'queue 6379' 'rserve 6311'; do set -- $target; grep -Eq \"(^\|[[:space:]])$1$\" /etc/hosts && nc -z -w 2 \"$1\" \"$2\" >/dev/null 2>&1 \|\| exit 1; done && pgrep -f resque > /dev/null"` | Shell command used by the worker service health check. The default verifies the worker has patched db/queue/rserve aliases into /etc/hosts, can open TCP connections to MongoDB, Redis, and Rserve, and still has a Resque process running. |
 | `worker_count` | `number` | `1` | The number of worker task group allocations. |
 | `worker_instance_type` | `string` | `""` | Optional worker node instance type/flavor selector (matches attr.platform.aws.instance-type). Leave empty to disable. |
 | `worker_constraints` | `any` | `[]` | Placement constraints for the worker group. |
@@ -76,14 +76,12 @@
 | `worker_spreads` | `any` | `[]` | Spread rules for the worker group. |
 | `worker_excluded_node_ids` | `list(string)` | `[]` | Node IDs that workers must not run on. Useful for protecting stateful service nodes (for example CSI topology-pinned MongoDB/Redis nodes) from worker placement. |
 | `worker_update_max_parallel` | `number` | `1` | Maximum number of worker allocations updated in parallel. Increase in high-scale fleets to retire bad worker versions faster than single-file rolling updates. |
-| `worker_update_canary` | `number` | `0` | Number of worker canary allocations to place before full rollout. Leave 0 to disable canary mode (default behavior). |
-| `worker_update_auto_promote` | `bool` | `true` | When worker_update_canary > 0, automatically promote the deployment after canaries pass. |
+| `worker_canary_count` | `number` | `10` | Number of canary allocations to place before promoting a worker job update. |
+| `worker_auto_promote` | `bool` | `false` | Automatically promote canary allocations if health checks pass. Set to true only with a reliable health check configured. |
 | `worker_update_stagger` | `string` | `""` | Optional delay between worker allocation updates. Leave empty for Nomad default behavior. |
-| `worker_update_health_check` | `string` | `"task_states"` | Health check mode for worker rolling updates. |
-| `worker_update_min_healthy_time` | `string` | `"30s"` | How long a worker allocation must remain healthy before promotion. |
+| `worker_min_healthy_time` | `string` | `"2m"` | Minimum time a worker canary allocation must be healthy before it is eligible for promotion. |
 | `worker_update_healthy_deadline` | `string` | `"5m"` | Maximum time for a worker allocation to become healthy. |
 | `worker_update_progress_deadline` | `string` | `"2h"` | Maximum time for the worker rolling update to make progress. Must be greater than worker_kill_timeout (default 5200s ≈ 87m). Defaults to 2h to ensure kill_timeout never exceeds progress_deadline. |
-| `worker_update_auto_revert` | `bool` | `true` | Automatically revert a worker deployment if the update fails. |
 | `wait_for_deps_max_attempts` | `number` | `120` | Maximum number of bounded wait-for-deps retries per dependency endpoint before timeout. |
 | `wait_for_deps_sleep_seconds` | `number` | `3` | Sleep duration (seconds) between bounded wait-for-deps retry attempts. |
 | `wait_for_deps_connect_timeout_seconds` | `number` | `2` | TCP connect timeout (seconds) for each bounded wait-for-deps dependency check attempt. |

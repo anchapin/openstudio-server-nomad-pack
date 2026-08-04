@@ -49,7 +49,7 @@ worker_autoscaling_scale_up_cooldown   = "60m"
 worker_autoscaling_scale_down_cooldown = "60m"
 
 worker_update_max_parallel      = 2
-worker_update_min_healthy_time  = "1m"
+worker_min_healthy_time         = "1m"
 worker_update_healthy_deadline  = "10m"
 worker_update_progress_deadline = "20m"
 

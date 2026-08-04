@@ -348,10 +348,10 @@ compute nodes). They are committed in `examples/advanced/openstack-production.hc
 | `worker_autoscaling_scale_up_cooldown` | `2m` | Eliminates long cooldown plateaus (e.g., stuck at 14 workers) |
 | `worker_autoscaling_scale_down_cooldown` | `10m` | Prevents rapid oscillation once bursts begin draining |
 | `worker_kill_timeout` | `5400` s (90 min) | Covers longest observed OpenStack analysis runtime |
-| `worker_update_canary` | `25` | Canary-first worker updates at high scale |
+| `worker_canary_count` | `25` | Canary-first worker updates at high scale |
 | `worker_update_max_parallel` | `100` | Retires bad worker versions faster than `max_parallel=1` |
 | `worker_update_stagger` | `15s` | Smooths allocation turnover to reduce control-plane spikes |
-| `worker_update_auto_promote` | `false` | Requires explicit canary promotion before full rollout |
+| `worker_auto_promote` | `false` | Requires explicit canary promotion before full rollout |
 | `db_cpu` | `4000` MHz | Keeps MongoDB stable under large queue bursts |
 | `db_memory` | `22528` MB | Holds larger working set in memory on OpenStack nodes |
 | `web_cpu` | `6000` MHz | Supports high-concurrency request routing and uploads |

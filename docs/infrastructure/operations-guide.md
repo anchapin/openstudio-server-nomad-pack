@@ -520,6 +520,58 @@ If ACLs are enabled, ensure the alerting job can read Nomad allocation state by 
 
 ---
 
+## Canary Rollout Procedure
+
+Worker updates now gate promotion on Nomad service checks. The worker readiness check verifies
+that `db`, `queue`, and `rserve` are reachable over TCP and that the allocation still has a
+Resque worker process, so unhealthy canaries fail before full promotion.
+
+### Monitor the canary
+
+List deployments and capture the worker deployment ID:
+
+```bash
+nomad deployment list
+```
+
+Inspect the canary in detail:
+
+```bash
+nomad deployment status <deployment-id>
+```
+
+Healthy canaries must stay healthy for at least `worker_min_healthy_time` (default `2m`)
+before they are eligible for promotion.
+
+### Promote a healthy canary
+
+When `worker_auto_promote = false` (the default), promote manually after reviewing canary
+health and logs:
+
+```bash
+nomad deployment promote <deployment-id>
+```
+
+### Fail and auto-revert a bad canary
+
+If the canary fails health checks or shows bad startup behavior, fail the deployment:
+
+```bash
+nomad deployment fail <deployment-id>
+```
+
+The pack hardcodes `auto_revert = true` for worker updates, so Nomad automatically returns
+the job to the last stable worker version after the failed deployment is marked unhealthy.
+
+### When to use `worker_auto_promote`
+
+- Keep `worker_auto_promote = false` for production, high-scale fleets, first-time image or
+  config changes, and any rollout where an operator should inspect canaries before promotion.
+- Set `worker_auto_promote = true` only for low-risk repeat rollouts after validating that
+  the worker readiness check is reliably catching dependency and startup regressions.
+
+---
+
 ## Quick-Reference: Pack Variables
 
 | Variable | Default | What it does |
@@ -1256,11 +1308,12 @@ including the **runtime discovery canary-first** gate before worker expansion.
 
 Recommended high-scale worker update controls:
 
-- `worker_update_canary=25`
+- `worker_canary_count=25`
 - `worker_update_max_parallel=100`
 - `worker_update_stagger="15s"`
-- `worker_update_auto_promote=false`
-- `worker_update_auto_revert=true`
+- `worker_auto_promote=false`
+- `worker_min_healthy_time="1m"`
+- `auto_revert=true` (pack-enforced invariant)
 
 Required observability signals during rollout:
 
