@@ -190,6 +190,52 @@ groups:
             New worker allocations will queue indefinitely.  Consider reducing
             worker_max_replicas or adding nodes to the compute pool.
 
+  - name: openstudio_periodic
+    rules:
+
+      # -----------------------------------------------------------------------
+      # Queue-sweeper/watchdog periodic job has failed allocations
+      # This is the primary signal for restart-budget exhaustion ("Exceeded
+      # allowed attempts") in the consolidated periodic watchdog scheduler.
+      # -----------------------------------------------------------------------
+      - alert: OpenStudioQueueSweeperFailedAllocs
+        expr: |
+          sum(nomad_nomad_job_summary_failed{exported_job="openstudio-server-queue-sweeper"}) > 0
+        for: 5m
+        labels:
+          severity: critical
+          team: infra
+        annotations:
+          summary: "Queue-sweeper/watchdog periodic job has failed allocations"
+          description: |
+            openstudio-server-queue-sweeper reports failed allocations for 5+ minutes.
+            This commonly indicates task restart budget exhaustion ("Exceeded allowed attempts"),
+            repeated watchdog non-zero exits, or a persistent dependency failure.
+            Actions:
+              1. nomad job status openstudio-server-queue-sweeper
+              2. nomad job allocs -json openstudio-server-queue-sweeper
+              3. scripts/capture-periodic-forensics.sh --job-name openstudio-server --job-suffix queue-sweeper
+
+      # -----------------------------------------------------------------------
+      # Queue-sweeper/watchdog periodic job cannot be placed
+      # -----------------------------------------------------------------------
+      - alert: OpenStudioQueueSweeperPlacementBlocked
+        expr: |
+          sum(nomad_nomad_job_summary_queued{exported_job="openstudio-server-queue-sweeper"}) > 0
+        for: 10m
+        labels:
+          severity: warning
+          team: infra
+        annotations:
+          summary: "Queue-sweeper/watchdog periodic job has queued allocations"
+          description: |
+            openstudio-server-queue-sweeper has queued allocations for 10+ minutes,
+            indicating placement/resource/constraint issues.
+            Actions:
+              1. nomad job status openstudio-server-queue-sweeper
+              2. nomad job evaluations openstudio-server-queue-sweeper
+              3. Validate node role/constraint compatibility and available resources.
+
   - name: openstudio_ingress
     rules:
 

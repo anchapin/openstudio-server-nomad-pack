@@ -477,11 +477,42 @@ enforce_removed_var_guardrails() {
 }
 
 run_pack_with_guard() {
+  purge_known_legacy_jobs_for_pack() {
+    local legacy_job
+    local -a known_legacy_jobs=(
+      "${JOB_NAME}-stall-watchdog"
+    )
+
+    for legacy_job in "${known_legacy_jobs[@]}"; do
+      if NOMAD_ADDR="${NOMAD_API}" nomad job status -namespace "${NOMAD_NAMESPACE:-default}" "${legacy_job}" >/dev/null 2>&1; then
+        warn "Purging legacy standalone job '${legacy_job}' to enforce consolidated watchdog scheduler source."
+        NOMAD_ADDR="${NOMAD_API}" nomad job stop -purge -namespace "${NOMAD_NAMESPACE:-default}" "${legacy_job}" >/dev/null
+      fi
+    done
+  }
+
   local run_log
   local -a run_args=("$@")
+  local metadata_retry=false
+  local run_succeeded=false
   run_log="$(mktemp)"
-  if ! NOMAD_ADDR="${NOMAD_API}" nomad-pack run "${run_args[@]}" "${PACK_PATH}" 2>&1 | tee "${run_log}"; then
-    if grep -q 'Failed To Query For Previously Deployed Jobs' "${run_log}"; then
+  if NOMAD_ADDR="${NOMAD_API}" nomad-pack run "${run_args[@]}" "${PACK_PATH}" 2>&1 | tee "${run_log}"; then
+    run_succeeded=true
+  else
+    if grep -Eq 'Failed To Query For Previously Deployed Jobs|pack\.deployment_name' "${run_log}"; then
+      purge_known_legacy_jobs_for_pack
+      metadata_retry=true
+    fi
+  fi
+
+  if [[ "${metadata_retry}" == "true" && "${run_succeeded}" != "true" ]]; then
+    if NOMAD_ADDR="${NOMAD_API}" nomad-pack run "${run_args[@]}" "${PACK_PATH}" 2>&1 | tee "${run_log}"; then
+      rm -f "${run_log}"
+      return 0
+    fi
+  fi
+
+  if grep -Eq 'Failed To Query For Previously Deployed Jobs|pack\.deployment_name' "${run_log}"; then
       core_jobs_ready=false
       for _ in $(seq 1 30); do
         if NOMAD_ADDR="${NOMAD_API}" nomad job status -namespace "${NOMAD_NAMESPACE:-default}" "${JOB_NAME}-web" >/dev/null 2>&1 && \
@@ -499,10 +530,9 @@ run_pack_with_guard() {
         exit 1
       fi
       warn "nomad-pack reported a deployment metadata query error, but core jobs were registered."
-    else
-      rm -f "${run_log}"
-      exit 1
-    fi
+  elif [[ "${run_succeeded}" != "true" ]]; then
+    rm -f "${run_log}"
+    exit 1
   fi
   rm -f "${run_log}"
 }

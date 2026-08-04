@@ -18,6 +18,10 @@
 #   make os-traefik-reconcile Reconcile jump-host Traefik managed config + validate ingress
 #   make os-conformance-audit Audit role/constraint conformance for critical jobs
 #   make os-disk-audit Audit node free disk and report low-disk risk
+#   make os-legacy-job-audit Audit legacy/orphan pack jobs that can break metadata queries
+#   make os-periodic-forensics Capture queue-sweeper/watchdog periodic alloc evidence
+#   make os-consul-transient-check Check recent queue-sweeper/watchdog Consul transient rate
+#   make os-alerts-check Verify required ingress + periodic OpenStudio alert rules in Prometheus
 #   make os-logs      Tail web job logs
 #   make os-ui        Open SSH tunnels + launch Nomad/Consul UIs
 #   make os-stop      Stop pack jobs
@@ -325,6 +329,22 @@ os-conformance-audit: ## [OpenStack] Audit critical job node-role constraints an
 .PHONY: os-disk-audit
 os-disk-audit: ## [OpenStack] Audit client root disk free-space risk (no mutations)
 	$(OS_SCRIPT) --disk-audit
+
+.PHONY: os-legacy-job-audit
+os-legacy-job-audit: ## [OpenStack] Audit legacy/orphan pack jobs (dry-run)
+	bash scripts/audit-legacy-pack-jobs.sh --job-name $(or $(OS_JOB_NAME),openstudio-server) --namespace $(or $(NOMAD_NAMESPACE),default)
+
+.PHONY: os-periodic-forensics
+os-periodic-forensics: ## [OpenStack] Capture queue-sweeper/watchdog periodic alloc forensics
+	bash scripts/capture-periodic-forensics.sh --job-name $(or $(OS_JOB_NAME),openstudio-server) --namespace $(or $(NOMAD_NAMESPACE),default)
+
+.PHONY: os-consul-transient-check
+os-consul-transient-check: ## [OpenStack] Check recent queue-sweeper/watchdog Consul transient rate
+	bash scripts/check-queue-sweeper-consul-transient-rate.sh --job-name $(or $(OS_JOB_NAME),openstudio-server) --namespace $(or $(NOMAD_NAMESPACE),default)
+
+.PHONY: os-alerts-check
+os-alerts-check: ## [OpenStack] Verify required OpenStudio alert rules are loaded in Prometheus
+	bash scripts/check-prometheus-openstudio-rules.sh --prometheus-url $(or $(PROMETHEUS_URL),http://localhost:9090)
 
 .PHONY: os-logs
 os-logs: ## [OpenStack] Tail web job logs (override: make os-logs JOB=worker)

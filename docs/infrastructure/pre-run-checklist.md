@@ -133,7 +133,7 @@ curl -s http://<web-host>:<port>/status.json | python3 -m json.tool | grep start
 **Pass criteria:** `data_points.started` == 0.
 
 If stale started DPs exist from a prior run:
-1. Check whether the stall-watchdog cleared them: `nomad job status openstudio-server-stall-watchdog`
+1. Check whether the consolidated watchdog cycle cleared them: `nomad job status openstudio-server-queue-sweeper`
 2. Manually reset and re-enqueue if needed: `./scripts/requeue-stuck-datapoints.sh <dp_id_file>`
 
 ---
@@ -212,16 +212,20 @@ make os-ingress-check
 
 ---
 
-## 10. Prometheus ingress alert rules loaded (recommended for production)
+## 10. Prometheus OpenStudio alert rules loaded (recommended for production)
 
-Confirm that the `openstudio_ingress` alert group is loaded in Prometheus so continuous alerting is active for Traefik route and backend health.
+Confirm required OpenStudio alert rules are loaded in Prometheus for both ingress and periodic watchdog/sweeper guardrails.
 
 ```bash
-curl -s http://<prometheus-host>:9090/api/v1/rules | \
-  jq '.data.groups[] | select(.name=="openstudio_ingress") | .rules[].name'
+./scripts/check-prometheus-openstudio-rules.sh --prometheus-url http://<prometheus-host>:9090
 ```
 
-**Pass criteria:** output includes `TraefikRouterMissing`, `TraefikIngressHighErrorRate`, and `TraefikBackendUnhealthy`.
+**Pass criteria:** script exits 0 and confirms:
+- `TraefikRouterMissing`
+- `TraefikIngressHighErrorRate`
+- `TraefikBackendUnhealthy`
+- `OpenStudioQueueSweeperFailedAllocs`
+- `OpenStudioQueueSweeperPlacementBlocked`
 
 If the rules are missing:
 
@@ -249,4 +253,4 @@ See `docs/infrastructure/operations-guide.md` § "Ingress Alerts — Loading / r
 | 7 | Stable baseline image correct | `nomad job history openstudio-server-worker` | Stable version = correct image |
 | 8 | Connectivity smoke check | `./scripts/run-batch-verification.sh` | `failed=0` |
 | 9 | Ingress route smoke check (OpenStack) | `./scripts/check-openstack-ingress.sh` | Exit 0 + router enabled + HTTP 2xx/3xx |
-| 10 | Prometheus ingress alerts loaded | `curl .../api/v1/rules` (see above) | `TraefikRouterMissing` + 2 others present |
+| 10 | Prometheus OpenStudio alerts loaded | `./scripts/check-prometheus-openstudio-rules.sh ...` | Exit 0; ingress + periodic rules present |

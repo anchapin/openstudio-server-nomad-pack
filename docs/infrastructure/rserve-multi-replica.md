@@ -4,7 +4,7 @@ This document describes how the OpenStudio Server Nomad Pack routes traffic to R
 
 ## Overview
 
-Rserve uses a custom binary protocol (not HTTP), so layer-7 load balancers such as Traefik cannot proxy it. Instead, multi-replica routing relies on **Consul service discovery** combined with a randomised selection strategy in the Consul template that patches `/etc/hosts` inside the `web` and `worker` task containers.
+Rserve uses a custom binary protocol (not HTTP), so layer-7 load balancers such as Traefik cannot proxy it. Instead, multi-replica routing relies on **Consul service discovery** and startup-time DNS resolution that patches `/etc/hosts` inside the `web` and `worker` task containers.
 
 ## How It Works
 
@@ -21,32 +21,30 @@ check {
 }
 ```
 
-Only allocations that **pass** their health check are returned by `service "openstudio-rserve"` in Consul template queries.
+The `web` and `worker` startup scripts resolve `openstudio-rserve.service.consul` and write the resulting IP to the `rserve` alias in `/etc/hosts`.
 
-### `/etc/hosts` patching with shuffle
+### `/etc/hosts` patching at startup
 
-The `web` and `worker` tasks use a Consul template (`local/patch-hosts.sh`) to write a `rserve` hostname entry into `/etc/hosts` at allocation startup:
+The `web` and `worker` tasks use `local/patch-hosts.sh` to write a `rserve` hostname entry into `/etc/hosts` at allocation startup:
 
-```gotemplate
-{{ with index (shuffle (service "openstudio-rserve")) 0 -}}
-echo "{{ .Address }}" >> /etc/hosts
-{{ end -}}
+```sh
+echo "<resolved-ip>" >> /etc/hosts
 ```
 
-**`shuffle`** randomises the list of healthy Rserve instances returned by Consul. **`with index ... 0`** selects the first entry from that shuffled list. This means:
+This means:
 
-- Each `web` or `worker` allocation independently picks one healthy Rserve backend at startup.
-- The selection is re-evaluated whenever the Consul template is re-rendered (e.g. after a Nomad reschedule or Consul template reload).
-- The result is probabilistic round-robin distribution: across many allocations and restarts, traffic spreads across all healthy Rserve replicas.
+- Each `web` or `worker` allocation independently picks one DNS-resolved Rserve backend at startup.
+- The selection is re-evaluated on allocation restart.
+- Across many allocations and restarts, requests distribute across available replicas.
 
 ## Health Check and Failover Semantics
 
 | Scenario | Behaviour |
 |---|---|
 | All Rserve replicas healthy | Each web/worker allocation picks a random backend at startup; traffic distributes across replicas. |
-| One Rserve replica fails its health check | Consul removes the failing instance from the `openstudio-rserve` service query. New web/worker allocations will never be assigned the failing backend. Existing allocations that already mapped to the failing backend continue to use it until they restart or the Consul template is re-rendered. |
-| All Rserve replicas fail | `service "openstudio-rserve"` returns an empty list; `with index ... 0` evaluates to nothing; no `rserve` entry is written. The `wait-for-deps` prestart task prevents `web`/`worker` from starting until at least one healthy Rserve instance is registered. |
-| Failed replica recovers | Consul adds the instance back to the service query on the next passing health check. Newly rendered templates can select the recovered instance. |
+| One Rserve replica fails its health check | New web/worker allocations resolve the service again at startup and can bind to another healthy backend. Existing allocations keep their current mapping until restart. |
+| All Rserve replicas fail | Startup resolution fails and `web`/`worker` tasks do not complete startup until a backend becomes reachable. |
+| Failed replica recovers | New allocation startups can resolve and bind to the recovered instance again. |
 
 ## Enabling Multi-Replica Rserve
 
@@ -97,7 +95,7 @@ web_rserve_colocation_node = "nomad-client-01"
 
 1. **Consul is required.** Multi-replica routing relies entirely on Consul service discovery. Nomad-native DNS (`nomad.service.consul`) is not used; the Consul catalog must be reachable from within the allocation network.
 
-2. **Static-IP mapping at startup only.** The `/etc/hosts` approach resolves the Rserve backend once at allocation startup (and on Consul template re-renders). It does not provide connection-level load balancing. A long-running `web` or `worker` allocation will continue sending all Rserve requests to the same backend until it restarts.
+2. **Static-IP mapping at startup only.** The `/etc/hosts` approach resolves the Rserve backend once at allocation startup. It does not provide connection-level load balancing. A long-running `web` or `worker` allocation will continue sending all Rserve requests to the same backend until it restarts.
 
 3. **Rserve binary protocol is not proxied by Traefik or Consul Connect.** Traefik handles HTTP/TCP only at the service-mesh layer; the Rserve binary protocol is not transparently proxied. Setting `enable_consul_connect = true` adds mTLS sidecar proxies but does not distribute Rserve connections across replicas.
 
