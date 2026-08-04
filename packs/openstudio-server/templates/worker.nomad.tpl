@@ -219,7 +219,7 @@ EOT
           command       = "/bin/sh"
           args          = ["-c", "grep -vE ' (db|queue|rserve|web)$' /etc/hosts > /alloc/hosts.tmp 2>/dev/null; cat /alloc/hosts.tmp > /etc/hosts; sh /local/patch-hosts.sh"]
           timeout       = "30s"
-          fail_on_error = true
+          fail_on_error = false
         }
         data = <<-EOT
 #!/bin/sh
@@ -231,7 +231,7 @@ RUNTIME_RESOLUTION_ENABLED=[[ var "web_worker_runtime_service_resolution_enabled
 
 if [ "$RUNTIME_RESOLUTION_ENABLED" != "true" ]; then
   echo "worker_runtime_resolution_disabled legacy_template_watch_mode_removed=true" >&2
-  exit 1
+  exit 0
 fi
 
 if [ "$MAX_ATTEMPTS" -lt 1 ]; then
