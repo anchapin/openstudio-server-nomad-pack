@@ -66,6 +66,87 @@ act push
 ```bash
 # Run the Nomad Pack integration test script
 bash scripts/test_nomad_pack_integration.sh
+
+# Lint rendered /bin/sh scripts embedded in Nomad templates
+./scripts/lint-posix-shell.sh packs/openstudio-server
+
+# Warn on shell parameter expansion patterns that Nomad HCL heredocs can parse
+./scripts/check-nomad-heredoc-interpolation.sh
+```
+
+---
+
+## POSIX shell and Nomad heredoc pitfalls
+
+Several runtime scripts in this repo execute under **POSIX `/bin/sh`**, not bash.
+Treat shell embedded in Nomad templates the same way you would treat a standalone `#!/bin/sh` script.
+
+### POSIX `/bin/sh` only
+
+Avoid bash-only features in container/runtime scripts:
+
+```sh
+# BAD: bash array syntax
+targets=("db" "queue")
+
+# BAD: bash-only delimiter handling
+read -r -d '' payload <<'EOF'
+...
+EOF
+
+# GOOD: plain POSIX sh
+targets="db
+queue"
+printf '%s\n' "$targets" | while IFS= read -r target; do
+  :
+done
+```
+
+Arithmetic expansion is fine only when values are guaranteed numeric. Validate first if a template variable can render empty:
+
+```sh
+# GOOD: default explicitly without ${var:-default} inside a Nomad heredoc
+delay="$BASE_DELAY"
+if [ -z "$delay" ]; then
+  delay=1
+fi
+delay=$((delay * 2))
+```
+
+Run the local lint before opening a PR:
+
+```bash
+./scripts/lint-posix-shell.sh packs/openstudio-server
+```
+
+### Nomad HCL heredoc interpolation
+
+Inside Nomad `data = <<-EOT` blocks, avoid shell parameter expansions such as `${VAR:-default}` and `${VAR:=default}`.
+Nomad's HCL parser can interpret the `${...}` sequence before the shell ever runs.
+
+```hcl
+# BAD: parsed by HCL before /bin/sh sees it
+template {
+  data = <<-EOT
+  timeout="${WORKER_TIMEOUT:-30}"
+  EOT
+}
+
+# GOOD: keep the shell logic POSIX-safe and avoid ${...:...} in the heredoc
+template {
+  data = <<-EOT
+  timeout="$WORKER_TIMEOUT"
+  if [ -z "$timeout" ]; then
+    timeout=30
+  fi
+  EOT
+}
+```
+
+The CI warning is grep-based and intentionally non-blocking because template-like text can have false positives:
+
+```bash
+./scripts/check-nomad-heredoc-interpolation.sh
 ```
 
 ---
