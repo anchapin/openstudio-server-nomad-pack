@@ -360,6 +360,44 @@ sys.exit(1)
 PY
   }
 
+  # _check_volume_claims VOL
+  # Exits 1 with an actionable error if the volume has active allocation claims.
+  # Safe to call before `nomad volume deregister`.
+  _check_volume_claims() {
+    local vol="$1"
+    local status_json
+    status_json="$(NOMAD_ADDR="${NOMAD_ADDR}" NOMAD_NAMESPACE="${NOMAD_NAMESPACE}" \
+      nomad volume status -json "${vol}" 2>/dev/null || true)"
+
+    local alloc_ids
+    alloc_ids="$(echo "${status_json}" | python3 - <<'PY'
+import json, sys
+raw = sys.stdin.read()
+try:
+    data = json.loads(raw)
+except Exception:
+    sys.exit(0)
+allocs = data.get("Allocations") or []
+ids = [a.get("ID","") for a in allocs if a.get("ID")]
+if ids:
+    print("\n".join(ids))
+PY
+)"
+
+    if [ -n "${alloc_ids}" ]; then
+      echo "✗ CSI volume '${vol}' cannot be deregistered — active allocation claims:" >&2
+      while IFS= read -r alloc_id; do
+        echo "    alloc: ${alloc_id}" >&2
+      done <<< "${alloc_ids}"
+      echo "" >&2
+      echo "  Stop the holding jobs first, then retry:" >&2
+      echo "    bash scripts/pre-teardown.sh" >&2
+      echo "  Then re-run preflight:" >&2
+      echo "    bash scripts/preflight-storage.sh --rebind-stale [other flags]" >&2
+      exit 1
+    fi
+  }
+
   for vol in "${required_csi[@]}"; do
     expected_plugin="$(plugin_for_volume "${vol}")"
 
@@ -416,6 +454,7 @@ PY
       # Plugin mismatch — fail fast (or rebind if requested)
       if [ -n "${expected_plugin}" ] && [ -n "${actual_plugin}" ] && [ "${expected_plugin}" != "${actual_plugin}" ]; then
         if [ "${REBIND_STALE}" = "true" ]; then
+          _check_volume_claims "${vol}"
           echo "⚠ CSI volume '${vol}' registered with wrong plugin '${actual_plugin}' (expected '${expected_plugin}') — deregistering for rebind" >&2
           NOMAD_ADDR="${NOMAD_ADDR}" NOMAD_NAMESPACE="${NOMAD_NAMESPACE}" nomad volume deregister "${vol}" 2>/dev/null || true
           vol_exists=false
@@ -430,6 +469,7 @@ PY
       # Stale check — no topology or 0 healthy nodes (implies csi_hook will fail)
       if [ "${vol_exists}" = "true" ] && [ "${REBIND_STALE}" = "true" ]; then
         if _VOL_JSON="${vol_json}" NOMAD_ADDR="${NOMAD_ADDR}" _is_stale_registration "${vol_json}" "${expected_plugin}" 2>&1; then
+          _check_volume_claims "${vol}"
           echo "⚠ CSI volume '${vol}' has a stale registration — deregistering for rebind" >&2
           NOMAD_ADDR="${NOMAD_ADDR}" NOMAD_NAMESPACE="${NOMAD_NAMESPACE}" nomad volume deregister "${vol}" 2>/dev/null || true
           vol_exists=false
