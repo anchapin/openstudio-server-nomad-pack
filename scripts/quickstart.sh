@@ -14,6 +14,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+PACK_PATH="${REPO_ROOT}/packs/openstudio-server"
 COMPOSE_FILE="${REPO_ROOT}/docker/docker-compose.yaml"
 VAR_FILE="${REPO_ROOT}/examples/quickstart/minimal-dev.hcl"
 JOB_NAME="openstudio-server-dev"
@@ -133,7 +134,7 @@ deploy_pack() {
   fi
 
   info "Deploying OpenStudio Server (nomad-pack run)..."
-  nomad-pack run -var-file "$VAR_FILE" "$REPO_ROOT"
+  nomad-pack run -var-file "$VAR_FILE" "$PACK_PATH"
   ok "Pack submitted."
 
   echo ""

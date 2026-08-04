@@ -98,7 +98,7 @@ Covers everything you need to provision persistent storage *before* running `nom
 
 **[docs/variables.md](../variables.md)**
 
-Full reference for every pack variable sourced directly from `variables.hcl`:
+Full reference for every pack variable sourced directly from `packs/openstudio-server/variables.hcl`:
 
 - Complete table: name, type, default, description, example override
 - Annotated override file examples: minimal dev, production HA, air-gapped/private-registry
@@ -157,7 +157,7 @@ Step-by-step migration from the [NREL openstudio-server Helm chart](https://gith
 > **CPU scaling (`worker_autoscaling_cpu_enabled`) uses the `nomad-apm` source** and reads metrics directly from the Nomad API — no Prometheus is required.  
 > **Prometheus is required only for queue-depth scaling** (`worker_queue_requeued_query` / `worker_queue_simulations_query`). You can enable CPU autoscaling without a Prometheus stack.
 
-This pack also ships an optional stub at `templates/nomad-autoscaler.nomad.tpl` gated by `nomad_autoscaler_enabled = false`. The stub defaults to the `nomad-apm` source and includes comments showing where to add an optional Prometheus source.
+This pack also ships an optional stub at `packs/openstudio-server/templates/nomad-autoscaler.nomad.tpl` gated by `nomad_autoscaler_enabled = false`. The stub defaults to the `nomad-apm` source and includes comments showing where to add an optional Prometheus source.
 
 When worker autoscaling is enabled, this pack now includes a built-in `nomad-apm` CPU check (`avg_cpu`) as the primary simple-scaling path. This requires no external metrics stack and is controlled by `worker_autoscaling_cpu_enabled` and `worker_cpu_target_utilization` (default `50`, matching Helm HPA behavior). Existing Prometheus queue-depth checks remain available for advanced backlog-aware tuning.
 
@@ -180,7 +180,7 @@ target "aws-asg" {
 
 Use the same pattern for GCP Managed Instance Groups with the `gce-mig` target plugin.
 
-> **Tip:** `templates/nomad-autoscaler.nomad.tpl` includes ready-to-uncomment `target "aws-asg"` and
+> **Tip:** `packs/openstudio-server/templates/nomad-autoscaler.nomad.tpl` includes ready-to-uncomment `target "aws-asg"` and
 > `target "gce-mig"` stanzas inside the inline `autoscaler.hcl` config block. Uncomment and fill in
 > the appropriate fields for your cloud provider — no HCL needs to be written from scratch.
 
@@ -640,7 +640,7 @@ stops jobs in this order:
 11. `<JOB_NAME>-nomad-autoscaler` (optional, if present)
 12. `<JOB_NAME>-autoscaler` (legacy optional name, if present)
 
-Then it prints the `nomad-pack destroy .` instruction.
+Then it prints the `nomad-pack destroy packs/openstudio-server` instruction.
 
 > **Note for non-default namespace deployments:** Always pass `--namespace` (or set
 > `NOMAD_NAMESPACE`) when the pack was deployed with `nomad_namespace != "default"`.
@@ -650,7 +650,7 @@ Then it prints the `nomad-pack destroy .` instruction.
 Once the script exits successfully, run:
 
 ```bash
-nomad-pack destroy .
+nomad-pack destroy packs/openstudio-server
 ```
 
 ### Why no `sleep`?
@@ -752,7 +752,7 @@ The `openstudio_ingress` group in `monitoring/prometheus-alert-rules.yml` provid
 4. If the allocation is in `failed` or `lost` state, restart the job:
    ```bash
    nomad job stop openstudio-server-web
-   nomad-pack run --name openstudio-server .
+   nomad-pack run --name openstudio-server packs/openstudio-server
    ```
 5. If Consul health checks are failing but the process is running, check the health check endpoint:
    ```bash

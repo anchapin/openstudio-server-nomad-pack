@@ -15,5 +15,5 @@ Traefik Router URL:
 
 [[ end ]]
 Batch Verification:
-- Enable job: nomad-pack run -var "enable_batch_verification=true" .
+- Enable job: nomad-pack run -var "enable_batch_verification=true" packs/openstudio-server
 - Metrics lines: batch_verification_result / batch_verification_summary

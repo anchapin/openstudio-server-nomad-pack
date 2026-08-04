@@ -4,7 +4,7 @@
 # deploying OpenStudio Server for the first time.
 #
 # Usage:
-#   nomad-pack run -var-file examples/quickstart/simple.hcl .
+#   nomad-pack run -var-file examples/quickstart/simple.hcl packs/openstudio-server
 #
 # To customize further (worker count, port, job name), copy user-overrides.hcl.example
 # from the repository root and add your changes there.

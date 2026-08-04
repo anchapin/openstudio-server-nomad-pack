@@ -2,6 +2,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+PACK_PATH="${REPO_ROOT}/packs/openstudio-server"
 
 DEFAULT_VAR_FILE="${OS_VAR_FILE:-${REPO_ROOT}/examples/advanced/openstack.hcl}"
 VAR_FILES=("${DEFAULT_VAR_FILE}")
@@ -242,7 +243,7 @@ if nomad job status -namespace "${NOMAD_NAMESPACE}" "${JOB_NAME}-web" >/dev/null
    nomad job status -namespace "${NOMAD_NAMESPACE}" "${JOB_NAME}-db" >/dev/null 2>&1 || \
    nomad job status -namespace "${NOMAD_NAMESPACE}" "${JOB_NAME}-redis" >/dev/null 2>&1 || \
    nomad job status -namespace "${NOMAD_NAMESPACE}" "${JOB_NAME}-rserve" >/dev/null 2>&1; then
-  nomad-pack destroy "${VAR_FILE_ARGS[@]}" --name "${JOB_NAME}" "${REPO_ROOT}" || true
+  nomad-pack destroy "${VAR_FILE_ARGS[@]}" --name "${JOB_NAME}" "${PACK_PATH}" || true
 else
   echo "  - no deployed ${JOB_NAME} pack jobs found; skipping nomad-pack destroy"
 fi
@@ -1069,7 +1070,7 @@ render_worker_job_spec() {
   render_args+=(--var "worker_max_replicas=${max_replicas}")
   render_args+=(--var "worker_autoscaling_scale_up_cooldown=${cooldown}")
 
-  nomad-pack render "${render_args[@]}" "${REPO_ROOT}" > "${rendered}"
+  nomad-pack render "${render_args[@]}" "${PACK_PATH}" > "${rendered}"
   awk '
     /^openstudio-server\/worker\.nomad:$/ { in_section=1; next }
     /^openstudio-server\/.*\.nomad:$/ { if (in_section) exit }
@@ -1161,7 +1162,7 @@ echo "==> Deploying permanent system-hooks image sentinel..."
       "${_sentinel_render_args[@]}" \
       --var "job_name=${JOB_NAME}" \
       --var "enable_image_prepull=true" \
-      "${REPO_ROOT}" > "${_sentinel_rendered}" 2>/dev/null; then
+      "${PACK_PATH}" > "${_sentinel_rendered}" 2>/dev/null; then
     awk '
       /^openstudio-server\/system-hooks\.nomad:$/ { in_section=1; next }
       /^openstudio-server\/.*\.nomad:$/ { if (in_section) exit }
@@ -1247,7 +1248,7 @@ render_system_hooks_spec() {
     --var "job_name=${job_name}" \
     --var "prepull_worker_enabled=${worker_enabled}" \
     --var "prepull_core_enabled=${core_enabled}" \
-    "${REPO_ROOT}" > "${rendered}"
+    "${PACK_PATH}" > "${rendered}"
   awk '
     /^openstudio-server\/system-hooks\.nomad:$/ { in_section=1; next }
     /^openstudio-server\/.*\.nomad:$/ { if (in_section) exit }
@@ -1559,7 +1560,7 @@ PY
 run_pack_with_guard() {
   local run_log
   run_log="$(mktemp)"
-  if ! nomad-pack run "$@" "${REPO_ROOT}" 2>&1 | tee "${run_log}"; then
+  if ! nomad-pack run "$@" "${PACK_PATH}" 2>&1 | tee "${run_log}"; then
     if grep -q 'Failed To Query For Previously Deployed Jobs' "${run_log}"; then
       core_jobs_ready=false
       for _ in $(seq 1 30); do

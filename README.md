@@ -59,7 +59,7 @@ cp user-overrides.hcl.example my-deployment.hcl
 # Edit my-deployment.hcl — uncomment and set the image version lines
 
 # Deploy
-nomad-pack run -var-file my-deployment.hcl .
+nomad-pack run -var-file my-deployment.hcl packs/openstudio-server
 ```
 
 For a complete walkthrough see **[docs/infrastructure/getting-started-single-node.md](./docs/infrastructure/getting-started-single-node.md)**.
@@ -81,7 +81,7 @@ The pack renders a dedicated Nomad job for each service component:
 | `<job_name>-batch-verify` | `batch-verification.nomad.tpl` | `enable_batch_verification = true` |
 | `<job_name>-traefik` | `traefik.nomad.tpl` | `deploy_traefik = true` |
 
-`templates/openstudio-server.nomad.tpl` is an architecture marker file that renders no job — it documents the consolidated template design.
+`packs/openstudio-server/templates/openstudio-server.nomad.tpl` is an architecture marker file that renders no job — it documents the consolidated template design.
 
 ## Deployment Checklist (Preflight)
 
@@ -152,7 +152,7 @@ vagrant destroy -f
 
 ## Repository cleanup
 
-Use the cleanup helper to remove transient files and keep generated variable docs consolidated from `variables.hcl`:
+Use the cleanup helper to remove transient files and keep generated variable docs consolidated from `packs/openstudio-server/variables.hcl`:
 
 ```bash
 # Preview changes only
@@ -168,11 +168,11 @@ GitHub Actions validation includes:
 
 | Workflow | Trigger | What it checks |
 |---|---|---|
-| `pack-validation.yml` | push to `develop` or `main`, PR to `develop` or `main`, `workflow_dispatch` | fmt, render, plan (dry-run for multiple example var-files), `examples/test-batch.nomad` job spec validation, Vagrantfile syntax, script syntax, version-bump tests, `variables.md` diff, backup/restore default-doc consistency, README links to `docs/variables.md`, `compatibility.md` version gate, `packs/` registry sync, integration test script |
+| `pack-validation.yml` | push to `develop` or `main`, PR to `develop` or `main`, `workflow_dispatch` | fmt, render, plan (dry-run for multiple example var-files), `examples/test-batch.nomad` job spec validation, Vagrantfile syntax, script syntax, version-bump tests, `variables.md` diff, backup/restore default-doc consistency, README links to `docs/variables.md`, compatibility version gate, integration test script |
 | `acl-policy-validation.yml` | push/PR to `develop` or `main` on `policies/**` or `scripts/apply-acl-policies.sh` changes | `nomad fmt -check policies/` |
-| `integration-test.yml` | PR to `develop` (path-filtered: `templates/**`, `variables.hcl`, `packs/**`, `scripts/**`, `examples/**`, `metadata.hcl`) | template render + e2e stack test against live Consul/Nomad dev agents |
-| `release-version-bump.yml` | push to `main` | **Step 1:** auto-bumps patch version in `metadata.hcl`, syncs `packs/openstudio-server/metadata.hcl`, commits both files, and pushes a `v*` git tag — triggers `release.yml` |
-| `release.yml` | push of tag matching `v*` | **Step 2:** reads version from `metadata.hcl`, publishes GitHub Release with auto-generated notes |
+| `integration-test.yml` | PR to `develop` (path-filtered: `packs/openstudio-server/templates/**`, `packs/openstudio-server/variables.hcl`, `packs/openstudio-server/metadata.hcl`, `scripts/**`, `examples/**`) | template render + e2e stack test against live Consul/Nomad dev agents |
+| `release-version-bump.yml` | push to `main` | **Step 1:** auto-bumps patch version in `packs/openstudio-server/metadata.hcl`, commits, and pushes a `v*` git tag — triggers `release.yml` |
+| `release.yml` | push of tag matching `v*` | **Step 2:** publishes GitHub Release with auto-generated notes |
 
 The `pack-validation.yml` workflow runs on **push to `develop` or `main`** and on **pull requests targeting `develop` or `main`**. The `integration-test.yml` workflow runs on **pull requests targeting `develop`** only when template or variable files change.
 
@@ -264,21 +264,19 @@ cp examples/advanced/openstack-site-local.hcl.template openstack-site-local.hcl
 nomad-pack run \
   -var-file examples/advanced/openstack-production.hcl \
   -var-file openstack-site-local.hcl \
-  .
+  packs/openstudio-server
 ```
 
-The raw variable declarations and defaults live in [`variables.hcl`](./variables.hcl).
+The raw variable declarations and defaults live in [`packs/openstudio-server/variables.hcl`](./packs/openstudio-server/variables.hcl).
 
 ## Pack Metadata
 
-- Root pack metadata: [`metadata.hcl`](./metadata.hcl)
-- Pack-scoped metadata: [`packs/openstudio-server/metadata.hcl`](./packs/openstudio-server/metadata.hcl)
-- Keep both metadata files synchronized when pack metadata changes.
+- Pack metadata: [`packs/openstudio-server/metadata.hcl`](./packs/openstudio-server/metadata.hcl)
 
 > **Variable reference:** All configurable variables — types, defaults, and descriptions — are
-> documented in **[docs/variables.md](./docs/variables.md)** (auto-generated from `variables.hcl`
+> documented in **[docs/variables.md](./docs/variables.md)** (auto-generated from `packs/openstudio-server/variables.hcl`
 > by `scripts/generate-vars-doc.sh`). Do not maintain a duplicate table here;
-> `variables.hcl` is the sole source of truth.
+> `packs/openstudio-server/variables.hcl` is the sole source of truth.
 
 ## Vault MongoDB Secret Mapping
 
@@ -289,7 +287,7 @@ When `enable_vault_mongo_secrets` is enabled, the MongoDB task renders a Nomad t
 
 ## Scheduling Helpers
 
-`templates/_helpers.tpl` defines reusable scheduling helpers for `constraint`, `affinity`, and `spread` stanzas.  
+`packs/openstudio-server/templates/_helpers.tpl` defines reusable scheduling helpers for `constraint`, `affinity`, and `spread` stanzas.  
 To target host environments, set group-level scheduling inputs, for example:
 
 ```hcl
@@ -313,21 +311,21 @@ redis_affinities = [
 
 ## Included Job Templates
 
-- `templates/openstudio-server.nomad.tpl`: **Architecture marker file — renders no job.** Documents the consolidated template design (fix #223, #405).
-- `templates/web.nomad.tpl`: Unified web application & worker service (`<job_name>-web`, Consul: `openstudio-web`) containing `web`, `web-background`, and `worker` task groups.
-- `templates/worker.nomad.tpl`: **Architecture marker file — renders no job.** Documents worker consolidation into `web.nomad.tpl` (fix #405).
-- `templates/db.nomad.tpl`: MongoDB service (`<job_name>-db`, Consul: `openstudio-db`) on port `27017`.
-- `templates/redis.nomad.tpl`: Redis cache service (`<job_name>-redis`, Consul: `openstudio-redis`) on port `6379`.
-- `templates/rserve.nomad.tpl`: Rserve service (`<job_name>-rserve`, Consul: `openstudio-rserve`) on port `6311`.
-- `templates/queue-sweeper.nomad.tpl`: Periodic background maintenance job (`<job_name>-queue-sweeper`) containing `queue-sweeper` and `stall-watchdog` task groups.
-- `templates/stall-watchdog.nomad.tpl`: **Architecture marker file — renders no job.** Documents stall watchdog consolidation into `queue-sweeper.nomad.tpl` (fix #405).
-- `templates/system-hooks.nomad.tpl`: System job that pre-pulls all service images on every eligible node (`enable_image_prepull = true`, default).
-- `templates/state-backup.nomad.tpl`: Periodic batch job (`<job_name>-state-backup`) that runs `mongodump` + Redis backup on `backup_cron` schedule (`backup_enabled = false` by default).
-- `templates/state-restore.nomad.tpl`: On-demand parameterized batch job (`<job_name>-state-restore`) for manual restore dispatch (`restore_enabled = false` by default).
-- `templates/openstudio_test.nomad.tpl`: Parameterized batch test job (`<job_name>-test`) for post-deploy service validation (always rendered).
-- `templates/traefik.nomad.tpl`: Optional Traefik ingress job (`<job_name>-traefik`), enabled by `deploy_traefik = true`.
-- `templates/nomad-autoscaler.nomad.tpl`: Optional Nomad Autoscaler daemon job stub (`<job_name>-autoscaler`), enabled by `nomad_autoscaler_enabled = true`.
-- `templates/batch-verification.nomad.tpl`: Optional batch connectivity verification job (`<job_name>-batch-verify`), enabled by `enable_batch_verification = true`.
+- `packs/openstudio-server/templates/openstudio-server.nomad.tpl`: **Architecture marker file — renders no job.** Documents the consolidated template design (fix #223, #405).
+- `packs/openstudio-server/templates/web.nomad.tpl`: Unified web application & worker service (`<job_name>-web`, Consul: `openstudio-web`) containing `web`, `web-background`, and `worker` task groups.
+- `packs/openstudio-server/templates/worker.nomad.tpl`: **Architecture marker file — renders no job.** Documents worker consolidation into `web.nomad.tpl` (fix #405).
+- `packs/openstudio-server/templates/db.nomad.tpl`: MongoDB service (`<job_name>-db`, Consul: `openstudio-db`) on port `27017`.
+- `packs/openstudio-server/templates/redis.nomad.tpl`: Redis cache service (`<job_name>-redis`, Consul: `openstudio-redis`) on port `6379`.
+- `packs/openstudio-server/templates/rserve.nomad.tpl`: Rserve service (`<job_name>-rserve`, Consul: `openstudio-rserve`) on port `6311`.
+- `packs/openstudio-server/templates/queue-sweeper.nomad.tpl`: Periodic background maintenance job (`<job_name>-queue-sweeper`) containing `queue-sweeper` and `stall-watchdog` task groups.
+- `packs/openstudio-server/templates/stall-watchdog.nomad.tpl`: **Architecture marker file — renders no job.** Documents stall watchdog consolidation into `queue-sweeper.nomad.tpl` (fix #405).
+- `packs/openstudio-server/templates/system-hooks.nomad.tpl`: System job that pre-pulls all service images on every eligible node (`enable_image_prepull = true`, default).
+- `packs/openstudio-server/templates/state-backup.nomad.tpl`: Periodic batch job (`<job_name>-state-backup`) that runs `mongodump` + Redis backup on `backup_cron` schedule (`backup_enabled = false` by default).
+- `packs/openstudio-server/templates/state-restore.nomad.tpl`: On-demand parameterized batch job (`<job_name>-state-restore`) for manual restore dispatch (`restore_enabled = false` by default).
+- `packs/openstudio-server/templates/openstudio_test.nomad.tpl`: Parameterized batch test job (`<job_name>-test`) for post-deploy service validation (always rendered).
+- `packs/openstudio-server/templates/traefik.nomad.tpl`: Optional Traefik ingress job (`<job_name>-traefik`), enabled by `deploy_traefik = true`.
+- `packs/openstudio-server/templates/nomad-autoscaler.nomad.tpl`: Optional Nomad Autoscaler daemon job stub (`<job_name>-autoscaler`), enabled by `nomad_autoscaler_enabled = true`.
+- `packs/openstudio-server/templates/batch-verification.nomad.tpl`: Optional batch connectivity verification job (`<job_name>-batch-verify`), enabled by `enable_batch_verification = true`.
 
 ## Worker Scaling Configuration
 
@@ -360,7 +358,7 @@ Set `worker_autoscaling_enabled = true` to activate worker scaling policies:
 | `worker_autoscaling_enabled` | `false` | Enable/disable the `scaling` block |
 | `worker_autoscaling_cpu_enabled` | `true` | Enable the built-in `nomad-apm` CPU check (`check "cpu-utilization"`); uses `source = "nomad-apm"` — **no external Prometheus required** |
 | `worker_cpu_target_utilization` | `50` | Target worker CPU utilization % for the `nomad-apm` avg_cpu check; mirrors Helm HPA `targetCPUUtilizationPercentage: 50` |
-| `nomad_autoscaler_enabled` | `false` | Render optional autoscaler daemon stub (`templates/nomad-autoscaler.nomad.tpl`) |
+| `nomad_autoscaler_enabled` | `false` | Render optional autoscaler daemon stub (`packs/openstudio-server/templates/nomad-autoscaler.nomad.tpl`) |
 | `worker_min_replicas` | `1` | Minimum worker allocations |
 | `worker_max_replicas` | `10` | Maximum worker allocations |
 | `worker_autoscaling_scale_up_cooldown` | `"10m"` | Cooldown between scale-up events |
@@ -447,7 +445,7 @@ For full instructions — including token creation, namespace scoping, and token
 | Kubernetes / Helm | Nomad Equivalent | Status |
 | --- | --- | --- |
 | Helm chart | Nomad Pack | ✅ Implemented |
-| `values.yaml` | `variables.hcl` | ✅ Implemented |
+| `values.yaml` | `packs/openstudio-server/variables.hcl` | ✅ Implemented |
 | Deployment/Pod | Job & Task Groups | ✅ Implemented (Web, DB, Redis, Worker, Rserve) |
 | Container | Task (`docker` driver) | ✅ Implemented |
 | Service | Consul `service` registration | ✅ Implemented |
@@ -488,7 +486,7 @@ The pack registers Consul service checks for datastore and API telemetry:
 
 ## Batch Verification Checks
 
-This pack includes an optional batch job template (`templates/batch-verification.nomad.tpl`) for connectivity checks across core services.
+This pack includes an optional batch job template (`packs/openstudio-server/templates/batch-verification.nomad.tpl`) for connectivity checks across core services.
 
 - Runs ICMP ping and TCP socket checks per target.
 - Emits metric-style log lines:
@@ -499,7 +497,7 @@ This pack includes an optional batch job template (`templates/batch-verification
 Run it with:
 
 ```bash
-nomad-pack run -var "enable_batch_verification=true" .
+nomad-pack run -var "enable_batch_verification=true" packs/openstudio-server
 ```
 
 Or with:
@@ -510,7 +508,7 @@ Or with:
 
 ## Running Tests
 
-The pack ships `templates/openstudio_test.nomad.tpl`, a `batch` + `parameterized` job that validates the full OpenStudio Server stack after deployment — the Nomad equivalent of a Helm test pod.
+The pack ships `packs/openstudio-server/templates/openstudio_test.nomad.tpl`, a `batch` + `parameterized` job that validates the full OpenStudio Server stack after deployment — the Nomad equivalent of a Helm test pod.
 
 ### What it checks
 
@@ -529,7 +527,7 @@ Render and register the test job alongside your deployment, then dispatch it:
 
 ```bash
 # Render and run pack (test job is always included)
-nomad-pack run .
+nomad-pack run packs/openstudio-server
 
 # Dispatch the parameterized test job
 nomad job dispatch openstudio-server-test
@@ -556,7 +554,7 @@ nomad alloc logs <alloc-id> redis-tcp-check
 | `test_busybox_image_tag` | `stable` | Tag for `busybox` image |
 
 ```bash
-nomad-pack run -var "test_timeout_seconds=30" -var "test_web_port=8080" .
+nomad-pack run -var "test_timeout_seconds=30" -var "test_web_port=8080" packs/openstudio-server
 ```
 
 ## Vault Integration
@@ -610,7 +608,7 @@ nomad-pack run \
   -var "vault_enabled=true" \
   -var "vault_default_role=openstudio-server" \
   -var "vault_policy=openstudio-server" \
-  .
+  packs/openstudio-server
 ```
 
 ### Variables

@@ -87,12 +87,12 @@ instead of assuming defaults:
 
 ```bash
 # Print the exact image tags that will be deployed
-nomad-pack render -var-file=override.hcl . \
+nomad-pack render -var-file=override.hcl packs/openstudio-server \
   | awk -F'"' '/image = "/ {print $2}' \
   | sort -u
 
 # Pull the exact rendered tags on each Nomad client
-for image in $(nomad-pack render -var-file=override.hcl . | awk -F'"' '/image = "/ {print $2}' | sort -u); do
+for image in $(nomad-pack render -var-file=override.hcl packs/openstudio-server | awk -F'"' '/image = "/ {print $2}' | sort -u); do
   docker pull "$image"
 done
 ```
@@ -114,7 +114,7 @@ configuration).
 ## 2. Helm → Nomad Pack Variable Mapping
 
 The table below maps common `values.yaml` keys from the NREL Helm chart to their equivalent
-Nomad Pack variable names (`variables.hcl`).
+Nomad Pack variable names (`packs/openstudio-server/variables.hcl`).
 
 | Helm `values.yaml` key                        | Nomad Pack variable              | Notes |
 |-----------------------------------------------|----------------------------------|-------|
@@ -354,7 +354,7 @@ curl -sf http://openstudio-web.service.consul:8080/up  && echo "Liveness OK"
 curl -sf http://openstudio-web.service.consul:8080/    && echo "Readiness OK"
 
 # 6. Optional: run the built-in batch verification job
-nomad-pack run -var "enable_batch_verification=true" .
+nomad-pack run -var "enable_batch_verification=true" packs/openstudio-server
 nomad job status openstudio-server-batch-verify
 ```
 
@@ -391,7 +391,7 @@ NOMAD_NAMESPACE="default" # Set to your target namespace
 ./scripts/pre-teardown.sh --namespace "${NOMAD_NAMESPACE}" "${JOB_NAME}"
 
 # After jobs are confirmed stopped, destroy remaining pack state.
-nomad-pack destroy -var-file=override.hcl .
+nomad-pack destroy -var-file=override.hcl packs/openstudio-server
 ```
 
 ### 7.3 Restore the Kubernetes Deployment

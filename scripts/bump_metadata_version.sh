@@ -6,17 +6,17 @@
 #   scripts/bump_metadata_version.sh [metadata_file] <x.y.z>
 #
 # Arguments:
-#   metadata_file   Path to the HCL file containing the version field (default: metadata.hcl)
+#   metadata_file   Path to the HCL file containing the version field (default: packs/openstudio-server/metadata.hcl)
 #   patch|minor|major   Increment the corresponding version component
 #   x.y.z           Set the version to an explicit semver string (e.g. 0.3.0)
 #
 # Examples:
-#   scripts/bump_metadata_version.sh                        # patch-bump metadata.hcl
-#   scripts/bump_metadata_version.sh metadata.hcl minor     # minor-bump metadata.hcl
-#   scripts/bump_metadata_version.sh metadata.hcl 0.3.0     # set to explicit version
+#   scripts/bump_metadata_version.sh                                             # patch-bump packs/openstudio-server/metadata.hcl
+#   scripts/bump_metadata_version.sh packs/openstudio-server/metadata.hcl minor  # minor-bump metadata.hcl
+#   scripts/bump_metadata_version.sh packs/openstudio-server/metadata.hcl 0.3.0  # set to explicit version
 set -euo pipefail
 
-METADATA_FILE="${1:-metadata.hcl}"
+METADATA_FILE="${1:-packs/openstudio-server/metadata.hcl}"
 BUMP_TYPE="${2:-patch}"
 
 CURRENT_VERSION="$(sed -nE 's/^[[:space:]]*version[[:space:]]*=[[:space:]]*"([0-9]+\.[0-9]+\.[0-9]+)".*/\1/p' "$METADATA_FILE" | head -n 1)"

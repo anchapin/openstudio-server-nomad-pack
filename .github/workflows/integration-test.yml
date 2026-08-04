@@ -5,20 +5,18 @@ on:
     branches: [ develop, main ]
     # Path coverage policy: run integration validation whenever any pack-impacting
     # path changes. This includes:
-    #   - templates/**         : Nomad job template files
-    #   - variables.hcl        : all user-facing variable definitions
-    #   - packs/**             : registry-aligned pack mirror (must stay in sync with root)
+    #   - packs/openstudio-server/templates/**   : Nomad job template files
+    #   - packs/openstudio-server/variables.hcl  : all user-facing variable definitions
     #   - scripts/**           : validation helpers used by CI and operators
     #   - examples/**          : var-files used by render/plan/e2e (covers e2e-test.hcl)
-    #   - metadata.hcl         : pack version and app_version metadata
+    #   - packs/openstudio-server/metadata.hcl   : pack version and app_version metadata
     #   - workflow file itself  : changes to this CI definition
     paths:
-      - 'templates/**'
-      - 'variables.hcl'
-      - 'packs/**'
+      - 'packs/openstudio-server/templates/**'
+      - 'packs/openstudio-server/variables.hcl'
+      - 'packs/openstudio-server/metadata.hcl'
       - 'scripts/**'
       - 'examples/**'
-      - 'metadata.hcl'
       - '.github/workflows/integration-test.yml'
 
 env:
@@ -53,7 +51,7 @@ jobs:
 
       - name: Render and validate templates
         run: |
-          nomad-pack render --var-file examples/quickstart/minimal-dev.hcl .
+          nomad-pack render --var-file examples/quickstart/minimal-dev.hcl packs/openstudio-server
           echo "Template rendering succeeded"
 
   e2e-test:
@@ -202,7 +200,7 @@ jobs:
           echo "E2E_WEB_JOB=${E2E_JOB_PREFIX}-web" >> "${GITHUB_ENV}"
           echo "E2E_DB_JOB=${E2E_JOB_PREFIX}-db" >> "${GITHUB_ENV}"
           echo "E2E_REDIS_JOB=${E2E_JOB_PREFIX}-redis" >> "${GITHUB_ENV}"
-          nomad-pack run --detach --var-file "${E2E_VAR_FILE}" .
+          nomad-pack run --detach --var-file "${E2E_VAR_FILE}" packs/openstudio-server
 
       - name: Wait for Nomad web allocations
         env:
@@ -358,4 +356,4 @@ jobs:
         if: always()
         env:
           NOMAD_ADDR: http://127.0.0.1:4646
-        run: nomad-pack destroy --var-file "${E2E_VAR_FILE}" . || true
+        run: nomad-pack destroy --var-file "${E2E_VAR_FILE}" packs/openstudio-server || true

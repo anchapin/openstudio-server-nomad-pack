@@ -22,8 +22,8 @@
 #
 # Usage:
 #   export NOMAD_ADDR=http://localhost:4646  # SSH tunnel must be open
-#   nomad-pack run -var-file examples/advanced/openstack.hcl --name openstudio-server .
-#   nomad-pack destroy -var-file examples/advanced/openstack.hcl --name openstudio-server .
+#   nomad-pack run -var-file examples/advanced/openstack.hcl --name openstudio-server packs/openstudio-server
+#   nomad-pack destroy -var-file examples/advanced/openstack.hcl --name openstudio-server packs/openstudio-server
 
 job_name    = "openstudio-server"
 datacenters = ["dc1"]

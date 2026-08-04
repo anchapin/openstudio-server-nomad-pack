@@ -18,7 +18,7 @@ energy simulations.
 **Quickstart:**
 ```bash
 # Edit simple.hcl to set your OpenStudio Server version, then:
-nomad-pack run -var-file examples/quickstart/simple.hcl .
+nomad-pack run -var-file examples/quickstart/simple.hcl packs/openstudio-server
 ```
 
 See [`docs/modelers/quickstart.md`](../docs/modelers/quickstart.md) for the

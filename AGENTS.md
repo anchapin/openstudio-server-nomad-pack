@@ -10,21 +10,21 @@ A [Nomad Pack](https://developer.hashicorp.com/nomad/tutorials/nomad-pack/nomad-
 
 ```bash
 # Format-check pack templates (non-destructive)
-# NOTE: On nomad-pack v0.4.2, `fmt -write templates/` can corrupt templates
+# NOTE: On nomad-pack v0.4.2, `fmt -write packs/openstudio-server/templates/` can corrupt templates
 # and `fmt --check -recursive .` is a silent no-op from the pack root.
-nomad-pack fmt --check templates/
+nomad-pack fmt --check packs/openstudio-server/templates/
 
 # Render templates to stdout and inspect output
-nomad-pack render .
-nomad-pack render -var-file examples/quickstart/minimal-dev.hcl .
-nomad-pack render -var "enable_batch_verification=true" .
+nomad-pack render packs/openstudio-server
+nomad-pack render -var-file examples/quickstart/minimal-dev.hcl packs/openstudio-server
+nomad-pack render -var "enable_batch_verification=true" packs/openstudio-server
 
 # Plan (dry-run) against a running Nomad dev agent
 nomad agent -dev -bind=127.0.0.1 -log-level=ERROR &
-nomad-pack plan --name openstudio-server .
-nomad-pack plan --name openstudio-server-minimal-dev -var-file examples/quickstart/minimal-dev.hcl .
-nomad-pack plan --name openstudio-server-production-ha -var-file examples/advanced/production-ha.hcl .
-nomad-pack plan --name openstudio-server-airgapped -var-file examples/advanced/airgapped.hcl .
+nomad-pack plan --name openstudio-server packs/openstudio-server
+nomad-pack plan --name openstudio-server-minimal-dev -var-file examples/quickstart/minimal-dev.hcl packs/openstudio-server
+nomad-pack plan --name openstudio-server-production-ha -var-file examples/advanced/production-ha.hcl packs/openstudio-server
+nomad-pack plan --name openstudio-server-airgapped -var-file examples/advanced/airgapped.hcl packs/openstudio-server
 
 # Run the integration test script (render + plan across key scenarios)
 bash scripts/test_nomad_pack_integration.sh
@@ -37,8 +37,8 @@ bash scripts/test_nomad_pack_integration.sh
 ./scripts/test_migration_doc_variable_mapping.sh
 
 # Render a specific scenario inline (e.g., verify a single template change)
-nomad-pack render -var "enable_vector_collection=false" .
-nomad-pack render -var "web_image=nrel/openstudio-server:3.8.0" .
+nomad-pack render -var "enable_vector_collection=false" packs/openstudio-server
+nomad-pack render -var "web_image=nrel/openstudio-server:3.8.0" packs/openstudio-server
 
 # Validate a single Nomad job spec used by CI
 nomad job validate examples/advanced/test-batch.nomad
@@ -47,14 +47,14 @@ nomad job validate examples/advanced/test-batch.nomad
 # Uses tests/fixtures/metadata.sample.hcl as an isolated test fixture
 ./scripts/test_bump_metadata_version.sh
 
-# Check that docs/variables.md is up-to-date with variables.hcl
+# Check that docs/variables.md is up-to-date with packs/openstudio-server/variables.hcl
 ./scripts/generate-vars-doc.sh docs/variables.generated.md
 diff docs/variables.md docs/variables.generated.md
 
-# Regenerate docs/variables.md after editing variables.hcl (required before committing)
+# Regenerate docs/variables.md after editing packs/openstudio-server/variables.hcl (required before committing)
 ./scripts/generate-vars-doc.sh
 
-# Check backup/restore default docs stay aligned with variables.hcl
+# Check backup/restore default docs stay aligned with packs/openstudio-server/variables.hcl
 ./scripts/test_backup_restore_docs_defaults.sh
 
 # Operational helpers (not part of CI — run manually against a live cluster)
@@ -109,7 +109,7 @@ Each component is a **separate Nomad job** (`<job_name>-web`, `<job_name>-worker
 
 ### Template layout
 
-Each Nomad job is a separate `.nomad.tpl` file under `templates/`. The pack renders all of them together via `nomad-pack render`:
+Each Nomad job is a separate `.nomad.tpl` file under `packs/openstudio-server/templates/`. The pack renders all of them together via `nomad-pack render`:
 
 | Template | Nomad job rendered | Conditional |
 |---|---|---|
@@ -132,7 +132,7 @@ Each Nomad job is a separate `.nomad.tpl` file under `templates/`. The pack rend
 | `infra-setup.nomad.tpl` | `<job_name>-infra-setup` (system job for client config) | `enable_infra_setup = false` (default) |
 | `openstudio_test.nomad.tpl` | `<job_name>-test` (parameterized batch) | always |
 
-`templates/_helpers.tpl` defines reusable named templates called throughout all job templates:
+`packs/openstudio-server/templates/_helpers.tpl` defines reusable named templates called throughout all job templates:
 
 | Helper | Usage |
 |---|---|
@@ -157,15 +157,13 @@ Nomad Pack templates use Go template syntax with **`[[` / `]]`** delimiters (not
 
 ### Variable flow
 
-All user-facing variables are defined in `variables.hcl` (root level). `packs/openstudio-server/variables.hcl` is a registry-aligned mirror — keep both files in sync when adding or changing variables.
+All user-facing variables are defined in `packs/openstudio-server/variables.hcl`.
 
-`docs/variables.md` is **auto-generated** by `scripts/generate-vars-doc.sh` (a Python script that parses `variables.hcl`). CI enforces this with a diff check. Never edit `docs/variables.md` manually.
+`docs/variables.md` is **auto-generated** by `scripts/generate-vars-doc.sh` (a Python script that parses `packs/openstudio-server/variables.hcl`). CI enforces this with a diff check. Never edit `docs/variables.md` manually.
 
-### Registry vs. root pack
+### Pack path
 
-Two pack layouts coexist:
-- **Root** (`templates/`, `variables.hcl`, `metadata.hcl`, `outputs.tpl`): used for direct `nomad-pack run .` invocations.
-- **Registry** (`packs/openstudio-server/`): registry-aligned layout for Nomad Pack Registry publication. Keep templates and variables in sync with root.
+Use `packs/openstudio-server/` for all `nomad-pack` commands in this repository.
 
 ### Consul service discovery
 
@@ -279,7 +277,7 @@ This pack is the Nomad equivalent of the `openstudio-server-helm` chart. When im
 
 | Kubernetes / Helm concept | Nomad Pack equivalent |
 |---|---|
-| `values.yaml` | `variables.hcl` |
+| `values.yaml` | `packs/openstudio-server/variables.hcl` |
 | Deployment / Pod | Job → Task Group → Task (docker driver) |
 | Service | `service` stanza (registers in Consul) |
 | ConfigMap / Secret | `template` stanza (static, Consul KV, or Vault) |
@@ -307,7 +305,7 @@ update {
 
 ### Post-deploy output template
 
-`outputs.tpl` is rendered by `nomad-pack run` on successful deployment. It prints Consul service UI URLs and the Traefik web URL. It uses `[[ ]]` delimiters like all other templates. If you add a new service, add its Consul URL here too.
+`packs/openstudio-server/outputs.tpl` is rendered by `nomad-pack run` on successful deployment. It prints Consul service UI URLs and the Traefik web URL. It uses `[[ ]]` delimiters like all other templates. If you add a new service, add its Consul URL here too.
 
 ### Deep-dive docs
 
@@ -345,9 +343,9 @@ Every PR adds an entry to `CHANGELOG.md` under `[Unreleased]` using [Keep a Chan
 
 ### Variable documentation
 
-After editing any variable in `variables.hcl`:
+After editing any variable in `packs/openstudio-server/variables.hcl`:
 1. Run `./scripts/generate-vars-doc.sh` to regenerate `docs/variables.md`.
-2. Commit both `variables.hcl` and `docs/variables.md` together.
+2. Commit both `packs/openstudio-server/variables.hcl` and `docs/variables.md` together.
 
 CI fails if these files are out of sync (the `Check variables.md is up-to-date` workflow step performs a diff).
 
@@ -357,19 +355,19 @@ CI fails if these files are out of sync (the `Check variables.md is up-to-date` 
 2. Add a new row to `docs/compatibility.md` (pack version, `app_version`, min Nomad, min Consul) for the **upcoming release version** (`pack.version` + patch). CI enforces this: for pull requests targeting `main`, the `Check compatibility.md is up-to-date` step requires that upcoming release version to be present.
 3. PR `develop` → `main`, merge when CI passes.
 4. Two workflows run automatically after merging to `main`:
-   - **Step 1 — `release-version-bump.yml`** (triggers on push to `main`): runs `scripts/bump_metadata_version.sh`, syncs `packs/openstudio-server/metadata.hcl`, commits both metadata files, and pushes a `v<version>` git tag.
-   - **Step 2 — `release.yml`** (triggers on the `v*` tag push created in Step 1): reads the version from `metadata.hcl` and publishes the GitHub Release with auto-generated release notes.
+   - **Step 1 — `release-version-bump.yml`** (triggers on push to `main`): runs `scripts/bump_metadata_version.sh` against `packs/openstudio-server/metadata.hcl`, commits, and pushes a `v<version>` git tag.
+   - **Step 2 — `release.yml`** (triggers on the `v*` tag push created in Step 1): publishes the GitHub Release with auto-generated release notes.
 
-   If Step 1 fails, check that the workflow has write permission to push to `main` and that `scripts/bump_metadata_version.sh` exits cleanly against the current `metadata.hcl`. If Step 2 fails (or is skipped), verify that the `v*` tag was actually pushed (check the repo's Tags page) and that the workflow has `contents: write` permission to create releases.
+   If Step 1 fails, check that the workflow has write permission to push to `main` and that `scripts/bump_metadata_version.sh` exits cleanly against `packs/openstudio-server/metadata.hcl`. If Step 2 fails (or is skipped), verify that the `v*` tag was actually pushed (check the repo's Tags page) and that the workflow has `contents: write` permission to create releases.
 
 For a non-patch increment (minor/major), manually run `scripts/bump_metadata_version.sh` with the appropriate bump type or explicit version before opening the `develop → main` PR:
 
 ```bash
 # Increment minor version (e.g. 0.2.0 → 0.3.0)
-scripts/bump_metadata_version.sh metadata.hcl minor
+scripts/bump_metadata_version.sh packs/openstudio-server/metadata.hcl minor
 
 # Set an explicit target version
-scripts/bump_metadata_version.sh metadata.hcl 0.3.0
+scripts/bump_metadata_version.sh packs/openstudio-server/metadata.hcl 0.3.0
 ```
 
 ### ACL policies
@@ -434,23 +432,12 @@ Per-group constraints, affinities, and spreads are exposed as list-of-object var
 
 Node class targeting uses the named macros `openstudio_server.compute_node_constraint` and `openstudio_server.system_node_constraint`, driven by `compute_node_class` (default `"compute"`) and `system_node_class` (default `"system"`) variables.
 
-### Registry sync
-
-`packs/openstudio-server/` must mirror the root pack. CI enforces this with a 3-way check (metadata version, variable names, template file contents). To fix drift:
-
-```bash
-cp variables.hcl packs/openstudio-server/variables.hcl
-cp metadata.hcl packs/openstudio-server/metadata.hcl
-cp outputs.tpl packs/openstudio-server/outputs.tpl
-cp templates/*.tpl templates/*.nomad.tpl packs/openstudio-server/templates/
-```
-
 ### CI workflow overview
 
 | Workflow | Trigger | What it checks |
 |---|---|---|
-| `pack-validation.yml` | push to `develop` or `main`, PR to `develop` or `main`, `workflow_dispatch` | fmt, render, plan (dry-run for multiple example var-files), `examples/test-batch.nomad` job spec validation, Vagrantfile syntax, script syntax, version-bump tests, `variables.md` diff, backup/restore default-doc consistency, README links to `docs/variables.md`, `compatibility.md` version gate, `packs/` registry sync, integration test script |
+| `pack-validation.yml` | push to `develop` or `main`, PR to `develop` or `main`, `workflow_dispatch` | fmt, render, plan (dry-run for multiple example var-files), `examples/test-batch.nomad` job spec validation, Vagrantfile syntax, script syntax, version-bump tests, `variables.md` diff, backup/restore default-doc consistency, README links to `docs/variables.md`, compatibility version gate, integration test script |
 | `acl-policy-validation.yml` | push/PR to `develop` or `main` on `policies/**` or `scripts/apply-acl-policies.sh` changes | `nomad fmt -check policies/` |
 | `integration-test.yml` | PR to `develop` (path-filtered) | template render + e2e stack test |
-| `release-version-bump.yml` | push to `main` | **Step 1:** auto-bumps patch version in `metadata.hcl`, syncs `packs/openstudio-server/metadata.hcl`, commits both files, creates and pushes `v*` git tag — triggers `release.yml` |
-| `release.yml` | push of tag matching `v*` | **Step 2:** reads version from `metadata.hcl`, publishes GitHub Release with auto-generated notes |
+| `release-version-bump.yml` | push to `main` | **Step 1:** auto-bumps patch version in `packs/openstudio-server/metadata.hcl`, commits, creates and pushes `v*` git tag — triggers `release.yml` |
+| `release.yml` | push of tag matching `v*` | **Step 2:** publishes GitHub Release with auto-generated notes |

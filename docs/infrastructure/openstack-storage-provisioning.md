@@ -338,7 +338,7 @@ redis_volume_source   = "openstudio-redis"
 Deploy with:
 
 ```bash
-nomad-pack run . \
+nomad-pack run packs/openstudio-server \
   --name openstudio-server \
   -var-file my-cluster.hcl
 ```

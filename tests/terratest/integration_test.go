@@ -60,8 +60,9 @@ func runCommand(args ...string) (string, error) {
 func TestNomadPackIntegrationScenarios(t *testing.T) {
 	t.Parallel()
 
-	packPath, err := filepath.Abs("../../")
+	repoRoot, err := filepath.Abs("../../")
 	require.NoError(t, err, "Failed to determine root pack path")
+	packPath := filepath.Join(repoRoot, "packs/openstudio-server")
 
 	scenarios := []scenario{
 		{
@@ -108,7 +109,7 @@ func TestNomadPackIntegrationScenarios(t *testing.T) {
 			name: "minimal-dev-var-file",
 			args: []string{
 				"render",
-				"--var-file", filepath.Join(packPath, "examples/quickstart/minimal-dev.hcl"),
+				"--var-file", filepath.Join(repoRoot, "examples/quickstart/minimal-dev.hcl"),
 				packPath,
 			},
 		},
@@ -116,7 +117,7 @@ func TestNomadPackIntegrationScenarios(t *testing.T) {
 			name: "production-ha-var-file",
 			args: []string{
 				"render",
-				"--var-file", filepath.Join(packPath, "examples/advanced/production-ha.hcl"),
+				"--var-file", filepath.Join(repoRoot, "examples/advanced/production-ha.hcl"),
 				packPath,
 			},
 		},
@@ -124,7 +125,7 @@ func TestNomadPackIntegrationScenarios(t *testing.T) {
 			name: "airgapped-var-file",
 			args: []string{
 				"render",
-				"--var-file", filepath.Join(packPath, "examples/advanced/airgapped.hcl"),
+				"--var-file", filepath.Join(repoRoot, "examples/advanced/airgapped.hcl"),
 				packPath,
 			},
 		},
@@ -199,8 +200,9 @@ func TestNomadPackPlanScenarios(t *testing.T) {
 		t.Skip("Nomad agent not running, skipping live nomad-pack plan scenarios")
 	}
 
-	packPath, err := filepath.Abs("../../")
+	repoRoot, err := filepath.Abs("../../")
 	require.NoError(t, err)
+	packPath := filepath.Join(repoRoot, "packs/openstudio-server")
 
 	planScenarios := []scenario{
 		{
@@ -209,7 +211,7 @@ func TestNomadPackPlanScenarios(t *testing.T) {
 		},
 		{
 			name: "plan-minimal-dev",
-			args: []string{"plan", "--name", "openstudio-server-terratest-plan-minimal", "--var", "job_name=openstudio-server-terratest-plan-minimal", "--var-file", filepath.Join(packPath, "examples/quickstart/minimal-dev.hcl"), packPath},
+			args: []string{"plan", "--name", "openstudio-server-terratest-plan-minimal", "--var", "job_name=openstudio-server-terratest-plan-minimal", "--var-file", filepath.Join(repoRoot, "examples/quickstart/minimal-dev.hcl"), packPath},
 		},
 	}
 
@@ -230,5 +232,4 @@ func TestNomadPackPlanScenarios(t *testing.T) {
 		})
 	}
 }
-
 
