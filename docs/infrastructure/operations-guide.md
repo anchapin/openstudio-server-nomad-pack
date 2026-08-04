@@ -269,6 +269,11 @@ Sample the counters twice, five minutes apart:
 
 The pack does **not** currently ship a standalone `openstudio-queue-health-alert` job. The in-pack structured worker-effectiveness signals come from the consolidated `queue-sweeper` job in `packs/openstudio-server/templates/queue-sweeper.nomad.tpl` and are suitable for Vector/Loki/Grafana log panels:
 
+- `queue_health_status depth=<n> failed_depth=<n> processed_total=<n> failed_total=<n> workers_running=<n> total_allocs=<n> velocity=<n>`
+- `queue_stagnation_alert depth=<n> velocity=<n> duration_min=<n> threshold_min=<n> workers_running=<n>`
+- `failed_jobs_acceleration_alert delta=<n> threshold=<n> window_min=<n> failed_total=<n>`
+- `worker_crashloop_alert rate=<n> threshold=<n> crashloop_allocs=<n> total_allocs=<n> allocs=<id,id>`
+- `worker_stuck_scheduling_alert count=<n> threshold_min=<n> allocs=<id,id> max_age_min=<n>`
 - `stall_watchdog_status completed=<n> started=<n> total=<n>`
 - `stall_watchdog_sample_summary checked=<n> stalled=<n>`
 - `stall_watchdog_alert stalled_count=<n> restart_allocs=<true|false>`
@@ -280,6 +285,9 @@ The pack does **not** currently ship a standalone `openstudio-queue-health-alert
 
 Recommended log-derived panels:
 
+- **Queue stagnation**: count `queue_stagnation_alert` and graph `depth` + `velocity`
+- **Crash-loop rate**: count `worker_crashloop_alert` and graph `rate`
+- **Stuck scheduling**: count `worker_stuck_scheduling_alert` and graph `max_age_min`
 - **Blocked workers / stalled data points**: count `queue_divergence_alert` and graph `stale_started`
 - **Auto-recovery activity**: graph `stall_watchdog_summary.allocs_stopped`
 - **Queue replay rate**: graph `queue_sweeper_replay_summary.replayed`
@@ -323,6 +331,22 @@ Queue velocity (positive = backlog growing, negative = backlog draining):
 
 ```promql
 (sum(delta(redis_key_size{key="resque:queue:simulations"}[10m])) or vector(0)) / 10
+```
+
+Queue stagnation detector (mirrors the new periodic batch alert job):
+
+```promql
+(
+  (sum(redis_key_size{key="resque:queue:simulations"}) or vector(0)) > 0
+  and
+  clamp_min(sum(delta(redis_key_value{key="resque:stat:processed"}[10m])), 0) == 0
+)
+```
+
+Failed jobs accelerating:
+
+```promql
+clamp_min(sum(delta(redis_key_value{key="resque:stat:failed"}[5m])), 0)
 ```
 
 #### Nomad worker state (requires `prometheus_scrape_nomad_enabled = true`)
@@ -393,6 +417,29 @@ Use a single dashboard row named **Worker Effectiveness** with these panels:
 ```
 
 Add a companion Loki / log panel for `queue_divergence_alert` or `stall_watchdog_alert` so operators can immediately tell the difference between "many workers exist" and "many workers are actually making progress."
+
+## Alert Routing
+
+There are now three practical routing surfaces for worker-effectiveness alerts:
+
+1. **Prometheus + Alertmanager** (`prometheus_enabled = true`):
+   - `OpenStudioQueueStagnation`
+   - `OpenStudioFailedJobsAccelerating`
+   - `OpenStudioWorkerAllocHighFailureRate`
+   - `OpenStudioWorkerQueuedTooLong`
+   Route these through Alertmanager receivers for PagerDuty, Slack, or email.
+2. **Structured logs via Vector/Loki**:
+   Match `*_alert` log lines from the `queue-sweeper` periodic job (`queue_stagnation_alert`, `worker_crashloop_alert`, `worker_stuck_scheduling_alert`, `failed_jobs_acceleration_alert`, `stall_watchdog_alert`, `queue_divergence_alert`) and route them to your log alerting backend.
+3. **Nomad job failure exit codes**:
+   The `queue-health-alert` task exits `2` when it emits a worker/queue alert and `1` on execution failure. If you already stream Nomad job status events, treat `openstudio-server-queue-sweeper` periodic allocation failures as a notification source and include the allocation logs in the alert payload.
+
+Minimum recommended production wiring:
+
+- PagerDuty: route `severity=critical` Prometheus alerts and `worker_crashloop_alert` / `queue_stagnation_alert` log matches.
+- Slack / email: route warning-level `OpenStudioWorkerQueuedTooLong` and `failed_jobs_acceleration_alert`.
+- Alert payload fields to preserve: job name, worker alloc IDs, queue depth, queue velocity, processed delta, failed delta, and threshold minutes/restart count.
+
+If ACLs are enabled, ensure the alerting job can read Nomad allocation state by providing a suitable `NOMAD_TOKEN` in the task environment or by running on a Nomad client with localhost API access that permits read-only allocation inspection.
 
 ---
 

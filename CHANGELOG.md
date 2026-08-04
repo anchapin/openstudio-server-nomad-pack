@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added queue-health alerting for simulations queue stagnation, failed-job acceleration, worker crash-loop restart thresholds, and stuck worker scheduling, plus alert-routing guidance for Prometheus/Alertmanager, Vector/Loki, and Nomad periodic job failures (#437).
 - Added `docs/infrastructure/runbooks/queue-stall.md`, linked it from the operations
   guide, and added `scripts/drain-workers.sh` for batched worker allocation drains during
   queue-stall recovery (#444).

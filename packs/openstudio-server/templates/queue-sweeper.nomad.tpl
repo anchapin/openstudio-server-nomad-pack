@@ -214,6 +214,408 @@ EOH
       }
     }
   }
+
+  group "queue-health-alert" {
+    count = 1
+
+    [[ template "openstudio_server.restart_block" (dict "attempts" 0 "interval" "5m" "delay" "15s" "mode" "fail") ]]
+
+    network {
+      mode = "host"
+    }
+
+    task "detect" {
+      driver = "docker"
+
+      config {
+        image           = "[[ var "stall_watchdog_image" . ]]"
+        command         = "python3"
+        args            = ["/local/health_alert.py"]
+        network_mode    = "host"
+        readonly_rootfs = false
+      }
+
+      template {
+        destination = "local/health_alert.py"
+        perms       = "644"
+        data        = <<EOH
+#!/usr/bin/env python3
+"""
+Queue effectiveness and worker health alerting.
+
+Emits structured alert log lines and exits:
+  0 = clean
+  1 = execution error
+  2 = alert condition detected
+"""
+import json
+import math
+import os
+import socket
+import sys
+import time
+from urllib.error import HTTPError, URLError
+from urllib.parse import quote
+from urllib.request import Request, urlopen
+
+REDIS_SERVICE = "openstudio-redis"
+REDIS_HOST = "openstudio-redis.service.consul"
+REDIS_PORT = 6379
+REDIS_PASSWORD = "[[ var "redis_password" . ]]"
+CONSUL_ADDR = "[[ var "consul_address" . ]]"
+CONSUL_RETRY_ATTEMPTS = [[ var "queue_sweeper_consul_retry_attempts" . ]]
+CONSUL_RETRY_BACKOFF_SECONDS = [[ var "queue_sweeper_consul_retry_backoff_seconds" . ]]
+NOMAD_ADDR = "[[ if ne (var "stall_watchdog_nomad_address" .) "" ]][[ var "stall_watchdog_nomad_address" . ]][[ else ]]http://localhost:4646[[ end ]]"
+WORKER_JOB = "[[ if ne (var "stall_watchdog_worker_job" .) "" ]][[ var "stall_watchdog_worker_job" . ]][[ else ]][[ var "job_name" . ]]-worker[[ end ]]"
+NAMESPACE = "[[ var "nomad_namespace" . ]]"
+CRASHLOOP_THRESHOLD = [[ var "alert_crashloop_threshold" . ]]
+STUCK_SCHEDULING_MINUTES = [[ var "alert_stuck_scheduling_minutes" . ]]
+QUEUE_STAGNATION_MINUTES = [[ var "alert_queue_stagnation_minutes" . ]]
+FAILED_DELTA_THRESHOLD = [[ var "alert_crashloop_threshold" . ]]
+STATE_KEY = "openstudio:queue_health_alert:state"
+
+
+class TransientControlPlaneError(Exception):
+    pass
+
+
+def log(message):
+    print(message, flush=True)
+
+
+def utc_now():
+    return int(time.time())
+
+
+def fetch_json(url, timeout=10):
+    headers = {"Accept": "application/json"}
+    token = os.environ.get("NOMAD_TOKEN", "").strip()
+    if token:
+        headers["X-Nomad-Token"] = token
+    req = Request(url, headers=headers)
+    with urlopen(req, timeout=timeout) as response:
+        return json.loads(response.read().decode())
+
+
+def fetch_json_with_retry(url, timeout=10, attempts=CONSUL_RETRY_ATTEMPTS):
+    delay = max(float(CONSUL_RETRY_BACKOFF_SECONDS), 0.1)
+    last_exc = None
+    for attempt in range(1, max(int(attempts), 1) + 1):
+        try:
+            return fetch_json(url, timeout=timeout)
+        except HTTPError as exc:
+            last_exc = exc
+            if exc.code not in (429,) and not (500 <= exc.code < 600):
+                raise
+            log(
+                f"queue_health_warn msg=consul_transient status={exc.code} "
+                f"url={url} attempt={attempt}/{attempts}"
+            )
+        except URLError as exc:
+            last_exc = exc
+        if attempt < max(int(attempts), 1):
+            time.sleep(delay)
+            delay = min(delay * 2.0, 8.0)
+    raise TransientControlPlaneError(
+        f"transient_control_plane_unavailable attempts={attempts} url={url} last_error={last_exc}"
+    )
+
+
+def resolve_redis_host():
+    try:
+        redis_command("PING", host=REDIS_HOST)
+        return REDIS_HOST
+    except Exception:
+        pass
+
+    try:
+        data = fetch_json_with_retry(
+            f"http://{CONSUL_ADDR}/v1/health/service/{REDIS_SERVICE}?passing=true",
+            timeout=5,
+            attempts=CONSUL_RETRY_ATTEMPTS,
+        )
+    except Exception:
+        return REDIS_HOST
+
+    for entry in data or []:
+        service = (entry or {}).get("Service") or {}
+        node = (entry or {}).get("Node") or {}
+        address = service.get("Address") or node.get("Address")
+        if address:
+            return address
+    return REDIS_HOST
+
+
+def read_exact(stream, count):
+    data = b""
+    while len(data) < count:
+        chunk = stream.read(count - len(data))
+        if not chunk:
+            raise RuntimeError("unexpected EOF from Redis")
+        data += chunk
+    return data
+
+
+def parse_redis_value(stream):
+    prefix = stream.read(1)
+    if not prefix:
+        raise RuntimeError("empty Redis response")
+    if prefix == b"+":
+        return stream.readline().decode().rstrip("\r\n")
+    if prefix == b"-":
+        raise RuntimeError(stream.readline().decode().rstrip("\r\n"))
+    if prefix == b":":
+        return int(stream.readline().decode().rstrip("\r\n"))
+    if prefix == b"$":
+        size = int(stream.readline().decode().rstrip("\r\n"))
+        if size == -1:
+            return None
+        data = read_exact(stream, size)
+        read_exact(stream, 2)
+        return data.decode()
+    if prefix == b"*":
+        size = int(stream.readline().decode().rstrip("\r\n"))
+        if size == -1:
+            return None
+        return [parse_redis_value(stream) for _ in range(size)]
+    raise RuntimeError(f"unsupported Redis response prefix: {prefix!r}")
+
+
+def redis_command(*args, host=None):
+    target_host = host or RESOLVED_REDIS_HOST
+    payload = "".join(
+        [f"*{len(args)}\r\n"]
+        + [f"${len(str(arg).encode())}\r\n{arg}\r\n" for arg in args]
+    ).encode()
+    with socket.create_connection((target_host, REDIS_PORT), timeout=5) as sock:
+        stream = sock.makefile("rb")
+        if REDIS_PASSWORD:
+            auth_payload = (
+                f"*2\r\n$4\r\nAUTH\r\n${len(REDIS_PASSWORD.encode())}\r\n{REDIS_PASSWORD}\r\n"
+            ).encode()
+            sock.sendall(auth_payload)
+            parse_redis_value(stream)
+        sock.sendall(payload)
+        return parse_redis_value(stream)
+
+
+def redis_int(command, key):
+    value = redis_command(command, key)
+    if value is None:
+        return 0
+    return int(value)
+
+
+def redis_text(command, key):
+    value = redis_command(command, key)
+    return "" if value is None else str(value)
+
+
+def load_state():
+    raw = redis_text("GET", STATE_KEY).strip()
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+        if isinstance(data, dict):
+            return data
+    except json.JSONDecodeError:
+        log("queue_health_warn msg=state_decode_failed action=reset_state")
+    return {}
+
+
+def save_state(state):
+    redis_command("SET", STATE_KEY, json.dumps(state, sort_keys=True), "EX", "86400")
+
+
+def fetch_alloc_detail(alloc_id):
+    return fetch_json(f"{NOMAD_ADDR}/v1/allocation/{quote(alloc_id)}")
+
+
+def alloc_age_minutes(alloc):
+    reference_ns = alloc.get("ModifyTime") or alloc.get("CreateTime") or 0
+    if not reference_ns:
+        return 0.0
+    return max((time.time_ns() - int(reference_ns)) / 1_000_000_000 / 60.0, 0.0)
+
+
+def short_alloc_id(alloc_id):
+    return str(alloc_id)[:8]
+
+
+def summarize_allocs():
+    allocs = fetch_json(
+        f"{NOMAD_ADDR}/v1/job/{quote(WORKER_JOB)}/allocations?namespace={quote(NAMESPACE)}"
+    )
+    details = []
+    crashloops = []
+    stuck = []
+    running = 0
+
+    for alloc in allocs or []:
+        if alloc.get("TaskGroup") != "worker":
+            continue
+        detail = fetch_alloc_detail(alloc.get("ID", ""))
+        task_state = ((detail.get("TaskStates") or {}).get("worker") or {})
+        client_status = str(detail.get("ClientStatus") or "unknown")
+        worker_state = str(task_state.get("State") or client_status)
+        restarts = int(task_state.get("Restarts") or 0)
+        age_minutes = alloc_age_minutes(detail)
+        alloc_summary = {
+            "id": detail.get("ID", ""),
+            "client_status": client_status,
+            "worker_state": worker_state,
+            "restarts": restarts,
+            "age_minutes": age_minutes,
+        }
+        details.append(alloc_summary)
+
+        if client_status == "running":
+            running += 1
+        if restarts >= CRASHLOOP_THRESHOLD:
+            crashloops.append(alloc_summary)
+        if (
+            client_status in ("pending", "starting")
+            or worker_state in ("pending", "starting")
+        ) and age_minutes >= STUCK_SCHEDULING_MINUTES:
+            stuck.append(alloc_summary)
+
+    return details, running, crashloops, stuck
+
+
+def main():
+    global RESOLVED_REDIS_HOST
+
+    try:
+        RESOLVED_REDIS_HOST = resolve_redis_host()
+        redis_command("PING")
+    except Exception as exc:
+        log(f"queue_health_error msg=redis_unreachable detail={exc}")
+        sys.exit(1)
+
+    try:
+        allocs, workers_running, crashloops, stuck = summarize_allocs()
+    except Exception as exc:
+        log(f"queue_health_error msg=nomad_alloc_inspection_failed detail={exc}")
+        sys.exit(1)
+
+    total_allocs = len(allocs)
+    simulations_depth = redis_int("LLEN", "resque:queue:simulations")
+    failed_depth = redis_int("LLEN", "resque:failed")
+    processed_total = int(redis_text("GET", "resque:stat:processed") or "0")
+    failed_total = int(redis_text("GET", "resque:stat:failed") or "0")
+
+    now = utc_now()
+    state = load_state()
+    previous_ts = int(state.get("ts") or 0)
+    elapsed_seconds = max(now - previous_ts, 0)
+    previous_depth = int(state.get("simulations_depth") or simulations_depth)
+    previous_processed = int(state.get("processed_total") or processed_total)
+    previous_failed = int(state.get("failed_total") or failed_total)
+    depth_delta = simulations_depth - previous_depth
+    processed_delta = processed_total - previous_processed
+    failed_delta = failed_total - previous_failed
+    velocity = 0.0
+    if elapsed_seconds > 0:
+        velocity = depth_delta / (elapsed_seconds / 60.0)
+
+    stagnation_since = state.get("stagnation_since")
+    stagnating = (
+        workers_running > 0
+        and simulations_depth > 0
+        and elapsed_seconds > 0
+        and depth_delta >= 0
+        and processed_delta <= 0
+    )
+
+    if stagnating:
+        if not stagnation_since:
+            stagnation_since = previous_ts or now
+    else:
+        stagnation_since = None
+
+    duration_seconds = max(now - int(stagnation_since or now), 0)
+    duration_minutes = int(duration_seconds / 60)
+
+    save_state(
+        {
+            "failed_total": failed_total,
+            "processed_total": processed_total,
+            "simulations_depth": simulations_depth,
+            "stagnation_since": stagnation_since,
+            "ts": now,
+        }
+    )
+
+    alerting = False
+
+    log(
+        "queue_health_status "
+        f"depth={simulations_depth} failed_depth={failed_depth} "
+        f"processed_total={processed_total} failed_total={failed_total} "
+        f"workers_running={workers_running} total_allocs={total_allocs} "
+        f"velocity={velocity:.2f} processed_delta={processed_delta} failed_delta={failed_delta}"
+    )
+
+    if duration_seconds >= QUEUE_STAGNATION_MINUTES * 60 and stagnating:
+        alerting = True
+        log(
+            "queue_stagnation_alert "
+            f"depth={simulations_depth} velocity={velocity:.2f} "
+            f"duration_min={duration_minutes} threshold_min={QUEUE_STAGNATION_MINUTES} "
+            f"workers_running={workers_running} processed_delta={processed_delta}"
+        )
+
+    if failed_delta > FAILED_DELTA_THRESHOLD and elapsed_seconds > 0:
+        alerting = True
+        window_minutes = max(int(math.ceil(elapsed_seconds / 60.0)), 1)
+        log(
+            "failed_jobs_acceleration_alert "
+            f"delta={failed_delta} threshold={FAILED_DELTA_THRESHOLD} "
+            f"window_min={window_minutes} failed_total={failed_total}"
+        )
+
+    if crashloops:
+        alerting = True
+        crashloop_rate = len(crashloops) / max(total_allocs, 1)
+        log(
+            "worker_crashloop_alert "
+            f"rate={crashloop_rate:.2f} threshold={CRASHLOOP_THRESHOLD} "
+            f"crashloop_allocs={len(crashloops)} total_allocs={total_allocs} "
+            f"allocs={','.join(short_alloc_id(a['id']) for a in crashloops[:10])}"
+        )
+
+    if stuck:
+        alerting = True
+        log(
+            "worker_stuck_scheduling_alert "
+            f"count={len(stuck)} threshold_min={STUCK_SCHEDULING_MINUTES} "
+            f"allocs={','.join(short_alloc_id(a['id']) for a in stuck[:10])} "
+            f"max_age_min={max(a['age_minutes'] for a in stuck):.1f}"
+        )
+
+    log(
+        "queue_health_summary "
+        f"alerting={'true' if alerting else 'false'} "
+        f"depth={simulations_depth} workers_running={workers_running} "
+        f"crashloop_allocs={len(crashloops)} stuck_allocs={len(stuck)}"
+    )
+    sys.exit(2 if alerting else 0)
+
+
+RESOLVED_REDIS_HOST = REDIS_HOST
+
+if __name__ == "__main__":
+    main()
+EOH
+      }
+
+      resources {
+        cpu    = [[ var "stall_watchdog_cpu" . ]]
+        memory = [[ var "stall_watchdog_memory" . ]]
+      }
+    }
+  }
   [[ end ]]
 
   [[ if var "enable_stall_watchdog" . ]]

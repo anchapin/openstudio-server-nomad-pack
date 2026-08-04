@@ -1498,6 +1498,24 @@ variable "queue_sweeper_consul_retry_backoff_seconds" {
   default     = 1
 }
 
+variable "alert_crashloop_threshold" {
+  type        = number
+  description = "Restart-count threshold per worker allocation for queue-health crash-loop alerting. When any worker alloc reaches or exceeds this restart count during a queue-health check cycle, the job emits worker_crashloop_alert and exits non-zero."
+  default     = 5
+}
+
+variable "alert_stuck_scheduling_minutes" {
+  type        = number
+  description = "Minutes a worker allocation may remain in pending or starting state before queue-health alerting emits worker_stuck_scheduling_alert."
+  default     = 5
+}
+
+variable "alert_queue_stagnation_minutes" {
+  type        = number
+  description = "Minutes the simulations queue may remain flat-or-growing with zero processed-job progress while workers are running before queue-health alerting emits queue_stagnation_alert."
+  default     = 10
+}
+
 # ── Stall watchdog ──────────────────────────────────────────────────────────
 variable "enable_stall_watchdog" {
   type        = bool
