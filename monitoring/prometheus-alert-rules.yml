@@ -244,3 +244,123 @@ groups:
           description: |
             The web entrypoint is serving an unusually high 404 ratio.
             Validate router discovery via Consul Catalog and run scripts/check-openstack-ingress.sh.
+
+      # -----------------------------------------------------------------------
+      # TraefikRouterMissing — openstudio-server Consul Catalog router absent
+      # Fires when the openstudio-server@consulcatalog router has had zero
+      # entry-point totals for 5 minutes, indicating the router was never
+      # registered or has been disabled/removed from the Consul Catalog.
+      # This is the primary signal for the 2026-08-03 class of 404 outages.
+      # Runbook: docs/infrastructure/operations-guide.md § Ingress Alerts
+      # -----------------------------------------------------------------------
+      - alert: TraefikRouterMissing
+        expr: |
+          absent(traefik_router_entry_points_total{router=~"openstudio-server(@consulcatalog)?"})
+          or
+          sum(traefik_router_entry_points_total{router=~"openstudio-server(@consulcatalog)?"}) < 1
+        for: 5m
+        labels:
+          severity: critical
+          team: infra
+        annotations:
+          summary: "Traefik router openstudio-server@consulcatalog is missing or has no entry points"
+          description: |
+            The Traefik Consul Catalog router for openstudio-server has been absent
+            for 5+ minutes.  This means Traefik is not serving any route for the
+            OpenStudio web UI — all requests will receive 404.
+
+            Immediate actions:
+              1. Confirm the openstudio-server-web Nomad job is running and
+                 that its Consul service is healthy:
+                   nomad job status openstudio-server-web
+                   consul catalog services | grep openstudio
+              2. Inspect Traefik Consul Catalog endpoint configuration:
+                   ./scripts/validate-traefik-consul-endpoint.sh
+              3. Run the full ingress smoke check:
+                   ./scripts/check-openstack-ingress.sh
+              4. If the Consul provider is misconfigured, re-apply the Traefik
+                 config baseline via: make os-traefik-reconcile
+              5. See docs/infrastructure/operations-guide.md § Ingress Alerts
+                 for the complete runbook.
+
+      # -----------------------------------------------------------------------
+      # TraefikIngressHighErrorRate — sustained 404 surge via router metric
+      # Uses traefik_router_requests_total for router-level granularity
+      # (catches route-specific 404s that do not appear on entrypoint metrics).
+      # -----------------------------------------------------------------------
+      - alert: TraefikIngressHighErrorRate
+        expr: |
+          (
+            sum(rate(traefik_router_requests_total{
+              router=~"openstudio-server(@consulcatalog)?",
+              code="404"
+            }[5m]))
+            /
+            clamp_min(
+              sum(rate(traefik_router_requests_total{
+                router=~"openstudio-server(@consulcatalog)?"
+              }[5m])),
+              0.01
+            )
+          ) > 0.10
+        for: 5m
+        labels:
+          severity: warning
+          team: infra
+        annotations:
+          summary: "OpenStudio Traefik router 404 rate > 10 % for 5 min ({{ $value | humanizePercentage }})"
+          description: |
+            The openstudio-server router is returning HTTP 404 for more than
+            10 % of requests over a 5-minute window.  Common causes:
+              - The route rule no longer matches the request path/host.
+              - A DNS or Host header mismatch between the client and Traefik.
+              - The web service returned 404 upstream (application-level).
+
+            Actions:
+              1. Check current router rules in the Traefik dashboard or API:
+                   curl -s http://<traefik-host>:8080/api/http/routers | jq '.[] | select(.name | contains("openstudio"))'
+              2. Verify the ingress domain and Host header match:
+                   ./scripts/check-openstack-ingress.sh
+              3. Inspect web application logs for upstream 404s:
+                   nomad alloc logs <web-alloc-id> web
+              4. See docs/infrastructure/operations-guide.md § Ingress Alerts.
+
+      # -----------------------------------------------------------------------
+      # TraefikBackendUnhealthy — Traefik cannot reach openstudio-web backend
+      # Uses traefik_service_server_up (v2.x) or traefik_backend_server_up (v1.x).
+      # Falls back to checking that the openstudio-web Consul service has no
+      # healthy instances when Traefik metrics are not yet scraped.
+      # -----------------------------------------------------------------------
+      - alert: TraefikBackendUnhealthy
+        expr: |
+          (
+            sum(traefik_service_server_up{service=~"openstudio-web(@consulcatalog)?"}) < 1
+          )
+          or
+          (
+            absent(traefik_service_server_up{service=~"openstudio-web(@consulcatalog)?"})
+            and
+            sum(nomad_nomad_job_summary_running{exported_job="openstudio-server-web"}) < 1
+          )
+        for: 2m
+        labels:
+          severity: critical
+          team: infra
+        annotations:
+          summary: "Traefik has no healthy backend for openstudio-web"
+          description: |
+            Traefik reports zero healthy servers for the openstudio-web service.
+            Every incoming request will fail with 502/503.
+
+            Actions:
+              1. Check the web job allocation status:
+                   nomad job status openstudio-server-web
+                   nomad alloc status <web-alloc-id>
+              2. Confirm Consul health for openstudio-web:
+                   consul health service openstudio-web
+              3. Inspect web allocation logs:
+                   nomad alloc logs -stderr <web-alloc-id> web
+              4. Restart the web job if allocation is failed/lost:
+                   nomad job stop openstudio-server-web
+                   nomad-pack run --name openstudio-server .
+              5. See docs/infrastructure/operations-guide.md § Ingress Alerts.

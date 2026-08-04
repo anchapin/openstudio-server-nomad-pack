@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added Prometheus ingress alert rules for Traefik route availability, 404 surge, and backend health to `monitoring/prometheus-alert-rules.yml`: `TraefikRouterMissing` (fires when `openstudio-server@consulcatalog` router is absent), `TraefikIngressHighErrorRate` (fires on sustained router-level 404 rate > 10 %), and `TraefikBackendUnhealthy` (fires when Traefik has no healthy server for openstudio-web) (#412).
+- Added "Ingress Alerts" runbook section to `docs/infrastructure/operations-guide.md` with response steps for each new alert and instructions for loading/reloading alert rules in Prometheus (#412).
+- Added item 10 ("Prometheus ingress alerts loaded") to `docs/infrastructure/pre-run-checklist.md` with a validation command and pass criteria (#412).
 - Added `scripts/check-csi-topology.sh` for automated CSI topology pin drift detection: reads `db_csi_topology_node_id` / `redis_csi_topology_node_id` from the running Nomad job spec, compares against the actual CSI volume topology, emits a structured warning and exits non-zero on drift; accepts `--auto-remediate` to re-run `preflight-storage.sh --rebind-stale --emit-topology-vars` and print updated var overrides (#416).
 - Added `--csi-topology-key` flag and `DB_CSI_TOPOLOGY_KEY` / `REDIS_CSI_TOPOLOGY_KEY` env vars to `scripts/preflight-storage.sh` to handle non-hostpath CSI plugins; defaults to `topology.hostpath.csi/node` for backward compatibility; resolved values that are not 36-char hyphenated UUIDs are warned and skipped rather than emitting an unsatisfiable node constraint (#415).
 - Added Node Replacement runbook section to `docs/infrastructure/operations-guide.md` covering CSI topology pin staleness detection and automated/manual remediation (#417).

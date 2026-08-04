@@ -212,6 +212,29 @@ make os-ingress-check
 
 ---
 
+## 10. Prometheus ingress alert rules loaded (recommended for production)
+
+Confirm that the `openstudio_ingress` alert group is loaded in Prometheus so continuous alerting is active for Traefik route and backend health.
+
+```bash
+curl -s http://<prometheus-host>:9090/api/v1/rules | \
+  jq '.data.groups[] | select(.name=="openstudio_ingress") | .rules[].name'
+```
+
+**Pass criteria:** output includes `TraefikRouterMissing`, `TraefikIngressHighErrorRate`, and `TraefikBackendUnhealthy`.
+
+If the rules are missing:
+
+```bash
+# Copy the rules file and reload Prometheus
+scp monitoring/prometheus-alert-rules.yml ubuntu@<prometheus-node>:/etc/prometheus/rules/
+curl -X POST http://<prometheus-host>:9090/-/reload
+```
+
+See `docs/infrastructure/operations-guide.md` § "Ingress Alerts — Loading / reloading alert rules" for full instructions.
+
+---
+
 ## Summary checklist
 
 | # | Check | Command | Pass criteria |
@@ -226,3 +249,4 @@ make os-ingress-check
 | 7 | Stable baseline image correct | `nomad job history openstudio-server-worker` | Stable version = correct image |
 | 8 | Connectivity smoke check | `./scripts/run-batch-verification.sh` | `failed=0` |
 | 9 | Ingress route smoke check (OpenStack) | `./scripts/check-openstack-ingress.sh` | Exit 0 + router enabled + HTTP 2xx/3xx |
+| 10 | Prometheus ingress alerts loaded | `curl .../api/v1/rules` (see above) | `TraefikRouterMissing` + 2 others present |

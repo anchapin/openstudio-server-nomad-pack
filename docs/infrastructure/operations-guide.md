@@ -664,6 +664,153 @@ is needed, making this approach cleaner and more reliable than the Helm equivale
 
 ---
 
+## Ingress Alerts
+
+The `openstudio_ingress` group in `monitoring/prometheus-alert-rules.yml` provides continuous alerting for Traefik route and backend health.  These fire automatically — no manual `check-openstack-ingress.sh` run required.
+
+### Alert: TraefikRouterMissing (critical)
+
+**Meaning:** The `openstudio-server@consulcatalog` Traefik router has been absent or has had no entry points for 5+ minutes.  All requests will return 404.  This is the primary signal for the class of outage that occurred on 2026-08-03.
+
+**Response steps:**
+
+1. Confirm the Nomad web job is running:
+   ```bash
+   nomad job status openstudio-server-web
+   ```
+2. Confirm the Consul service is healthy:
+   ```bash
+   consul catalog services | grep openstudio
+   consul health service openstudio-web
+   ```
+3. Validate Traefik's Consul Catalog endpoint configuration:
+   ```bash
+   ./scripts/validate-traefik-consul-endpoint.sh
+   ```
+4. Run the full ingress smoke check:
+   ```bash
+   ./scripts/check-openstack-ingress.sh
+   # or
+   make os-ingress-check
+   ```
+5. If the Consul provider address is wrong or missing, re-apply the managed Traefik baseline:
+   ```bash
+   make os-traefik-reconcile
+   ```
+6. Verify the router is visible in the Traefik API after reconciliation:
+   ```bash
+   curl -s http://<traefik-host>:8080/api/http/routers | \
+     jq '.[] | select(.name | contains("openstudio"))'
+   ```
+
+---
+
+### Alert: TraefikIngressHighErrorRate (warning)
+
+**Meaning:** The `openstudio-server@consulcatalog` router is returning HTTP 404 for more than 10 % of requests over a 5-minute window.  The route exists but requests are not matching or the application is returning 404 upstream.
+
+**Response steps:**
+
+1. Check the current router rule (Host/Path/PathPrefix):
+   ```bash
+   curl -s http://<traefik-host>:8080/api/http/routers | \
+     jq '.[] | select(.name | contains("openstudio")) | {name,rule,status}'
+   ```
+2. Verify the `ingress_domain` variable matches the domain clients are requesting and the Host header is correct:
+   ```bash
+   ./scripts/check-openstack-ingress.sh
+   ```
+3. Check application-level 404s in web allocation logs:
+   ```bash
+   WEB_ALLOC=$(nomad job allocs -json openstudio-server-web | jq -r '.[0].ID')
+   nomad alloc logs "$WEB_ALLOC" web | grep " 404 "
+   ```
+4. If the path prefix has changed, redeploy with the correct `ingress_path_prefix` variable.
+5. Escalate to `OpenStudioIngressHigh404Ratio` (entrypoint-level, >30 %) if the issue is not router-specific.
+
+---
+
+### Alert: TraefikBackendUnhealthy (critical)
+
+**Meaning:** Traefik's `traefik_service_server_up` metric reports zero healthy servers for `openstudio-web`.  Every routed request will return 502/503.
+
+**Response steps:**
+
+1. Check the web job allocation:
+   ```bash
+   nomad job status openstudio-server-web
+   nomad alloc status <web-alloc-id>
+   ```
+2. Inspect Consul health checks for `openstudio-web`:
+   ```bash
+   consul health service openstudio-web
+   ```
+3. View web allocation logs for startup errors:
+   ```bash
+   nomad alloc logs -stderr <web-alloc-id> web
+   ```
+4. If the allocation is in `failed` or `lost` state, restart the job:
+   ```bash
+   nomad job stop openstudio-server-web
+   nomad-pack run --name openstudio-server .
+   ```
+5. If Consul health checks are failing but the process is running, check the health check endpoint:
+   ```bash
+   curl -v http://<web-node-ip>:<web_port>/
+   ```
+6. After the web job recovers, confirm Traefik detects the backend:
+   ```bash
+   curl -s http://<traefik-host>:8080/api/http/services | \
+     jq '.[] | select(.name | contains("openstudio")) | {name, serverStatus}'
+   ```
+
+---
+
+### Alert: OpenStudioTraefikConfigReloadFailed (critical)
+
+**Meaning:** `traefik_config_last_reload_success == 0` — Traefik failed to apply its most recent configuration.  The running config is stale; routes may be out of date.
+
+**Response steps:**
+
+1. Check Traefik logs for the parse/validation error:
+   ```bash
+   nomad alloc logs -stderr <traefik-alloc-id> traefik | tail -50
+   ```
+2. Validate the static config file:
+   ```bash
+   traefik healthcheck --configFile /etc/traefik/traefik.yml
+   ```
+3. Correct the config and force a reconcile:
+   ```bash
+   make os-traefik-reconcile
+   ```
+
+---
+
+### Loading / reloading alert rules
+
+Alert rules are stored in `monitoring/prometheus-alert-rules.yml`.  To deploy them:
+
+```bash
+# Copy into the Prometheus config directory on the Prometheus node
+scp monitoring/prometheus-alert-rules.yml ubuntu@<prometheus-node>:/etc/prometheus/rules/
+
+# Add to Prometheus rule_files: if not already present:
+# rule_files:
+#   - /etc/prometheus/rules/prometheus-alert-rules.yml
+
+# Reload Prometheus (no restart required):
+curl -X POST http://<prometheus-host>:9090/-/reload
+
+# Confirm rules are loaded:
+curl -s http://<prometheus-host>:9090/api/v1/rules | \
+  jq '.data.groups[] | select(.name=="openstudio_ingress") | .rules[].name'
+```
+
+Expected output includes: `TraefikRouterMissing`, `TraefikIngressHighErrorRate`, `TraefikBackendUnhealthy`, `OpenStudioTraefikConfigReloadFailed`, `OpenStudioIngressNoHealthyBackend`, `OpenStudioIngressHigh404Ratio`.
+
+---
+
 ## Further Reading
 
 - [Nomad Pack documentation](https://developer.hashicorp.com/nomad/tools/nomad-pack)
