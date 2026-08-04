@@ -28,9 +28,9 @@ job "[[ var "job_name" . ]]-traefik" {
       driver = "docker"
 
       config {
-        image = "[[ var "traefik_image" . ]]"
+        image        = "[[ var "traefik_image" . ]]"
         network_mode = "host"
-        ports = ["http", "https", "dashboard"]
+        ports        = ["http", "https", "dashboard"]
         args = [
           "--providers.consulcatalog.endpoint.address=[[ var "traefik_consul_catalog_address" . ]]",
           "--entrypoints.web.address=:[[ var "traefik_http_port" . ]]",
