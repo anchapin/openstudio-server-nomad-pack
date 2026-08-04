@@ -59,7 +59,7 @@ job "[[ var "job_name" . ]]-worker" {
         [[ if var "worker_autoscaling_queue_enabled" . ]]
         check "queue-requeued-depth" {
           source = "prometheus"
-          query  = [[ printf "ceil(clamp_min(sum(max_over_time(%s[%s]) or vector(0)) / %v, 0))" (var "worker_queue_requeued_query" .) (var "worker_queue_query_window" .) (var "worker_queue_requeued_target" .) | toJson ]]
+          query  = [[ printf "ceil(clamp_min((max_over_time(%s[%s]) or vector(0)) / %v, 0))" (var "worker_queue_requeued_query" .) (var "worker_queue_query_window" .) (var "worker_queue_requeued_target" .) | toJson ]]
 
           config {
             prometheus_address = "[[ var "autoscaler_prometheus_address" . ]]"
@@ -70,7 +70,7 @@ job "[[ var "job_name" . ]]-worker" {
 
         check "queue-simulations-depth" {
           source = "prometheus"
-          query  = [[ printf "ceil(clamp_min(sum(max_over_time(%s[%s]) or vector(0)) / %v, 0))" (var "worker_queue_simulations_query" .) (var "worker_queue_query_window" .) (var "worker_queue_simulations_target" .) | toJson ]]
+          query  = [[ printf "ceil(clamp_min((max_over_time(%s[%s]) or vector(0)) / %v, 0))" (var "worker_queue_simulations_query" .) (var "worker_queue_query_window" .) (var "worker_queue_simulations_target" .) | toJson ]]
 
           config {
             prometheus_address = "[[ var "autoscaler_prometheus_address" . ]]"
