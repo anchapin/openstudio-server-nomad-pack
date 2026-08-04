@@ -199,6 +199,203 @@ termination, protect critical tasks with Nomad controls such as:
 
 ---
 
+## Worker Effectiveness Monitoring
+
+> **Incident lesson (2026-08-04):** worker count alone is not a health signal. A cluster can show thousands of `running` workers while many are crash-looping or stuck before they complete useful work.
+
+Use the following categories instead of a single worker-count panel:
+
+| Category | Nomad detection | Resque detection | Prometheus / logs |
+|---|---|---|---|
+| **Starting / scheduling** | `nomad job allocs <job_name>-worker` shows allocs in `pending` / `starting` / `queued` | N/A | `sum(nomad_nomad_job_summary_queued{job="<job_name>-worker"})` when `prometheus_scrape_nomad_enabled = true` |
+| **Crash-looping** | `nomad alloc status <alloc_id>` shows repeated restart events or high `Restarts` | Usually absent from `/resque/working` because the worker never stabilizes | Nomad scrape can show elevated `failed` ratio, but restart count is best confirmed in Nomad UI / CLI |
+| **Initialization-blocked** | Alloc is `running`, but task has no recent useful log progress | `/resque/working` shows the same data point IDs for a long time while processed completions stay flat | `queue_divergence_alert`, `stall_watchdog_alert`, and low completion throughput |
+| **Actively processing** | Alloc is `running` and stable | `/resque/working` has active workers and processed counter is increasing | `working_count - blocked_count` in Grafana; use throughput panel to confirm forward progress |
+| **Recently completed** | N/A | Resque processed counter is increasing | `delta(redis_key_value{key="resque:stat:processed"}[5m]) / 5` |
+
+### Nomad CLI checks
+
+List current worker alloc state, restart count, and task state:
+
+```bash
+nomad job allocs -json <job_name>-worker | jq -r '
+  .[] | [
+    .ID[0:8],
+    .ClientStatus,
+    (.TaskStates.worker.State // "n/a"),
+    (.TaskStates.worker.Restarts // 0)
+  ] | @tsv'
+```
+
+Interpretation:
+
+- `pending`, `starting`, or `queued` allocs = **starting / scheduling**
+- `running` with `Restarts > 0` climbing rapidly = **crash-looping**
+- `running` with `Restarts = 0` is only a liveness signal; it does **not** prove useful work
+
+For a suspicious alloc, inspect recent task events:
+
+```bash
+nomad alloc status <alloc_id>
+```
+
+Look for:
+
+- repeated `Restart Signaled` / `Task restarting` events → crash-loop
+- long gaps with no new events while the alloc remains `running` → likely initialization-blocked or wedged
+
+### Resque dashboard checks
+
+Use the web UI's Resque dashboard to separate "alive" workers from "useful" workers:
+
+- **`/resque/working`**: current workers holding jobs. If the same data point IDs remain here for longer than your stall threshold (default pack watchdog threshold: `stall_watchdog_max_stall_seconds = 1800`), treat them as **initialization-blocked** until proven otherwise.
+- **`/resque/stats`** (or the counters at the top of the Resque UI): `Processed` should keep increasing during healthy steady-state execution.
+- **`/resque/failed`**: rising failure count plus stable or falling processed count usually indicates crash-looping or bad worker rollout.
+
+Fast CLI equivalents:
+
+```bash
+redis-cli -h <redis-host> get resque:stat:processed
+redis-cli -h <redis-host> get resque:stat:failed
+```
+
+Sample the counters twice, five minutes apart:
+
+- `processed` rising → workers are completing useful work
+- `processed` flat while `/resque/working` stays non-empty → likely **initialization-blocked**
+- `failed` rising quickly after new allocations start → likely **crash-looping** or bad startup configuration
+
+### Structured log metrics available today
+
+The pack does **not** currently ship a standalone `openstudio-queue-health-alert` job. The in-pack structured worker-effectiveness signals come from the consolidated `queue-sweeper` job in `packs/openstudio-server/templates/queue-sweeper.nomad.tpl` and are suitable for Vector/Loki/Grafana log panels:
+
+- `stall_watchdog_status completed=<n> started=<n> total=<n>`
+- `stall_watchdog_sample_summary checked=<n> stalled=<n>`
+- `stall_watchdog_alert stalled_count=<n> restart_allocs=<true|false>`
+- `queue_divergence_alert stale_started=<n> threshold=<seconds>s action=<restart_workers|alert_only>`
+- `stall_watchdog_summary stalled_dps=<n> allocs_stopped=<n>`
+- `queue_sweeper_lock_summary found=<n> cleared=<n>`
+- `queue_sweeper_replay_summary replayed=<n> skipped=<n>`
+- `queue_sweeper_summary locks_cleared=<n> replayed=<n>`
+
+Recommended log-derived panels:
+
+- **Blocked workers / stalled data points**: count `queue_divergence_alert` and graph `stale_started`
+- **Auto-recovery activity**: graph `stall_watchdog_summary.allocs_stopped`
+- **Queue replay rate**: graph `queue_sweeper_replay_summary.replayed`
+
+### Prometheus queries (`prometheus_enabled = true`)
+
+The in-pack `prometheus.nomad.tpl` deploys a Redis exporter sidecar. It now scrapes:
+
+- queue depths: `resque:queue:simulations`, `resque:queue:requeued`, `resque:failed`
+- Resque counters: `resque:stat:processed`, `resque:stat:failed`
+
+That makes queue throughput visible without any app-code change.
+
+#### Queue throughput / effectiveness
+
+Completions per minute:
+
+```promql
+clamp_min(sum(delta(redis_key_value{key="resque:stat:processed"}[5m])), 0) / 5
+```
+
+Failures per minute:
+
+```promql
+clamp_min(sum(delta(redis_key_value{key="resque:stat:failed"}[5m])), 0) / 5
+```
+
+Simulation queue depth:
+
+```promql
+sum(redis_key_size{key="resque:queue:simulations"}) or vector(0)
+```
+
+Requeued queue depth:
+
+```promql
+sum(redis_key_size{key="resque:queue:requeued"}) or vector(0)
+```
+
+Queue velocity (positive = backlog growing, negative = backlog draining):
+
+```promql
+(sum(delta(redis_key_size{key="resque:queue:simulations"}[10m])) or vector(0)) / 10
+```
+
+#### Nomad worker state (requires `prometheus_scrape_nomad_enabled = true`)
+
+Workers waiting to schedule / start:
+
+```promql
+sum(nomad_nomad_job_summary_queued{job="<job_name>-worker"})
+```
+
+Current failed-alloc ratio (best lightweight proxy for startup failure pressure with the built-in Nomad scrape):
+
+```promql
+sum(nomad_nomad_job_summary_failed{job="<job_name>-worker"})
+/
+clamp_min(
+  sum(nomad_nomad_job_summary_running{job="<job_name>-worker"})
+  + sum(nomad_nomad_job_summary_failed{job="<job_name>-worker"})
+  + sum(nomad_nomad_job_summary_queued{job="<job_name>-worker"}),
+  1
+)
+```
+
+> **Note:** the in-pack Prometheus scrape exposes job-summary gauges, not per-allocation restart counters. Use `nomad alloc status` for exact crash-loop confirmation.
+
+#### Interpreting the combined signals
+
+- **High queued allocs + low throughput** → scheduler bottleneck or startup failure
+- **Low queued allocs + high failed ratio** → crash-looping worker rollout
+- **Healthy running count + flat throughput + non-empty `/resque/working`** → initialization-blocked workers
+- **Negative queue velocity + rising completions/min** → genuinely healthy worker fleet
+
+### Grafana panel starter snippet
+
+Use a single dashboard row named **Worker Effectiveness** with these panels:
+
+```json
+[
+  {
+    "title": "Completions / min",
+    "type": "timeseries",
+    "targets": [
+      { "expr": "clamp_min(sum(delta(redis_key_value{key=\"resque:stat:processed\"}[5m])), 0) / 5" }
+    ]
+  },
+  {
+    "title": "Queue Velocity (simulations / min)",
+    "type": "timeseries",
+    "targets": [
+      { "expr": "(sum(delta(redis_key_size{key=\"resque:queue:simulations\"}[10m])) or vector(0)) / 10" }
+    ]
+  },
+  {
+    "title": "Workers Waiting to Start",
+    "type": "stat",
+    "targets": [
+      { "expr": "sum(nomad_nomad_job_summary_queued{job=\"<job_name>-worker\"})" }
+    ]
+  },
+  {
+    "title": "Failed Alloc Ratio",
+    "type": "stat",
+    "targets": [
+      { "expr": "sum(nomad_nomad_job_summary_failed{job=\"<job_name>-worker\"}) / clamp_min(sum(nomad_nomad_job_summary_running{job=\"<job_name>-worker\"}) + sum(nomad_nomad_job_summary_failed{job=\"<job_name>-worker\"}) + sum(nomad_nomad_job_summary_queued{job=\"<job_name>-worker\"}), 1)" }
+    ]
+  }
+]
+```
+
+Add a companion Loki / log panel for `queue_divergence_alert` or `stall_watchdog_alert` so operators can immediately tell the difference between "many workers exist" and "many workers are actually making progress."
+
+---
+
 ## Quick-Reference: Pack Variables
 
 | Variable | Default | What it does |

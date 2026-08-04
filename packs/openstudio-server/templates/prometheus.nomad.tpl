@@ -27,7 +27,7 @@ job "[[ var "job_name" . ]]-prometheus" {
         image        = "[[ var "redis_exporter_image" . ]]"
         force_pull   = true
         network_mode = "host"
-        args         = ["--check-keys=resque:queue:simulations,resque:queue:requeued,resque:failed"]
+        args         = ["--check-single-keys=resque:queue:simulations,resque:queue:requeued,resque:failed,resque:stat:processed,resque:stat:failed"]
       }
 
       template {
