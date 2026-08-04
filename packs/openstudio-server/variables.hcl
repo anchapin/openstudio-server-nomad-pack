@@ -457,6 +457,24 @@ variable "worker_kill_timeout" {
   default     = "5200s"
 }
 
+variable "worker_restart_attempts" {
+  type        = number
+  description = "Number of times Nomad will restart a failed worker task within worker_restart_interval before marking the allocation permanently failed. Workers killed by OOM (exit 137) are retried up to this limit, allowing the worker to pick up a different simulation instead of immediately marking the deployment unhealthy."
+  default     = 3
+}
+
+variable "worker_restart_delay" {
+  type        = string
+  description = "Time Nomad waits between worker task restart attempts. A short delay (15s) is sufficient since the worker picks up from the Redis queue on each start."
+  default     = "15s"
+}
+
+variable "worker_restart_interval" {
+  type        = string
+  description = "Rolling window over which worker_restart_attempts is counted. Restarts older than this interval do not count against the limit."
+  default     = "5m"
+}
+
 variable "worker_autoscaling_enabled" {
   type        = bool
   description = "Enable Nomad Autoscaler integration for the worker task group. When false (default), the scaling block is omitted and worker_count controls the fixed allocation count."
