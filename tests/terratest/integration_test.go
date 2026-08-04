@@ -267,10 +267,14 @@ func TestWorkerStartupDNSResolution(t *testing.T) {
 	require.True(t, ok, "worker.nomad was not present in render output")
 	require.NotEmpty(t, strings.TrimSpace(workerSpec), "worker.nomad render output should not be empty")
 
-	assert.Contains(t, workerSpec, `task "wait-for-deps"`)
+	assert.Contains(t, workerSpec, `task "preflight"`)
 	assert.Contains(t, workerSpec, `http://$CONSUL_ADDR/v1/health/service/$service?passing=true`)
-	assert.Contains(t, workerSpec, `check_service "openstudio-db"`)
-	assert.Contains(t, workerSpec, `check_service "openstudio-redis"`)
+	assert.Contains(t, workerSpec, `http://$CONSUL_ADDR/v1/catalog/service/$service`)
+	assert.Contains(t, workerSpec, `check_service "openstudio-db" "27017"`)
+	assert.Contains(t, workerSpec, `check_service "openstudio-redis" "6379"`)
+	assert.Contains(t, workerSpec, `check_service "openstudio-rserve" "6311"`)
+	assert.Contains(t, workerSpec, `preflight_check service=$service status=pass reason=dns_and_tcp_ok`)
+	assert.Contains(t, workerSpec, `preflight_check service=$service status=fail reason=$last_reason`)
 
 	assert.Contains(t, workerSpec, `{{ range $svc := service "openstudio-db" }}{{ $svc.Address }} db`)
 	assert.Contains(t, workerSpec, `{{ range $svc := service "openstudio-redis" }}{{ $svc.Address }} queue`)

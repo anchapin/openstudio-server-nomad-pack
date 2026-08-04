@@ -88,7 +88,10 @@
 | `wait_for_deps_sleep_seconds` | `number` | `3` | Sleep duration (seconds) between bounded wait-for-deps retry attempts. |
 | `wait_for_deps_connect_timeout_seconds` | `number` | `2` | TCP connect timeout (seconds) for each bounded wait-for-deps dependency check attempt. |
 | `web_wait_for_deps_proceed_on_timeout` | `bool` | `false` | If true, web and web-background wait-for-deps timeouts log and continue startup. If false (default), timeout fails prestart so Nomad retries explicitly. |
-| `worker_wait_for_deps_proceed_on_timeout` | `bool` | `true` | If true, worker wait-for-deps timeouts log and continue startup (default). If false, timeout fails prestart so Nomad retries explicitly. |
+| `worker_wait_for_deps_proceed_on_timeout` | `bool` | `false` | If true, worker dependency preflight timeouts log and continue startup. If false (default), the preflight task exits non-zero so Nomad surfaces the failed dependency explicitly. |
+| `worker_preflight_max_attempts` | `number` | `5` | Maximum number of worker dependency preflight attempts per service before failing the allocation. Defaults keep the bounded retry window below 30 seconds. |
+| `worker_preflight_sleep_seconds` | `number` | `2` | Sleep duration (seconds) between worker dependency preflight attempts. |
+| `worker_preflight_connect_timeout_seconds` | `number` | `2` | HTTP and TCP connect timeout (seconds) for each worker dependency preflight attempt. |
 | `worker_priority` | `number` | `40` | Nomad job priority for calculation workers (Nomad scale 1–100). Must always be less than web_priority so the web UI is scheduled preferentially during resource contention. Mirrors the Kubernetes low-priority PriorityClass (value 10000) used by the Helm chart. WARNING: do not set this higher than or equal to web_priority. |
 | `worker_queues` | `string` | `"requeued,simulations"` | Comma-separated queue list processed by worker tasks. |
 | `worker_process_count` | `string` | `"1"` | COUNT environment variable passed to worker containers. Also injected into web and web-background as OS_SERVER_NUMBER_OF_WORKERS so analyses can enqueue simulation datapoints. |

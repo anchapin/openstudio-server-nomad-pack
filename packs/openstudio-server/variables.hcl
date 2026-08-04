@@ -501,8 +501,26 @@ variable "web_wait_for_deps_proceed_on_timeout" {
 
 variable "worker_wait_for_deps_proceed_on_timeout" {
   type        = bool
-  description = "If true, worker wait-for-deps timeouts log and continue startup (default). If false, timeout fails prestart so Nomad retries explicitly."
-  default     = true
+  description = "If true, worker dependency preflight timeouts log and continue startup. If false (default), the preflight task exits non-zero so Nomad surfaces the failed dependency explicitly."
+  default     = false
+}
+
+variable "worker_preflight_max_attempts" {
+  type        = number
+  description = "Maximum number of worker dependency preflight attempts per service before failing the allocation. Defaults keep the bounded retry window below 30 seconds."
+  default     = 5
+}
+
+variable "worker_preflight_sleep_seconds" {
+  type        = number
+  description = "Sleep duration (seconds) between worker dependency preflight attempts."
+  default     = 2
+}
+
+variable "worker_preflight_connect_timeout_seconds" {
+  type        = number
+  description = "HTTP and TCP connect timeout (seconds) for each worker dependency preflight attempt."
+  default     = 2
 }
 
 variable "worker_priority" {

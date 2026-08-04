@@ -107,7 +107,7 @@ job "[[ var "job_name" . ]]-worker" {
     [[ template "openstudio_server.arch_constraint" . ]]
     [[ end ]]
 
-    [[ template "openstudio_server.wait_for_deps_task" (dict "root" . "include_rserve" false "proceed_on_timeout" (var "worker_wait_for_deps_proceed_on_timeout" .)) ]]
+    [[ template "openstudio_server.worker_preflight_task" (dict "root" .) ]]
 
     task "worker" {
       driver = "docker"
