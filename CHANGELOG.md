@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Added queue-health alerting for simulations queue stagnation, failed-job acceleration, worker crash-loop restart thresholds, and stuck worker scheduling, plus alert-routing guidance for Prometheus/Alertmanager, Vector/Loki, and Nomad periodic job failures (#437).
 - Added a pack-managed `queue-health-alert.nomad.tpl` periodic batch job, new queue-health alert threshold variables, and on-call routing documentation for Nomad/Vector→Slack/PagerDuty/email integration so the ad hoc production queue alert can be replaced with a maintained operational asset (#438).
+- Added worker startup DNS/service resolution render guardrails in `scripts/test_worker_startup_dns_resolution.sh`, plus a matching Terratest assertion, to catch Consul-based worker dependency resolution regressions before merge (#447).
 - Added `docs/infrastructure/runbooks/queue-stall.md`, linked it from the operations
   guide, and added `scripts/drain-workers.sh` for batched worker allocation drains during
   queue-stall recovery (#444).
