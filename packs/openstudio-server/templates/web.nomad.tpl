@@ -580,6 +580,15 @@ EOT
     [[ template "affinities" (var "worker_affinities" .) ]]
     [[ template "spreads" (var "worker_spreads" .) ]]
 
+    # Per-group update stanza: the worker group inherits the web job's update
+    # stanza when consolidated into web.nomad.tpl, whose progress_deadline
+    # (web_update_progress_deadline, default 10m) is shorter than
+    # worker_kill_timeout (default 5200s). Nomad rejects a task whose
+    # kill_timeout exceeds the group progress_deadline, so the worker group
+    # restores its own update policy (progress_deadline default 2h).
+    # Requires Nomad >= 1.7.0 (per-group update stanzas).
+    [[ template "openstudio_server.update_block" (dict "max_parallel" (var "worker_update_max_parallel" .) "health_check" (var "worker_update_health_check" .) "min_healthy_time" (var "worker_update_min_healthy_time" .) "healthy_deadline" (var "worker_update_healthy_deadline" .) "progress_deadline" (var "worker_update_progress_deadline" .) "auto_revert" (var "worker_update_auto_revert" .)) ]]
+
     [[ if var "worker_autoscaling_enabled" . ]]
     scaling {
       enabled = true
