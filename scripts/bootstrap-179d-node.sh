@@ -290,4 +290,36 @@ systemctl restart docker.service
 systemctl restart consul.service
 systemctl restart nomad.service
 
+# ── Consul DNS forwarding ─────────────────────────────────────────────────────
+# Configure systemd-resolved (or dnsmasq) to forward .consul queries to the
+# local Consul agent on port 8600. This allows pack variables like
+# autoscaler_nomad_address and autoscaler_prometheus_address to resolve via
+# Consul DNS (e.g. nomad.service.consul) without hard-coded IP addresses.
+log "Configuring Consul DNS forwarding ..."
+if systemctl is-active --quiet systemd-resolved 2>/dev/null; then
+  mkdir -p /etc/systemd/resolved.conf.d
+  cat >/etc/systemd/resolved.conf.d/consul.conf <<'EOF'
+[Resolve]
+# Forward all .consul queries to the local Consul agent DNS port.
+DNS=127.0.0.1:8600
+DNSSEC=false
+Domains=~consul
+EOF
+  systemctl restart systemd-resolved
+  log "systemd-resolved configured for .consul stub zone."
+else
+  # dnsmasq fallback for distros without systemd-resolved
+  if ! command -v dnsmasq >/dev/null 2>&1; then
+    DEBIAN_FRONTEND=noninteractive apt-get install -y dnsmasq
+  fi
+  mkdir -p /etc/dnsmasq.d
+  cat >/etc/dnsmasq.d/consul.conf <<'EOF'
+# Forward .consul queries to the local Consul agent DNS port.
+server=/consul/127.0.0.1#8600
+EOF
+  systemctl enable --now dnsmasq
+  systemctl restart dnsmasq
+  log "dnsmasq configured for .consul forwarding."
+fi
+
 echo "Bootstrap complete: $(hostname) (${ROLE}) @ ${PRIVATE_IP}"

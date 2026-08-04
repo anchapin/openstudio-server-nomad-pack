@@ -68,12 +68,6 @@ prometheus_scrape_nomad_enabled = true
 # prometheus_nomad_scrape_target defaults to "nomad.service.consul:4646";
 # override in openstack-site-local.hcl if Consul DNS is unavailable.
 
-# Scrape Nomad telemetry for worker alloc failure rate and sentinel alerts.
-# Requires Nomad server config: telemetry { prometheus_metrics = true }
-prometheus_scrape_nomad_enabled = true
-# prometheus_nomad_scrape_target defaults to "nomad.service.consul:4646";
-# override in openstack-site-local.hcl if Consul DNS is unavailable.
-
 # ---------- Web ----------
 # web_count MUST remain 1 — NFS does not provide distributed file-locking.
 # See docs/infrastructure/operations-guide.md §'Web Replica Constraint'.
@@ -295,7 +289,7 @@ worker_min_replicas              = 2
 worker_max_replicas              = 5500
 
 # 60 % CPU target: conservative threshold to trigger scale-out before iowait spikes.
-worker_cpu_target_utilization = 60
+# worker_cpu_target_utilization = 60
 
 # Queue-depth target: ceil(queue_depth / target) = desired workers, clamped to [min, max].
 # Formula: choose target ≤ ceil(expected_peak_queue / worker_max_replicas)
