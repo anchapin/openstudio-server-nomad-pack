@@ -1,3 +1,4 @@
+[[ if var "enable_infra_setup" . -]]
 # infra-setup.nomad
 #
 # One-time system job that configures all Nomad clients for openstudio-server-nomad-pack testing:
@@ -12,7 +13,6 @@
 # Teardown when done testing:
 #   nomad stop -purge infra-setup
 
-[[ if var "enable_infra_setup" . ]]
 job "[[ var "job_name" . ]]-infra-setup" {
   region      = "[[ var "region" . ]]"
   datacenters = [[ var "datacenters" . | toJson ]]
