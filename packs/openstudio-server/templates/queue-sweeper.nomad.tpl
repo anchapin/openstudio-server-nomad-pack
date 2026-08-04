@@ -385,13 +385,13 @@ def redis_command(*args, host=None):
     target_host = host or RESOLVED_REDIS_HOST
     payload = "".join(
         [f"*{len(args)}\r\n"]
-        + [f"${len(str(arg).encode())}\r\n{arg}\r\n" for arg in args]
+        + [f"$${len(str(arg).encode())}\r\n{arg}\r\n" for arg in args]
     ).encode()
     with socket.create_connection((target_host, REDIS_PORT), timeout=5) as sock:
         stream = sock.makefile("rb")
         if REDIS_PASSWORD:
             auth_payload = (
-                f"*2\r\n$4\r\nAUTH\r\n${len(REDIS_PASSWORD.encode())}\r\n{REDIS_PASSWORD}\r\n"
+                f"*2\r\n$4\r\nAUTH\r\n$${len(REDIS_PASSWORD.encode())}\r\n{REDIS_PASSWORD}\r\n"
             ).encode()
             sock.sendall(auth_payload)
             parse_redis_value(stream)
