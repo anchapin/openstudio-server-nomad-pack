@@ -27,7 +27,7 @@ Check available versions at:
 Copy the template from the repository root:
 
 ```bash
-cp user-overrides.hcl my-deployment.hcl
+cp user-overrides.hcl.example my-deployment.hcl
 ```
 
 Open `my-deployment.hcl` and uncomment the four image lines, setting your

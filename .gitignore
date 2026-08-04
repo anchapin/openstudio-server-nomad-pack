@@ -28,3 +28,8 @@ benchmark-results/
 # Copy from examples/advanced/openstack-site-local.hcl.template to create this file
 openstack-site-local.hcl
 examples/advanced/openstack-site-local.hcl
+
+# Local state and variable overrides
+user-overrides.hcl
+*.override.hcl
+

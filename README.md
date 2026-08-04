@@ -10,9 +10,9 @@ You want to run building energy simulations. You don't need to understand
 Nomad job specs or load balancing — just set your OpenStudio version and go.
 
 **→ [Quickstart: Deploy in 3 Steps](./docs/modelers/quickstart.md)**  
-**→ [Submit Simulations (OSW, PAT, REST API)](./docs/modelers/submitting-osw-jobs.md)**
+**→ [Submit Simulations (OSW, PAT, REST API)](./docs/modelers/submitting-osw-jobs.md)
 
-The only file you need to edit is [`user-overrides.hcl`](./user-overrides.hcl)
+The only file you need to edit is [`user-overrides.hcl.example`](./user-overrides.hcl.example)
 at the root of this repository.
 
 ---
@@ -33,7 +33,7 @@ Key starting points:
 | [OpenStack Staged Rollout](./docs/infrastructure/openstack-staged-rollout-runbook.md) | 4-stage canary → full ramp with gate criteria |
 | [Vault Setup](./docs/infrastructure/vault-policies.md) | KV v2 paths, policy templates, token TTL guidance |
 | [ACL Policies](./docs/infrastructure/acl-policies.md) | Operator, read-only, and CI/CD role policies |
-| [Storage](./docs/infrastructure/storage.md) | CSI plugins, host volumes, NFS, permissions |
+| [Storage](./docs/infrastructure/storage.md) | CSI plugins, host volumes, permissions, and teardown |
 
 For supported version combinations, see **[docs/compatibility.md](./docs/compatibility.md)**.
 
@@ -55,7 +55,7 @@ Quick deploy (assumes Nomad and Consul are already running):
 
 ```bash
 # Copy the modeler overrides template and set your OpenStudio version
-cp user-overrides.hcl my-deployment.hcl
+cp user-overrides.hcl.example my-deployment.hcl
 # Edit my-deployment.hcl — uncomment and set the image version lines
 
 # Deploy
