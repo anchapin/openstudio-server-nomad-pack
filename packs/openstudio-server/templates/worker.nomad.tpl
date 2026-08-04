@@ -273,7 +273,7 @@ EOT
           name     = "worker-ready"
           type     = "script"
           command  = "/bin/sh"
-          args     = ["-c", "[[ var "worker_health_check_command" . ]]"]
+          args     = ["-c", [[ var "worker_health_check_command" . | toJson ]]]
           interval = "30s"
           timeout  = "5s"
         }
