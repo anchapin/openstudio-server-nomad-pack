@@ -73,7 +73,7 @@ diff docs/variables.md docs/variables.generated.md
 
 - `nomad-pack render` emits multiple Nomad jobs from `packs/openstudio-server/templates/*.nomad.tpl`.
 - The runtime stack is split into jobs: `<job_name>-web`, `<job_name>-db`, `<job_name>-redis`, `<job_name>-rserve`.
-- `worker` is consolidated into `web.nomad.tpl` as a task group; `worker.nomad.tpl` is an architecture marker file.
+- `worker` is a separate Nomad job rendered from `worker.nomad.tpl` with `priority = worker_priority` (default 40), lower than `web_priority` (default 80), so the scheduler evicts workers before the web UI during resource contention.
 - Service discovery and cross-job connectivity are done through **Consul** (`*.service.consul`).
 
 ### Template layout and conditional jobs

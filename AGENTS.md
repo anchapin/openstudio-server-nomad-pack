@@ -114,8 +114,8 @@ Each Nomad job is a separate `.nomad.tpl` file under `packs/openstudio-server/te
 | Template | Nomad job rendered | Conditional |
 |---|---|---|
 | `openstudio-server.nomad.tpl` | Architecture marker file (intentionally renders no job) | always |
-| `web.nomad.tpl` | `<job_name>-web` (task groups: `web`, `web-background`, `worker`) | always |
-| `worker.nomad.tpl` | Architecture marker file (consolidated into `web.nomad.tpl`) | always |
+| `web.nomad.tpl` | `<job_name>-web` (task groups: `web`, `web-background`) | always |
+| `worker.nomad.tpl` | `<job_name>-worker` | `batch_engine = "internal"` (default) |
 | `db.nomad.tpl` | `<job_name>-db` (MongoDB) | always |
 | `redis.nomad.tpl` | `<job_name>-redis` | always |
 | `rserve.nomad.tpl` | `<job_name>-rserve` | always |
