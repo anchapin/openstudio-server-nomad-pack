@@ -68,11 +68,11 @@ The pack renders a dedicated Nomad job for each service component:
 
 | Job | Template | Conditional |
 |---|---|---|
-| `<job_name>-web` | `web.nomad.tpl` | always |
-| `<job_name>-worker` | `worker.nomad.tpl` | always |
+| `<job_name>-web` | `web.nomad.tpl` | always (task groups: `web`, `web-background`, `worker`) |
 | `<job_name>-db` | `db.nomad.tpl` | always (MongoDB, Consul: `openstudio-db`) |
 | `<job_name>-redis` | `redis.nomad.tpl` | always (Consul: `openstudio-redis`) |
 | `<job_name>-rserve` | `rserve.nomad.tpl` | always (Consul: `openstudio-rserve`) |
+| `<job_name>-queue-sweeper` | `queue-sweeper.nomad.tpl` | `enable_queue_sweeper` or `enable_stall_watchdog` (task groups: `queue-sweeper`, `stall-watchdog`) |
 | `<job_name>-system-hooks` | `system-hooks.nomad.tpl` | `enable_image_prepull = true` (default) |
 | `<job_name>-state-backup` | `state-backup.nomad.tpl` | `backup_enabled = false` (default; set `true` when backup storage is provisioned) |
 | `<job_name>-state-restore` | `state-restore.nomad.tpl` | `restore_enabled = false` (default; set `true` when restore workflows are required) |
@@ -81,7 +81,7 @@ The pack renders a dedicated Nomad job for each service component:
 | `<job_name>-batch-verify` | `batch-verification.nomad.tpl` | `enable_batch_verification = true` |
 | `<job_name>-traefik` | `traefik.nomad.tpl` | `deploy_traefik = true` |
 
-`templates/openstudio-server.nomad.tpl` is an architecture marker file that renders no job — it documents the split-job design.
+`templates/openstudio-server.nomad.tpl` is an architecture marker file that renders no job — it documents the consolidated template design.
 
 ## Deployment Checklist (Preflight)
 
@@ -313,12 +313,14 @@ redis_affinities = [
 
 ## Included Job Templates
 
-- `templates/openstudio-server.nomad.tpl`: **Architecture marker file — renders no job.** Documents the split-job design; the previous monolithic job has been removed (fix #223).
-- `templates/web.nomad.tpl`: Web application service (`<job_name>-web`, Consul: `openstudio-web`) on `web_port`.
-- `templates/worker.nomad.tpl`: Resque worker job (`<job_name>-worker`) with rolling deploys, Nomad Autoscaler scaling, and optional Vector sidecar.
+- `templates/openstudio-server.nomad.tpl`: **Architecture marker file — renders no job.** Documents the consolidated template design (fix #223, #405).
+- `templates/web.nomad.tpl`: Unified web application & worker service (`<job_name>-web`, Consul: `openstudio-web`) containing `web`, `web-background`, and `worker` task groups.
+- `templates/worker.nomad.tpl`: **Architecture marker file — renders no job.** Documents worker consolidation into `web.nomad.tpl` (fix #405).
 - `templates/db.nomad.tpl`: MongoDB service (`<job_name>-db`, Consul: `openstudio-db`) on port `27017`.
 - `templates/redis.nomad.tpl`: Redis cache service (`<job_name>-redis`, Consul: `openstudio-redis`) on port `6379`.
 - `templates/rserve.nomad.tpl`: Rserve service (`<job_name>-rserve`, Consul: `openstudio-rserve`) on port `6311`.
+- `templates/queue-sweeper.nomad.tpl`: Periodic background maintenance job (`<job_name>-queue-sweeper`) containing `queue-sweeper` and `stall-watchdog` task groups.
+- `templates/stall-watchdog.nomad.tpl`: **Architecture marker file — renders no job.** Documents stall watchdog consolidation into `queue-sweeper.nomad.tpl` (fix #405).
 - `templates/system-hooks.nomad.tpl`: System job that pre-pulls all service images on every eligible node (`enable_image_prepull = true`, default).
 - `templates/state-backup.nomad.tpl`: Periodic batch job (`<job_name>-state-backup`) that runs `mongodump` + Redis backup on `backup_cron` schedule (`backup_enabled = false` by default).
 - `templates/state-restore.nomad.tpl`: On-demand parameterized batch job (`<job_name>-state-restore`) for manual restore dispatch (`restore_enabled = false` by default).

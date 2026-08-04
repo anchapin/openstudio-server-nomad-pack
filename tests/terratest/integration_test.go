@@ -162,7 +162,9 @@ func TestNomadPackIntegrationScenarios(t *testing.T) {
 			switch sc.name {
 			case "default":
 				assert.Contains(t, output, `job "openstudio-server-web"`)
-				assert.Contains(t, output, `job "openstudio-server-worker"`)
+				assert.Contains(t, output, `group "web"`)
+				assert.Contains(t, output, `group "web-background"`)
+				assert.Contains(t, output, `group "worker"`)
 				assert.Contains(t, output, `job "openstudio-server-db"`)
 				assert.Contains(t, output, `job "openstudio-server-redis"`)
 				assert.Contains(t, output, `job "openstudio-server-rserve"`)
