@@ -53,6 +53,8 @@ web_args = [
   "-c",
   "mkdir -p /srv/www && printf 'ok\\n' > /srv/www/status && exec busybox httpd -f -p 8080 -h /srv/www",
 ]
+web_port           = 8888
+web_container_port = 8080
 
 web_background_command = "/bin/sh"
 web_background_args = [

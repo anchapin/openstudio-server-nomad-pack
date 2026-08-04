@@ -228,6 +228,7 @@ set -eu
 MAX_ATTEMPTS=[[ var "web_worker_runtime_service_resolution_attempts" . ]]
 BASE_DELAY=[[ var "web_worker_runtime_service_resolution_backoff_seconds" . ]]
 RUNTIME_RESOLUTION_ENABLED=[[ var "web_worker_runtime_service_resolution_enabled" . ]]
+CONSUL_ADDR=[[ var "consul_address" . ]]
 
 if [ "$RUNTIME_RESOLUTION_ENABLED" != "true" ]; then
   echo "worker_runtime_resolution_disabled legacy_template_watch_mode_removed=true" >&2
@@ -235,12 +236,12 @@ if [ "$RUNTIME_RESOLUTION_ENABLED" != "true" ]; then
 fi
 
 if [ "$MAX_ATTEMPTS" -lt 1 ]; then
-  echo "worker_runtime_invalid_attempts value=$MAX_ATTEMPTS" >&2
+  echo "worker_runtime_invalid_attempts value=${MAX_ATTEMPTS}" >&2
   exit 1
 fi
 
 if [ "$BASE_DELAY" -lt 1 ]; then
-  echo "worker_runtime_invalid_backoff value=$BASE_DELAY" >&2
+  echo "worker_runtime_invalid_backoff value=${BASE_DELAY}" >&2
   exit 1
 fi
 
@@ -250,16 +251,12 @@ resolve_alias() {
   attempt=1
   delay="$BASE_DELAY"
   while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
-    ip=""
-    if command -v getent >/dev/null 2>&1; then
-      ip="$(getent hosts "$service.service.consul" 2>/dev/null | awk 'NR==1 {print $1}')"
-    fi
-    if [ -z "$ip" ] && command -v nslookup >/dev/null 2>&1; then
-      ip="$(nslookup "$service.service.consul" 2>/dev/null | awk '/^Address [0-9]+: / {print $3; exit} /^Address: / {print $2; exit}')"
-    fi
+    response=$(wget -qO- "http://${CONSUL_ADDR}/v1/catalog/service/${service}" 2>/dev/null || true)
+    ip=$(echo "$response" | grep -o '"ServiceAddress":"[^"]*"' | head -1 | cut -d'"' -f4)
+    [ -z "$ip" ] && ip=$(echo "$response" | grep -o '"Address":"[^"]*"' | head -1 | cut -d'"' -f4)
     if [ -n "$ip" ]; then
-      echo "$ip $alias" >> /etc/hosts
-      echo "worker_runtime_resolve_ok service=$service alias=$alias ip=$ip attempt=$attempt"
+      echo "${ip} ${alias}" >> /etc/hosts
+      echo "worker_runtime_resolve_ok service=${service} alias=${alias} ip=${ip} attempt=${attempt}"
       return 0
     fi
     sleep "$delay"
@@ -267,14 +264,14 @@ resolve_alias() {
     delay=$((delay * 2))
     [ "$delay" -gt 8 ] && delay=8
   done
-  echo "worker_runtime_resolve_failed service=$service alias=$alias" >&2
+  echo "worker_runtime_resolve_failed service=${service} alias=${alias}" >&2
   return 1
 }
 
-resolve_alias "openstudio-db" "db"
-resolve_alias "openstudio-redis" "queue"
-resolve_alias "openstudio-rserve" "rserve"
-resolve_alias "openstudio-web" "web"
+resolve_alias "openstudio-db" "db" || true
+resolve_alias "openstudio-redis" "queue" || true
+resolve_alias "openstudio-rserve" "rserve" || true
+resolve_alias "openstudio-web" "web" || true
 EOT
       }
 

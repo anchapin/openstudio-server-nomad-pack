@@ -99,15 +99,6 @@ scrape_configs:
     static_configs:
       - targets: ['[[ var "prometheus_nomad_scrape_target" . ]]']
 [[ end ]]
-[[ if var "prometheus_scrape_nomad_enabled" . ]]
-  - job_name: 'nomad'
-    honor_labels: true
-    metrics_path: '/v1/metrics'
-    params:
-      format: ['prometheus']
-    static_configs:
-      - targets: ['[[ var "prometheus_nomad_scrape_target" . ]]']
-[[ end ]]
 EOH
       }
 

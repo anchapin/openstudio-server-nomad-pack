@@ -28,7 +28,7 @@ PREPULL_RECONCILE_INTERVAL_SECONDS="${OS_PREPULL_RECONCILE_INTERVAL_SECONDS:-30}
 DISABLE_VECTOR_COLLECTION="${OS_DISABLE_VECTOR_COLLECTION:-false}"
 CSI_WIPE_MAX_ATTEMPTS="${OS_CSI_WIPE_MAX_ATTEMPTS:-3}"
 CSI_WIPE_JOB_IMAGE="${OS_CSI_WIPE_JOB_IMAGE:-}"
-STATEFUL_CSI_NODE_ROLE="${OS_STATEFUL_CSI_NODE_ROLE:-web}"
+STATEFUL_CSI_NODE_ROLE="${OS_STATEFUL_CSI_NODE_ROLE:-stateful}"
 CSI_TOPOLOGY_RECREATE_MAX_ATTEMPTS="${OS_CSI_TOPOLOGY_RECREATE_MAX_ATTEMPTS:-6}"
 AUTO_DEPLOY_ROLE_CSI_PLUGINS="${OS_AUTO_DEPLOY_ROLE_CSI_PLUGINS:-true}"
 CSI_PLUGIN_READY_TIMEOUT_SECONDS="${OS_CSI_PLUGIN_READY_TIMEOUT_SECONDS:-180}"
@@ -72,6 +72,7 @@ Options:
   --nomad-addr <url>     Nomad API (default: ${NOMAD_ADDR})
   --namespace <ns>       Nomad namespace (default: ${NOMAD_NAMESPACE})
   --csi-plugin-id <id>   CSI plugin ID for volume create (auto-detected by default)
+  --stateful-csi-node-role <role>  Node role used for DB/Redis CSI topology and default plugin IDs (default: ${STATEFUL_CSI_NODE_ROLE})
   --redis-node-class <class>  Override redis_node_class for this deploy only
   --disable-vector-collection Temporarily disable vector sidecars for this redeploy
   --skip-nfs-wipe        Skip shared NFS wipe step
@@ -105,6 +106,104 @@ print(count)
 PY
 }
 
+count_ready_eligible_nodes_with_role() {
+  local desired_role="$1"
+  if [[ -z "${desired_role}" ]]; then
+    echo "0"
+    return 0
+  fi
+  NOMAD_ADDR="${NOMAD_ADDR}" NOMAD_NAMESPACE="${NOMAD_NAMESPACE}" DESIRED_ROLE="${desired_role}" python3 - <<'PY'
+import json, os, urllib.request
+
+addr = os.environ["NOMAD_ADDR"].rstrip("/")
+ns = os.environ.get("NOMAD_NAMESPACE", "default")
+desired = os.environ["DESIRED_ROLE"]
+req = urllib.request.Request(f"{addr}/v1/nodes?namespace={ns}")
+with urllib.request.urlopen(req, timeout=20) as r:
+    nodes = json.load(r)
+count = 0
+for n in nodes:
+    if n.get("Status") != "ready" or n.get("SchedulingEligibility") != "eligible":
+        continue
+    node_id = n.get("ID")
+    if not node_id:
+        continue
+    dreq = urllib.request.Request(f"{addr}/v1/node/{node_id}?namespace={ns}")
+    with urllib.request.urlopen(dreq, timeout=20) as r:
+        detail = json.load(r)
+    if ((detail.get("Meta") or {}).get("node_role") or "").strip() == desired:
+        count += 1
+print(count)
+PY
+}
+
+extract_service_constraint_roles() {
+  local var_files_payload=""
+  local vf
+  for vf in "${VAR_FILES[@]}"; do
+    var_files_payload+="${vf}"$'\n'
+  done
+  VAR_FILES_PAYLOAD="${var_files_payload}" python3 - <<'PY'
+import json, os, re
+
+keys = ("db_constraints", "redis_constraints", "rserve_constraints")
+files = [x.strip() for x in os.environ.get("VAR_FILES_PAYLOAD", "").splitlines() if x.strip()]
+result = {k: "" for k in keys}
+
+block_re = lambda key: re.compile(rf'(?ms)^\s*{re.escape(key)}\s*=\s*\[(.*?)^\s*\]', re.MULTILINE)
+obj_re = re.compile(r'(?ms)\{(.*?)\}')
+attr_re = re.compile(r'attribute\s*=\s*"[^"]*meta\.node_role[^"]*"')
+val_re = re.compile(r'value\s*=\s*"([^"]+)"')
+
+for path in files:
+    try:
+        text = open(path, "r", encoding="utf-8").read()
+    except Exception:
+        continue
+    for key in keys:
+        for bm in block_re(key).finditer(text):
+            block = bm.group(1)
+            role = ""
+            for om in obj_re.finditer(block):
+                obj = om.group(1)
+                if not attr_re.search(obj):
+                    continue
+                vm = val_re.search(obj)
+                if vm:
+                    role = vm.group(1).strip()
+                    break
+            if role:
+                result[key] = role
+
+print(json.dumps(result))
+PY
+}
+
+validate_stateful_role_constraints() {
+  if [[ "${db_storage_type}" != "csi" && "${redis_storage_type}" != "csi" ]]; then
+    return 0
+  fi
+
+  local role_json db_role redis_role rserve_role
+  role_json="$(extract_service_constraint_roles)"
+  db_role="$(echo "${role_json}" | python3 -c 'import json,sys; print((json.load(sys.stdin).get("db_constraints") or "").strip())')"
+  redis_role="$(echo "${role_json}" | python3 -c 'import json,sys; print((json.load(sys.stdin).get("redis_constraints") or "").strip())')"
+  rserve_role="$(echo "${role_json}" | python3 -c 'import json,sys; print((json.load(sys.stdin).get("rserve_constraints") or "").strip())')"
+
+  local mismatches=()
+  [[ -n "${db_role}" && "${db_role}" != "${STATEFUL_CSI_NODE_ROLE}" ]] && mismatches+=("db_constraints=${db_role}")
+  [[ -n "${redis_role}" && "${redis_role}" != "${STATEFUL_CSI_NODE_ROLE}" ]] && mismatches+=("redis_constraints=${redis_role}")
+  [[ -n "${rserve_role}" && "${rserve_role}" != "${STATEFUL_CSI_NODE_ROLE}" ]] && mismatches+=("rserve_constraints=${rserve_role}")
+
+  if [[ ${#mismatches[@]} -gt 0 ]]; then
+    echo "✗ Constraint role mismatch detected for stateful services." >&2
+    echo "  stateful_csi_node_role=${STATEFUL_CSI_NODE_ROLE}" >&2
+    echo "  Found: ${mismatches[*]}" >&2
+    echo "  Ensure DB/Redis/Rserve constraints target the same node_role as --stateful-csi-node-role." >&2
+    exit 1
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --var-file)
@@ -119,6 +218,7 @@ while [[ $# -gt 0 ]]; do
     --nomad-addr) NOMAD_ADDR="$2"; shift 2 ;;
     --namespace) NOMAD_NAMESPACE="$2"; shift 2 ;;
     --csi-plugin-id) CSI_PLUGIN_ID="$2"; shift 2 ;;
+    --stateful-csi-node-role) STATEFUL_CSI_NODE_ROLE="$2"; shift 2 ;;
     --redis-node-class) REDIS_NODE_CLASS_OVERRIDE="$2"; shift 2 ;;
     --disable-vector-collection) DISABLE_VECTOR_COLLECTION=true; shift ;;
     --skip-nfs-wipe) WIPE_NFS=false; shift ;;
@@ -214,6 +314,7 @@ for var_file in "${VAR_FILES[@]}"; do
   echo "    - ${var_file}"
 done
 echo "  job_name=${JOB_NAME}"
+echo "  stateful_csi_node_role=${STATEFUL_CSI_NODE_ROLE}"
 echo "  redis_node_class=${redis_node_class:-<unset>}"
 echo "  redis_config: maxclients=${redis_config_maxclients} tcp_backlog=${redis_config_tcp_backlog} timeout=${redis_config_timeout_seconds}s maxmemory=${redis_config_maxmemory} policy=${redis_config_maxmemory_policy} appendfsync=${redis_config_appendfsync} save='${redis_config_save}'"
 echo "  disable_vector_collection=${DISABLE_VECTOR_COLLECTION}"
@@ -231,6 +332,16 @@ if [[ -n "${redis_node_class}" ]]; then
   fi
   echo "  redis_node_class readiness: ${redis_class_ready_count} node(s) ready/eligible"
 fi
+if [[ "${db_storage_type}" == "csi" || "${redis_storage_type}" == "csi" ]]; then
+  stateful_role_ready_count="$(count_ready_eligible_nodes_with_role "${STATEFUL_CSI_NODE_ROLE}")"
+  if [[ "${stateful_role_ready_count}" == "0" ]]; then
+    echo "✗ stateful_csi_node_role='${STATEFUL_CSI_NODE_ROLE}' but no ready/eligible nodes advertise meta.node_role='${STATEFUL_CSI_NODE_ROLE}'." >&2
+    echo "  Either label at least one node with meta.node_role='${STATEFUL_CSI_NODE_ROLE}', or rerun with --stateful-csi-node-role web." >&2
+    exit 1
+  fi
+  echo "  stateful_csi_node_role readiness: ${stateful_role_ready_count} node(s) ready/eligible"
+fi
+validate_stateful_role_constraints
 
 echo ""
 echo "==> Stopping jobs in teardown-safe order"
@@ -238,11 +349,36 @@ echo "==> Stopping jobs in teardown-safe order"
 
 echo ""
 echo "==> Destroying pack jobs"
-if nomad job status -namespace "${NOMAD_NAMESPACE}" "${JOB_NAME}-web" >/dev/null 2>&1 || \
-   nomad job status -namespace "${NOMAD_NAMESPACE}" "${JOB_NAME}-worker" >/dev/null 2>&1 || \
-   nomad job status -namespace "${NOMAD_NAMESPACE}" "${JOB_NAME}-db" >/dev/null 2>&1 || \
-   nomad job status -namespace "${NOMAD_NAMESPACE}" "${JOB_NAME}-redis" >/dev/null 2>&1 || \
-   nomad job status -namespace "${NOMAD_NAMESPACE}" "${JOB_NAME}-rserve" >/dev/null 2>&1; then
+PACK_JOB_SUFFIXES=(
+  web
+  worker
+  db
+  redis
+  rserve
+  traefik
+  autoscaler
+  prometheus
+  queue-sweeper
+  stall-watchdog
+  state-backup
+  state-restore
+  test
+  system-hooks
+  batch-verify
+  nomad-autoscaler
+  nomad-batch-worker
+  infra-setup
+)
+
+pack_jobs_found=false
+for suffix in "${PACK_JOB_SUFFIXES[@]}"; do
+  if nomad job status -namespace "${NOMAD_NAMESPACE}" "${JOB_NAME}-${suffix}" >/dev/null 2>&1; then
+    pack_jobs_found=true
+    break
+  fi
+done
+
+if [[ "${pack_jobs_found}" == "true" ]]; then
   nomad-pack destroy "${VAR_FILE_ARGS[@]}" --name "${JOB_NAME}" "${PACK_PATH}" || true
 else
   echo "  - no deployed ${JOB_NAME} pack jobs found; skipping nomad-pack destroy"
@@ -361,7 +497,21 @@ ensure_role_scoped_csi_plugins() {
 
   echo "==> Missing role-scoped CSI plugin(s): ${missing_plugins[*]}"
   echo "==> Deploying role-scoped CSI plugins via ${ROLE_CSI_DEPLOY_SCRIPT}"
-  NOMAD_ADDR="${NOMAD_ADDR}" NOMAD_NAMESPACE="${NOMAD_NAMESPACE}" bash "${ROLE_CSI_DEPLOY_SCRIPT}"
+  local stateful_plugin_id="hostpath-${STATEFUL_CSI_NODE_ROLE}-plugin0"
+  local stateful_job_name="csi-plugin-hostpath-${STATEFUL_CSI_NODE_ROLE}"
+  if [[ "${STATEFUL_CSI_NODE_ROLE}" == "web" ]]; then
+    stateful_plugin_id="${db_csi_plugin_id:-hostpath-web-plugin0}"
+    stateful_job_name="csi-plugin-hostpath-web"
+  elif [[ "${STATEFUL_CSI_NODE_ROLE}" == "worker" ]]; then
+    stateful_plugin_id="${db_csi_plugin_id:-hostpath-worker-plugin0}"
+    stateful_job_name="csi-plugin-hostpath-worker"
+  fi
+
+  NOMAD_ADDR="${NOMAD_ADDR}" NOMAD_NAMESPACE="${NOMAD_NAMESPACE}" \
+    STATEFUL_NODE_ROLE="${STATEFUL_CSI_NODE_ROLE}" \
+    STATEFUL_PLUGIN_ID="${stateful_plugin_id}" \
+    STATEFUL_JOB_NAME="${stateful_job_name}" \
+    bash "${ROLE_CSI_DEPLOY_SCRIPT}"
 
   for plugin_id in "${missing_plugins[@]}"; do
     if ! wait_for_csi_plugin_ready "${plugin_id}"; then
@@ -1471,6 +1621,50 @@ PY
 
   if [[ "${all_ready}" != "true" ]]; then
     echo "✗ Core services did not reach running state in time." >&2
+    echo "  Core scheduling diagnostics:" >&2
+    NOMAD_ADDR="${NOMAD_ADDR}" NOMAD_NAMESPACE="${NOMAD_NAMESPACE}" JOB_PREFIX="${JOB_NAME}" python3 - <<'PY' >&2
+import json, os, urllib.request
+addr = os.environ["NOMAD_ADDR"].rstrip("/")
+ns = os.environ.get("NOMAD_NAMESPACE", "default")
+prefix = os.environ["JOB_PREFIX"]
+core = [f"{prefix}-db", f"{prefix}-redis", f"{prefix}-rserve", f"{prefix}-web"]
+
+def get(path):
+    with urllib.request.urlopen(f"{addr}{path}", timeout=20) as r:
+        return json.load(r)
+
+for job_id in core:
+    try:
+        summary = get(f"/v1/job/{job_id}/summary?namespace={ns}")
+    except Exception:
+        print(f"    - {job_id}: missing")
+        continue
+    groups = summary.get("Summary") or {}
+    grp_bits = []
+    for name, vals in groups.items():
+        grp_bits.append(f"{name}=run:{vals.get('Running',0)} queued:{vals.get('Queued',0)} failed:{vals.get('Failed',0)}")
+    print(f"    - {job_id}: " + (", ".join(grp_bits) if grp_bits else "no groups"))
+    try:
+        evals = get(f"/v1/job/{job_id}/evaluations?namespace={ns}")
+    except Exception:
+        evals = []
+    if not evals:
+        continue
+    e = evals[0]
+    failed = e.get("FailedTGAllocs") or {}
+    if not failed:
+        continue
+    for tg, data in failed.items():
+        cf = data.get("ConstraintFiltered") or {}
+        ex = data.get("DimensionExhausted") or {}
+        details = []
+        if cf:
+            details.append("constraints=" + json.dumps(cf))
+        if ex:
+            details.append("exhausted=" + json.dumps(ex))
+        if details:
+            print(f"      latest-eval {e.get('ID','')[:8]} tg={tg} " + " ".join(details))
+PY
     exit 1
   fi
 }
@@ -1484,7 +1678,7 @@ wait_for_prometheus_if_enabled() {
 
   local job_id deadline now status_line all_ready
   job_id="${JOB_NAME}-prometheus"
-  deadline=$(( $(date +%s) + 600 ))
+  deadline=$(( $(date +%s) + 120 ))
   all_ready=false
 
   echo ""
@@ -1537,6 +1731,10 @@ except Exception:
 
 if job_status == "running" and dep_status == "successful" and running >= 1:
     ready = True
+elif dep_status == "failed":
+    ready = False
+    print(f"job={job_status} deployment={dep_status} running={running} queued={queued} ready=false status=deployment_failed")
+    raise SystemExit(0)
 
 print(f"job={job_status} deployment={dep_status or 'none'} running={running} queued={queued} ready={'true' if ready else 'false'}")
 PY
@@ -1545,6 +1743,12 @@ PY
     if [[ "${status_line}" == *"ready=true"* ]]; then
       all_ready=true
       break
+    fi
+    if [[ "${status_line}" == *"status=deployment_failed"* ]]; then
+      echo ""
+      echo "✗ Prometheus deployment failed — cannot recover without intervention." >&2
+      nomad job status -namespace "${NOMAD_NAMESPACE}" "${job_id}" || true
+      exit 1
     fi
     sleep 5
   done
@@ -1558,14 +1762,46 @@ PY
 }
 
 run_pack_with_guard() {
+  purge_known_legacy_jobs_for_pack() {
+    local legacy_job
+    local -a known_legacy_jobs=(
+      "${JOB_NAME}-stall-watchdog"
+    )
+    for legacy_job in "${known_legacy_jobs[@]}"; do
+      if nomad job status -namespace "${NOMAD_NAMESPACE}" "${legacy_job}" >/dev/null 2>&1; then
+        echo "⚠ Purging legacy standalone job '${legacy_job}' to enforce consolidated watchdog scheduler source."
+        nomad job stop -purge -namespace "${NOMAD_NAMESPACE}" "${legacy_job}" >/dev/null
+      fi
+    done
+  }
+
   local run_log
+  local run_succeeded=false
+  local metadata_retry=false
   run_log="$(mktemp)"
-  if ! nomad-pack run "$@" "${PACK_PATH}" 2>&1 | tee "${run_log}"; then
-    if grep -q 'Failed To Query For Previously Deployed Jobs' "${run_log}"; then
+  if nomad-pack run "$@" "${PACK_PATH}" 2>&1 | tee "${run_log}"; then
+    run_succeeded=true
+  else
+    if grep -Eq 'Failed To Query For Previously Deployed Jobs|pack\.deployment_name' "${run_log}"; then
+      purge_known_legacy_jobs_for_pack
+      metadata_retry=true
+    fi
+  fi
+
+  if [[ "${metadata_retry}" == "true" && "${run_succeeded}" != "true" ]]; then
+    if nomad-pack run "$@" "${PACK_PATH}" 2>&1 | tee "${run_log}"; then
+      rm -f "${run_log}"
+      return 0
+    fi
+  fi
+
+  if [[ "${run_succeeded}" != "true" ]]; then
+    if grep -Eq 'Failed To Query For Previously Deployed Jobs|pack\.deployment_name' "${run_log}"; then
       core_jobs_ready=false
       for _ in $(seq 1 30); do
+        # worker is a task group inside ${JOB_NAME}-web (consolidated in fix #405),
+        # not a standalone job — check web/db/redis/rserve only.
         if nomad job status -namespace "${NOMAD_NAMESPACE}" "${JOB_NAME}-web" >/dev/null 2>&1 && \
-           nomad job status -namespace "${NOMAD_NAMESPACE}" "${JOB_NAME}-worker" >/dev/null 2>&1 && \
            nomad job status -namespace "${NOMAD_NAMESPACE}" "${JOB_NAME}-db" >/dev/null 2>&1 && \
            nomad job status -namespace "${NOMAD_NAMESPACE}" "${JOB_NAME}-redis" >/dev/null 2>&1 && \
            nomad job status -namespace "${NOMAD_NAMESPACE}" "${JOB_NAME}-rserve" >/dev/null 2>&1; then
@@ -1828,8 +2064,13 @@ run_system_hooks_phase
 if [[ "${enable_image_prepull}" == "true" ]]; then
   echo ""
   echo "==> Verifying image pre-pull sentinel health on all nodes"
+  # During fresh redeploy, the permanent system-hooks sentinel hasn't been
+  # deployed yet at this gate — only the prewarm worker job exists. Pass the
+  # prewarm job prefix so verify-prepull.sh targets the correct job
+  # ("${JOB_NAME}-prewarm-worker-system-hooks") rather than the not-yet-
+  # deployed "${JOB_NAME}-system-hooks".
   VERIFY_ARGS=(
-    --job-name "${JOB_NAME}"
+    --job-name "${JOB_NAME}-prewarm-worker"
     --namespace "${NOMAD_NAMESPACE}"
     --timeout 600
   )

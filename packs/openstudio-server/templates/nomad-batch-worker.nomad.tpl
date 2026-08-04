@@ -101,19 +101,54 @@ EOT
         memory = [[ var "nomad_batch_memory" . ]]
       }
 
-      # Consul-hosted service addresses are resolved via /etc/hosts patching.
+      # Consul-hosted service addresses are resolved once via DNS lookups.
       template {
         destination     = "local/patch-hosts.sh"
         left_delimiter  = "{{"
         right_delimiter = "}}"
         data            = <<-EOT
 #!/bin/sh
-{{ range service "openstudio-db" -}}
-echo "{{ .Address }} db" >> /etc/hosts
-{{ end -}}
-{{ range service "openstudio-redis" -}}
-echo "{{ .Address }} queue" >> /etc/hosts
-{{ end -}}
+set -eu
+
+CONSUL_ADDR="[[ var "consul_address" . ]]"
+
+resolve_service_ip() {
+  service="$1"
+  max_attempts=60
+  attempt=1
+  while [ "$attempt" -le "$max_attempts" ]; do
+    json="$(wget -qO- -T 2 "http://${CONSUL_ADDR}/v1/health/service/${service}?passing=true" || true)"
+    ip=""
+    if [ -n "$json" ] && command -v python3 >/dev/null 2>&1; then
+      ip="$(printf '%s' "$json" | python3 -c 'import json,sys
+data=json.load(sys.stdin)
+for entry in data:
+    svc=(entry or {}).get("Service") or {}
+    node=(entry or {}).get("Node") or {}
+    addr=svc.get("Address") or node.get("Address") or ""
+    if addr:
+        print(addr)
+        break
+')"
+    fi
+    if [ -z "$ip" ] && [ -n "$json" ]; then
+      ip="$(printf '%s' "$json" | sed -n 's/.*"ServiceAddress":"\([^"]*\)".*/\1/p' | head -n 1)"
+      if [ -z "$ip" ]; then
+        ip="$(printf '%s' "$json" | sed -n 's/.*"Address":"\([^"]*\)".*/\1/p' | head -n 1)"
+      fi
+    fi
+    if [ -n "$ip" ]; then
+      printf '%s\n' "$ip"
+      return 0
+    fi
+    sleep 2
+    attempt=$((attempt + 1))
+  done
+  return 1
+}
+
+echo "$(resolve_service_ip "openstudio-db") db" >> /etc/hosts
+echo "$(resolve_service_ip "openstudio-redis") queue" >> /etc/hosts
 EOT
         change_mode     = "noop"
       }

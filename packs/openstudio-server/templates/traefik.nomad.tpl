@@ -28,10 +28,11 @@ job "[[ var "job_name" . ]]-traefik" {
       driver = "docker"
 
       config {
-        image = "[[ var "traefik_image" . ]]"
-        ports = ["http", "https", "dashboard"]
+        image        = "[[ var "traefik_image" . ]]"
+        network_mode = "host"
+        ports        = ["http", "https", "dashboard"]
         args = [
-          "--providers.consulcatalog.endpoint.address=consul.service.consul:8500",
+          "--providers.consulcatalog.endpoint.address=[[ var "traefik_consul_catalog_address" . ]]",
           "--entrypoints.web.address=:[[ var "traefik_http_port" . ]]",
           "--entrypoints.web.transport.respondingTimeouts.readTimeout=[[ var "traefik_read_timeout" . ]]",
           "--entrypoints.web.transport.respondingTimeouts.writeTimeout=[[ var "traefik_write_timeout" . ]]",
