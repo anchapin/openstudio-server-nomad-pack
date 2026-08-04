@@ -135,6 +135,33 @@ groups:
         annotations:
           summary: "OpenStudio failed jobs queue is non-empty"
           description: "resque:failed has remained non-empty for more than [[ var "prometheus_alert_failed_jobs_minutes" . ]] minutes."
+
+      - alert: OpenStudioQueueStagnation
+        expr: |
+          (
+            (sum(redis_key_size{key="resque:queue:simulations"}) or vector(0)) > 0
+            and
+            clamp_min(sum(delta(redis_key_value{key="resque:stat:processed"}[[ printf "[%vm]" (var "alert_queue_stagnation_minutes" .) ]])), 0) == 0
+          )
+[[ if var "prometheus_scrape_nomad_enabled" . ]]
+          and
+          (sum(nomad_nomad_job_summary_running{job="[[ var "job_name" . ]]-worker"}) > 0)
+[[ end ]]
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "OpenStudio simulations queue is not making completion progress"
+          description: "The simulations queue has remained non-empty with zero processed-job progress across the last [[ var "alert_queue_stagnation_minutes" . ]] minutes."
+
+      - alert: OpenStudioFailedJobsAccelerating
+        expr: clamp_min(sum(delta(redis_key_value{key="resque:stat:failed"}[5m])), 0) > [[ var "alert_crashloop_threshold" . ]]
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OpenStudio failed jobs counter is accelerating"
+          description: "resque:stat:failed increased by more than [[ var "alert_crashloop_threshold" . ]] in 5 minutes. Check worker rollout health and queue-health alert logs."
 [[ if var "prometheus_scrape_nomad_enabled" . ]]
       - alert: OpenStudioWorkerAllocHighFailureRate
         expr: |
@@ -149,6 +176,15 @@ groups:
         annotations:
           summary: "Worker alloc failure rate > 50 %"
           description: "More than half of [[ var "job_name" . ]]-worker allocations are failing. Most likely cause: openstudio-worker:local image alias missing on worker nodes. Run: ./scripts/verify-prepull.sh"
+
+      - alert: OpenStudioWorkerQueuedTooLong
+        expr: sum(nomad_nomad_job_summary_queued{job="[[ var "job_name" . ]]-worker"}) > 0
+        for: [[ var "alert_stuck_scheduling_minutes" . ]]m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Worker allocations are queued or stuck starting"
+          description: "One or more [[ var "job_name" . ]]-worker allocations have remained queued for more than [[ var "alert_stuck_scheduling_minutes" . ]] minutes. Check Nomad placement, image pulls, and crash-loop alerts."
 
       - alert: OpenStudioSystemHooksSentinelFailing
         expr: sum(nomad_nomad_job_summary_failed{job="[[ var "job_name" . ]]-system-hooks"}) > 0
