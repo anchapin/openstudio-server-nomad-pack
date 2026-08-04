@@ -625,4 +625,4 @@ This renders and deploys an additional `<job_name>-traefik` job with:
 
 The Traefik dashboard is accessible at `http://<node-ip>:8080/dashboard/` after deployment.
 
-> **Note**: `deploy_traefik = false` is the default. No Traefik job is rendered or submitted when the variable is omitted.
+> **Note**: `deploy_traefik = true` is the default. Omit the variable to deploy Traefik, or set `deploy_traefik = false` to disable it.

@@ -42,7 +42,7 @@ job "[[ var "job_name" . ]]-autoscaler" {
         destination = "local/autoscaler.hcl"
         data        = <<EOH
 nomad {
-  address = "[[ var "autoscaler_nomad_address" . ]]"
+  address = "{{ with service "nomad" }}http://{{ (index . 0).Address }}:4646{{ else }}[[ var "autoscaler_nomad_address" . ]]{{ end }}"
 }
 
 apm "nomad-apm" {
