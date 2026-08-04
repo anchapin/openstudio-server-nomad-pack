@@ -8,18 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added matrix strategy `render-matrix` job to `.github/workflows/pack-validation.yml` to automate `nomad-pack render` verification across key configuration scenarios (default, minimal-dev, simple, production-ha, airgapped, openstack-production, e2e-test, batch-verification, nomad-batch-engine, aws-batch-engine, vector-disabled) (#408).
 - Added `db_csi_topology_node_id` and `redis_csi_topology_node_id` pack variables: when set and `db_storage_type`/`redis_storage_type` is `"csi"`, inject a hard `constraint { attribute = "${node.unique.id}" }` into the DB and Redis job groups, pinning allocations to the node that owns the CSI volume and preventing the `"csi_hook failed … does not exist in volumes list"` scheduling error.
-- Added `--rebind-stale` flag to `scripts/preflight-storage.sh`: automatically detects stale CSI volume registrations (wrong plugin ID, no topology segments, or 0 healthy nodes) and deregisters + re-creates them before deploy. Implies `--create-missing-csi`.
-- Added `--emit-topology-vars` flag to `scripts/preflight-storage.sh`: after all checks pass, emits `db_csi_topology_node_id=<uuid>` and `redis_csi_topology_node_id=<uuid>` on stdout for capture by `deploy-openstack.sh`.
-- Added `examples/advanced/volumes/csi-mongodb.hcl` and `csi-redis.hcl`: idempotent CSI volume spec files for manual `nomad volume create` registration with plugin, capacity, and topology documentation.
-- Added §7 "CSI Persistence and Topology Pinning" to `docs/infrastructure/storage.md`: root-cause analysis, automated fix description, manual audit/remediation commands.
-- Added root-cause section and updated §4/§5 of `docs/infrastructure/openstack-stabilization-runbook.md` with automated rebind flow and break-glass fallback commands.
-
-### Changed
-- `scripts/deploy-openstack.sh` now passes `--rebind-stale` and `--emit-topology-vars` to `preflight-storage.sh` and injects the emitted topology node IDs as `--var db_csi_topology_node_id` / `--var redis_csi_topology_node_id` into all `nomad-pack run` phases.
-- `scripts/deploy-openstack.sh` prefers topology node IDs emitted by the new preflight output over the previous Nomad API topology query, eliminating a race where the query returned stale data after a rebind.
-
-### Added
 - Added `examples/advanced/openstack-site-local.hcl.template`: copy-and-fill template for site-specific OpenStack overrides (ingress domain, datacenter name, Consul-unreachable addresses, private registry). Operators copy to `openstack-site-local.hcl`, fill in values, and pass as a second `-var-file` alongside `openstack-production.hcl`. Keeps cluster-specific IP addresses out of version control.
 - Added `scripts/provision-worker-nodes.sh`: idempotent helper to provision new `azimuth.compute1-179d-250disk` OpenStack instances and bootstrap them into the Nomad cluster. Includes quota pre-flight check, auto-detected start index, dry-run mode, and a `--bootstrap-only --ips` path for re-bootstrapping existing nodes. Capacity reference: each node adds up to 45 workers (80 GB RAM / 1,750 MB each); 7,296 vCPUs of quota headroom permit ~117 more nodes → ~10,620 workers cluster-wide.
 - Added `scripts/verify-prepull.sh`: pre-run smoke-check that queries Nomad for all `system-hooks` alloc states and confirms the `image-cache-ready` sentinel task is `running` on every eligible worker node. Exits non-zero if any node is missing the sentinel, indicating the pre-pull did not complete. Supports `--timeout` for polling mode and `--quiet` for CI use.
