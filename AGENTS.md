@@ -130,6 +130,7 @@ Each Nomad job is a separate `.nomad.tpl` file under `packs/openstudio-server/te
 | `batch-verification.nomad.tpl` | `<job_name>-batch-verify` | `enable_batch_verification = true` |
 | `traefik.nomad.tpl` | Traefik ingress job | `deploy_traefik = true` |
 | `prometheus.nomad.tpl` | `<job_name>-prometheus` (Prometheus + redis_exporter sidecar) | `prometheus_enabled = true` |
+| `queue-health-alert.nomad.tpl` | `<job_name>-queue-health-alert` | `enable_queue_health_alert = true` (default) |
 | `queue-sweeper.nomad.tpl` | `<job_name>-queue-sweeper` (task groups: `queue-sweeper`, `stall-watchdog`) | `enable_queue_sweeper` or `enable_stall_watchdog` |
 | `stall-watchdog.nomad.tpl` | Architecture marker file (consolidated into `queue-sweeper.nomad.tpl`) | `enable_stall_watchdog = true` |
 | `nomad-batch-worker.nomad.tpl` | `<job_name>-nomad-batch-worker` | `batch_engine == "nomad_batch"` |

@@ -1437,6 +1437,37 @@ variable "verification_targets" {
   ]
 }
 
+# Queue health alert — periodic Redis-backed queue effectiveness alerting
+variable "enable_queue_health_alert" {
+  type        = bool
+  description = "Enable the periodic batch job that emits `queue_health` structured log lines and exits 2 when queue backlog growth, failed-job depth, stale queuing locks, or Redis reachability breach the configured thresholds. Enabled by default so production renders replace the ad hoc manual alert job with a pack-managed equivalent."
+  default     = true
+}
+
+variable "alert_stale_lock_threshold" {
+  type        = number
+  description = "Alert when the number of TTL-less `resque:analysis:*:queuing` locks whose idle time is at least queue_sweeper_max_lock_age_seconds reaches or exceeds this threshold."
+  default     = 10
+}
+
+variable "alert_queue_growth_delta" {
+  type        = number
+  description = "Alert when the simulations queue depth grows by at least this many items between successive queue-health-alert runs. The job stores its previous queue depth baseline in Redis."
+  default     = 50
+}
+
+variable "alert_failed_job_threshold" {
+  type        = number
+  description = "Alert when `LLEN resque:failed` reaches or exceeds this threshold."
+  default     = 500
+}
+
+variable "alert_check_interval" {
+  type        = string
+  description = "Cron schedule (UTC) for the queue-health-alert periodic batch job."
+  default     = "*/2 * * * *"
+}
+
 # Queue sweeper — proactive stale Redis queuing-lock recovery
 variable "enable_queue_sweeper" {
   type        = bool

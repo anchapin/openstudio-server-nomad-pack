@@ -265,9 +265,33 @@ Sample the counters twice, five minutes apart:
 - `processed` flat while `/resque/working` stays non-empty → likely **initialization-blocked**
 - `failed` rising quickly after new allocations start → likely **crash-looping** or bad startup configuration
 
+### Queue health alert job
+
+The pack now ships `packs/openstudio-server/templates/queue-health-alert.nomad.tpl`, which
+renders `<job_name>-queue-health-alert` when `enable_queue_health_alert = true`
+(default). The periodic batch task checks Redis queue depth, failed-job depth, active
+working workers, and stale `resque:analysis:*:queuing` locks, then emits:
+
+```text
+queue_health ts=<epoch> status=ok|alert reasons=<list> simulations=<N> failed=<N> workers_working=<N> stale_locks=<N>
+```
+
+Exit behavior is intentional:
+
+- `0`: healthy
+- `2`: alert condition matched (`status=alert`) so Nomad marks the batch run as failed
+- `1`: script/runtime failure that should be investigated separately
+
+To replace the ad hoc production job, deploy the pack-managed job, confirm
+`<job_name>-queue-health-alert` is running on schedule, then stop the manual
+`openstudio-queue-health-alert` job so there is only one alert source.
+
 ### Structured log metrics available today
 
-The pack does **not** currently ship a standalone `openstudio-queue-health-alert` job. The in-pack structured worker-effectiveness signals come from the consolidated `queue-sweeper` job in `packs/openstudio-server/templates/queue-sweeper.nomad.tpl` and are suitable for Vector/Loki/Grafana log panels:
+The queue-health alert line is the primary maintained signal for queue backpressure. The
+pack also emits the following structured worker-effectiveness signals from
+`packs/openstudio-server/templates/queue-sweeper.nomad.tpl`, which remain suitable for
+Vector/Loki/Grafana log panels:
 
 - `queue_health_status depth=<n> failed_depth=<n> processed_total=<n> failed_total=<n> workers_running=<n> total_allocs=<n> velocity=<n>`
 - `queue_stagnation_alert depth=<n> velocity=<n> duration_min=<n> threshold_min=<n> workers_running=<n>`
@@ -291,6 +315,59 @@ Recommended log-derived panels:
 - **Blocked workers / stalled data points**: count `queue_divergence_alert` and graph `stale_started`
 - **Auto-recovery activity**: graph `stall_watchdog_summary.allocs_stopped`
 - **Queue replay rate**: graph `queue_sweeper_replay_summary.replayed`
+
+### On-call routing for queue-health alerts
+
+`<job_name>-queue-health-alert` is a periodic Nomad batch job, so every `exit 2` run is
+visible as a failed batch execution in the Nomad UI/API. Route that failure state into
+your existing operational notification path in one of two ways:
+
+1. **Nomad job-failure path**: alert when the latest periodic run of
+   `<job_name>-queue-health-alert` is `dead/failed` or when the `check-queue-health`
+   task exits `2`. This is the best path when you already consume Nomad allocation or
+   job events for Slack, PagerDuty, or email.
+2. **Structured-log path**: alert on `queue_health ... status=alert` log lines. This is
+   the best path when Vector/Loki/ELK already ingest Nomad allocation logs.
+
+Example checks:
+
+```bash
+nomad job status <job_name>-queue-health-alert
+nomad alloc status <alloc_id>
+```
+
+#### Example Vector webhook route
+
+If you already collect Nomad allocation logs with Vector, filter the alert lines and post
+them to a webhook receiver:
+
+```toml
+[transforms.queue_health_alerts]
+type = "filter"
+inputs = ["nomad_alloc_logs"]
+condition = '''
+starts_with(string!(.message), "queue_health ") &&
+contains(string!(.message), "status=alert")
+'''
+
+[sinks.queue_health_webhook]
+type = "http"
+inputs = ["queue_health_alerts"]
+uri = "https://alerts.example.com/openstudio/queue-health"
+method = "post"
+encoding.codec = "json"
+request.headers.Content-Type = "application/json"
+```
+
+This generic webhook can fan out to:
+
+- **Slack**: post to an internal relay or add a small Vector remap so the body matches a
+  Slack incoming-webhook payload (`{"text":"..."}`).
+- **PagerDuty**: point the HTTP sink (or webhook relay) at the PagerDuty Events v2 API
+  and map the `queue_health` fields into `payload.summary`, `payload.severity`, and
+  `custom_details`.
+- **Email**: route the webhook into your mailer/Alertmanager bridge and send the same
+  structured event to an on-call distribution list.
 
 ### Prometheus queries (`prometheus_enabled = true`)
 
