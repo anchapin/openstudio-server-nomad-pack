@@ -1474,6 +1474,31 @@ variable "alert_check_interval" {
   default     = "*/2 * * * *"
 }
 
+# Lock sweeper — periodic cleanup for orphaned analysis_zip.lock files on shared NFS storage
+variable "enable_lock_sweeper" {
+  type        = bool
+  description = "Enable the periodic batch job that removes orphaned analysis_zip.lock files from the shared OpenStudio NFS volume. Disable this when the deployment does not mount the shared NFS host volume, or override lock_sweeper_nfs_volume to the correct host volume name."
+  default     = true
+}
+
+variable "lock_sweeper_interval" {
+  type        = string
+  description = "Cron schedule for the lock-sweeper periodic batch job (UTC). Default: every 5 minutes."
+  default     = "*/5 * * * *"
+}
+
+variable "lock_sweeper_stale_threshold_minutes" {
+  type        = number
+  description = "Minimum age in minutes before an analysis_zip.lock file with no matching analysis_zip.receipt file is considered stale and eligible for deletion."
+  default     = 15
+}
+
+variable "lock_sweeper_nfs_volume" {
+  type        = string
+  description = "Nomad host volume name mounted by the lock-sweeper job at /mnt/openstudio. Defaults to the production shared NFS volume name."
+  default     = "openstudio-nfs"
+}
+
 # Queue sweeper — proactive stale Redis queuing-lock recovery
 variable "enable_queue_sweeper" {
   type        = bool

@@ -1330,6 +1330,62 @@ Rollback path:
 
 ---
 
+## Lock Sweeper
+
+The pack now ships a managed `<job_name>-lock-sweeper` periodic batch job in
+`packs/openstudio-server/templates/lock-sweeper.nomad.tpl`. It replaces the ad hoc
+production job created during the 2026-08-04 incident and removes orphaned
+`analysis_zip.lock` files from the shared NFS mount when no matching
+`analysis_zip.receipt` exists.
+
+### Default behavior
+
+- Enabled by default with `enable_lock_sweeper = true`
+- Runs every 5 minutes via `lock_sweeper_interval`
+- Mounts the `lock_sweeper_nfs_volume` host volume at `/mnt/openstudio`
+- Treats lock files older than `lock_sweeper_stale_threshold_minutes` as stale
+- Emits one structured log line per sweep:
+  `lock_sweep ts=<epoch> stale_before=<n> removed=<n> stale_after=<n>`
+
+### Configuration
+
+| Variable | Default | Purpose |
+|---|---:|---|
+| `enable_lock_sweeper` | `true` | Enable or suppress rendering of the lock-sweeper job. |
+| `lock_sweeper_interval` | `"*/5 * * * *"` | UTC cron for the periodic batch job. |
+| `lock_sweeper_stale_threshold_minutes` | `15` | Minimum age before an orphaned `analysis_zip.lock` file is deleted. |
+| `lock_sweeper_nfs_volume` | `"openstudio-nfs"` | Nomad host volume name mounted at `/mnt/openstudio`. |
+
+Disable the job for environments that do not mount the shared NFS host volume:
+
+```bash
+nomad-pack render -var "enable_lock_sweeper=false" packs/openstudio-server
+```
+
+If your cluster uses a different host volume name, override it at deploy time:
+
+```bash
+nomad-pack run -var "lock_sweeper_nfs_volume=<your-nfs-host-volume>" packs/openstudio-server
+```
+
+### Verification
+
+Confirm the job is registered and scheduled:
+
+```bash
+nomad job status <job_name>-lock-sweeper
+```
+
+Inspect the most recent sweep log output:
+
+```bash
+nomad job history <job_name>-lock-sweeper
+nomad alloc logs <alloc_id> lock-sweeper
+```
+
+After deploying the pack-managed job, purge the old hand-created production job so only
+`<job_name>-lock-sweeper` remains as the source of truth.
+
 ## Incident Response Runbooks
 
 Use these runbooks for production incident diagnosis and recovery:
