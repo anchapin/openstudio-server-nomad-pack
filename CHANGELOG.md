@@ -52,6 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Lowered `worker_queue_simulations_target` in `examples/advanced/openstack-production.hcl` from `20` to `6` so the autoscaler targets ~1 worker per 6 queued simulations (cluster capacity of ~5,355 workers saturates at ~32,000 queued simulations rather than 107,000).
 
 ### Fixed
+- Fixed worker startup dependency aliasing to render `db`, `queue`, and `rserve` directly from Consul-native Nomad template lookups, removed `getent hosts` fallback usage for Consul-only service names, and documented the constraint for contributors (#434).
 - Fixed `preflight-storage.sh --rebind-stale` to check for active CSI volume allocation claims before deregistering; emits an actionable error listing the alloc IDs and the exact `scripts/pre-teardown.sh` command to run instead of silently failing with a 500 error (#413).
 - Fixed pre-existing `nomad-pack fmt --check` failures in `templates/db.nomad.tpl` and `templates/prometheus.nomad.tpl`; both files now pass the fmt gate on nomad-pack v0.4.2 and CI validates all templates via `nomad-pack fmt --check templates/` (#414).
 - Fixed OpenStack bootstrap and provisioning guardrails for disk exhaustion: `scripts/bootstrap-179d-node.sh` now configures `client.reserved.disk = 20480` by default, and `scripts/provision-worker-nodes.sh` now supports `--root-disk-gb` / `ROOT_DISK_GB` so replacement nodes can be provisioned with larger root volumes when project quota allows.

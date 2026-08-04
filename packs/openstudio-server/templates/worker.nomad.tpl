@@ -225,53 +225,28 @@ EOT
 #!/bin/sh
 set -eu
 
-MAX_ATTEMPTS=[[ var "web_worker_runtime_service_resolution_attempts" . ]]
-BASE_DELAY=[[ var "web_worker_runtime_service_resolution_backoff_seconds" . ]]
-RUNTIME_RESOLUTION_ENABLED=[[ var "web_worker_runtime_service_resolution_enabled" . ]]
-CONSUL_ADDR=[[ var "consul_address" . ]]
+# Authoritative worker dependency resolution:
+# - Nomad renders these aliases directly from the Consul service catalog.
+# - patch-hosts.sh only copies the rendered aliases into /etc/hosts.
+# - Never replace this with node-local resolver probes for openstudio-db,
+#   openstudio-redis, or openstudio-rserve: those names exist only in Consul
+#   unless the client node is separately configured with Consul DNS forwarding.
+cat <<'EOF_HOSTS' >> /etc/hosts
+{{ range $svc := service "openstudio-db" }}{{ $svc.Address }} db
+{{ end }}{{ range $svc := service "openstudio-redis" }}{{ $svc.Address }} queue
+{{ end }}{{ range $svc := service "openstudio-rserve" }}{{ $svc.Address }} rserve
+{{ end }}{{ range $svc := service "openstudio-web" }}{{ $svc.Address }} web
+{{ end }}
+EOF_HOSTS
 
-if [ "$RUNTIME_RESOLUTION_ENABLED" != "true" ]; then
-  echo "worker_runtime_resolution_disabled legacy_template_watch_mode_removed=true" >&2
-  exit 0
-fi
+for alias in db queue rserve; do
+  if ! grep -Eq "(^|[ \t])${alias}$" /etc/hosts; then
+    echo "worker_runtime_resolve_failed alias=${alias} source=consul_template" >&2
+    exit 1
+  fi
+done
 
-if [ "$MAX_ATTEMPTS" -lt 1 ]; then
-  echo "worker_runtime_invalid_attempts value=${MAX_ATTEMPTS}" >&2
-  exit 1
-fi
-
-if [ "$BASE_DELAY" -lt 1 ]; then
-  echo "worker_runtime_invalid_backoff value=${BASE_DELAY}" >&2
-  exit 1
-fi
-
-resolve_alias() {
-  service="$1"
-  alias="$2"
-  attempt=1
-  delay="$BASE_DELAY"
-  while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
-    response=$(wget -qO- "http://${CONSUL_ADDR}/v1/catalog/service/${service}" 2>/dev/null || true)
-    ip=$(echo "$response" | grep -o '"ServiceAddress":"[^"]*"' | head -1 | cut -d'"' -f4)
-    [ -z "$ip" ] && ip=$(echo "$response" | grep -o '"Address":"[^"]*"' | head -1 | cut -d'"' -f4)
-    if [ -n "$ip" ]; then
-      echo "${ip} ${alias}" >> /etc/hosts
-      echo "worker_runtime_resolve_ok service=${service} alias=${alias} ip=${ip} attempt=${attempt}"
-      return 0
-    fi
-    sleep "$delay"
-    attempt=$((attempt + 1))
-    delay=$((delay * 2))
-    [ "$delay" -gt 8 ] && delay=8
-  done
-  echo "worker_runtime_resolve_failed service=${service} alias=${alias}" >&2
-  return 1
-}
-
-resolve_alias "openstudio-db" "db" || true
-resolve_alias "openstudio-redis" "queue" || true
-resolve_alias "openstudio-rserve" "rserve" || true
-resolve_alias "openstudio-web" "web" || true
+echo "worker_runtime_service_hosts_applied source=consul_template"
 EOT
       }
 

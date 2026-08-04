@@ -219,6 +219,9 @@ Use `packs/openstudio-server/` for all `nomad-pack` commands in this repository.
 
 ### Consul service discovery
 
+Worker startup aliasing (`db`, `queue`, `rserve`, `web`) must stay **Consul-native**. Prefer Nomad template rendering (`{{ range service "..." }}`) for worker `/etc/hosts` patching, and only rely on `.service.consul` names when the client node's OS resolver has been explicitly configured to forward `.consul` queries to Consul. Never switch worker startup back to `getent hosts` for Consul-only services such as `openstudio-db`, `openstudio-redis`, or `openstudio-rserve`.
+
+
 Consul service names registered by this pack:
 
 | Consul service name | Component |
