@@ -15,6 +15,7 @@
 #   CONSUL_SERVER_IP    Consul server address  (default: 192.168.100.87)
 #   ROLE                worker|web (default: worker)
 #   DISK_TYPE           Nomad meta.disk_type value (default: local-large)
+#   NOMAD_RESERVED_DISK_MB  Nomad client reserved disk (default: 20480 MB / 20 GiB)
 #   DOCKER_MAX_CONCURRENT_DOWNLOADS  Docker image pull concurrency cap (default: 2)
 #   PULP_REGISTRY_HOST  Registry hostname to pin in /etc/hosts (default: pulp-dev.hpc.nlr.gov)
 #   PULP_REGISTRY_IP    Registry IP to pin in /etc/hosts (default: 10.60.127.127)
@@ -36,6 +37,7 @@ Defaults:
   NOMAD_SERVER_IP=192.168.100.87
   CONSUL_SERVER_IP=192.168.100.87
   DISK_TYPE=local-large
+  NOMAD_RESERVED_DISK_MB=20480
 EOF
 }
 
@@ -46,6 +48,7 @@ DISK_TYPE="${DISK_TYPE:-local-large}"
 DOCKER_MAX_CONCURRENT_DOWNLOADS="${DOCKER_MAX_CONCURRENT_DOWNLOADS:-2}"
 PULP_REGISTRY_HOST="${PULP_REGISTRY_HOST:-pulp-dev.hpc.nlr.gov}"
 PULP_REGISTRY_IP="${PULP_REGISTRY_IP:-10.60.127.127}"
+NOMAD_RESERVED_DISK_MB="${NOMAD_RESERVED_DISK_MB:-20480}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -144,6 +147,10 @@ client {
   enabled = true
   servers = ["${NOMAD_SERVER_IP}:4647"]
   cni_path = "/opt/cni/bin"
+  reserved {
+    # Keep the node ineligible before rootfs pressure breaks image pulls/logging.
+    disk = ${NOMAD_RESERVED_DISK_MB}
+  }
   meta {
     disk_type = "${DISK_TYPE}"
     node_role = "${ROLE}"

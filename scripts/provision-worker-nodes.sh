@@ -14,6 +14,7 @@
 #   --dry-run          Print what would be done without creating anything
 #   --bootstrap-only   Skip instance creation; re-bootstrap nodes by IP list
 #   --ips IP1,IP2,...  Comma-separated IP list for --bootstrap-only mode
+#   --root-disk-gb N   Optional root volume size in GiB (--boot-from-volume)
 #   --help             Show this message
 #
 # Prerequisites:
@@ -37,6 +38,7 @@
 #   PULP_REGISTRY_IP    Registry IP              (default: 10.60.127.127)
 #   BOOT_TIMEOUT        Seconds to wait for SSH readiness after boot (default: 300)
 #   IP_LOOKUP_TIMEOUT   Seconds to wait for OpenStack to report node IP (default: 180)
+#   ROOT_DISK_GB        Optional root volume size in GiB (uses --boot-from-volume)
 #
 # Capacity reference (as of 2025):
 #   Flavor azimuth.compute1-179d-250disk: 62 vCPU, 80 GB RAM, 250 GB disk
@@ -61,6 +63,7 @@ PULP_REGISTRY_HOST="${PULP_REGISTRY_HOST:-pulp-dev.hpc.nlr.gov}"
 PULP_REGISTRY_IP="${PULP_REGISTRY_IP:-10.60.127.127}"
 BOOT_TIMEOUT="${BOOT_TIMEOUT:-300}"
 IP_LOOKUP_TIMEOUT="${IP_LOOKUP_TIMEOUT:-180}"
+ROOT_DISK_GB="${ROOT_DISK_GB:-}"
 
 COUNT=1
 START_INDEX=""
@@ -81,10 +84,15 @@ while [[ $# -gt 0 ]]; do
     --dry-run)     DRY_RUN=true;     shift   ;;
     --bootstrap-only) BOOTSTRAP_ONLY=true; shift ;;
     --ips)         EXTRA_IPS="$2";   shift 2 ;;
+    --root-disk-gb) ROOT_DISK_GB="$2"; shift 2 ;;
     --help|-h)     usage ;;
     *) echo "Unknown option: $1" >&2; exit 1 ;;
   esac
 done
+
+if [[ -n "${ROOT_DISK_GB}" ]] && ! [[ "${ROOT_DISK_GB}" =~ ^[0-9]+$ ]]; then
+  error "ROOT_DISK_GB must be an integer value in GiB (got: ${ROOT_DISK_GB})"
+fi
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 info()    { echo "[INFO]  $*"; }
@@ -287,20 +295,28 @@ for (( i=0; i<COUNT; i++ )); do
 
   if $DRY_RUN; then
     echo "[DRY-RUN] openstack server create --flavor ${FLAVOR} --image ${IMAGE} \\"
+    if [[ -n "${ROOT_DISK_GB}" ]]; then
+      echo "            --boot-from-volume ${ROOT_DISK_GB} \\"
+    fi
     echo "            --network ${NETWORK} --security-group ${SECURITY_GROUP} \\"
     echo "            --key-name ${KEY_NAME} --wait ${name}"
     provisioned+=("192.0.2.${idx}")  # placeholder IP for dry-run
     continue
   fi
 
-  openstack server create \
-    --flavor "${FLAVOR}" \
-    --image "${IMAGE}" \
-    --network "${NETWORK}" \
-    --security-group "${SECURITY_GROUP}" \
-    --key-name "${KEY_NAME}" \
-    --wait \
-    "${name}"
+  create_cmd=(
+    openstack server create
+    --flavor "${FLAVOR}"
+    --image "${IMAGE}"
+    --network "${NETWORK}"
+    --security-group "${SECURITY_GROUP}"
+    --key-name "${KEY_NAME}"
+  )
+  if [[ -n "${ROOT_DISK_GB}" ]]; then
+    create_cmd+=(--boot-from-volume "${ROOT_DISK_GB}")
+  fi
+  create_cmd+=(--wait "${name}")
+  "${create_cmd[@]}"
 
   # Retrieve the assigned IP (OpenStack returns addresses as list[str] on this cloud).
   local_ip="$(get_server_ip_with_retry "${name}" || true)"

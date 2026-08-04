@@ -19,6 +19,13 @@ job "[[ var "job_name" . ]]-redis" {
     [[ template "affinities" (var "redis_affinities" .) ]]
     [[ template "spreads" (var "redis_spreads" .) ]]
 
+    [[ if and (eq (var "redis_storage_type" .) "csi") (var "redis_csi_topology_node_id" .) ]]
+    constraint {
+      attribute = "${node.unique.id}"
+      value     = "[[ var "redis_csi_topology_node_id" . ]]"
+    }
+    [[ end ]]
+
     [[ if ne (var "redis_storage_type" .) "ephemeral" ]]
     [[ if eq (var "redis_storage_type" .) "csi" ]]
     volume "redis-data" {

@@ -457,6 +457,24 @@ variable "worker_kill_timeout" {
   default     = "5200s"
 }
 
+variable "worker_restart_attempts" {
+  type        = number
+  description = "Number of times Nomad will restart a failed worker task within worker_restart_interval before marking the allocation permanently failed. Workers killed by OOM (exit 137) are retried up to this limit, allowing the worker to pick up a different simulation instead of immediately marking the deployment unhealthy."
+  default     = 3
+}
+
+variable "worker_restart_delay" {
+  type        = string
+  description = "Time Nomad waits between worker task restart attempts. A short delay (15s) is sufficient since the worker picks up from the Redis queue on each start."
+  default     = "15s"
+}
+
+variable "worker_restart_interval" {
+  type        = string
+  description = "Rolling window over which worker_restart_attempts is counted. Restarts older than this interval do not count against the limit."
+  default     = "5m"
+}
+
 variable "worker_autoscaling_enabled" {
   type        = bool
   description = "Enable Nomad Autoscaler integration for the worker task group. When false (default), the scaling block is omitted and worker_count controls the fixed allocation count."
@@ -613,6 +631,18 @@ variable "prometheus_alert_failed_jobs_minutes" {
   default     = 5
 }
 
+variable "prometheus_scrape_nomad_enabled" {
+  type        = bool
+  description = "Add a Nomad telemetry scrape target to the in-pack Prometheus job. When true, Prometheus scrapes the Nomad metrics endpoint at prometheus_nomad_scrape_target and enables worker alloc failure rate and system-hooks sentinel alert rules. Requires prometheus_enabled = true and Nomad prometheus_metrics = true in Nomad server config."
+  default     = false
+}
+
+variable "prometheus_nomad_scrape_target" {
+  type        = string
+  description = "Host:port of the Nomad server telemetry endpoint to scrape. Used only when prometheus_scrape_nomad_enabled = true. Format: host:port (no scheme). Prometheus appends metrics_path=/v1/metrics?format=prometheus automatically."
+  default     = "nomad.service.consul:4646"
+}
+
 variable "worker_queue_requeued_query" {
   type        = string
   description = "Prometheus instant-vector selector for the requeued queue depth. Must be a bare vector selector (metric name + labels only) — do not include range brackets, sum(), or or vector(0). The template wraps this in max_over_time(...[window]) and appends 'or vector(0)' so the series always resolves to 0 (not empty/error) when the queue key does not yet exist in Redis, enabling scale-to-zero. Worker count math is applied via a pass-through strategy."
@@ -745,6 +775,12 @@ variable "db_volume_source" {
   default     = "openstudio-mongodb"
 }
 
+variable "db_csi_topology_node_id" {
+  type        = string
+  description = "Nomad node ID (full UUID) that hosts the CSI volume for MongoDB. When set and db_storage_type = \"csi\", a hard constraint is added to the db task group so it can only schedule on this node, preventing the alloc from landing on a node where the volume is inaccessible. Populated automatically by scripts/preflight-storage.sh --create-missing-csi and scripts/deploy-openstack.sh. Leave empty to let the scheduler choose freely (not recommended for single-node-writer CSI volumes)."
+  default     = ""
+}
+
 # Intentionally uses redis:6.2-alpine (newer, smaller) instead of the Helm chart's
 # redis:6.0.9. Operators should align the Redis major.minor version with their
 # target OpenStudio Server release requirements.
@@ -830,6 +866,12 @@ variable "redis_volume_source" {
   type        = string
   description = "Nomad volume source name for Redis persistent storage (host_volume name or CSI volume ID)."
   default     = "openstudio-redis"
+}
+
+variable "redis_csi_topology_node_id" {
+  type        = string
+  description = "Nomad node ID (full UUID) that hosts the CSI volume for Redis. When set and redis_storage_type = \"csi\", a hard constraint is added to the redis task group so it can only schedule on this node, preventing the alloc from landing on a node where the volume is inaccessible. Populated automatically by scripts/preflight-storage.sh --create-missing-csi and scripts/deploy-openstack.sh. Leave empty to let the scheduler choose freely (not recommended for single-node-writer CSI volumes)."
+  default     = ""
 }
 
 variable "redis_health_check_interval" {
@@ -1247,6 +1289,18 @@ variable "prepull_restart_attempts" {
   type        = number
   description = "Number of times each image pre-pull task group will retry on failure before the alloc is marked failed. Registry TLS handshake timeouts under concurrent cluster-wide pulls are transient; 10 retries over a 1-hour window absorbs the congestion without permanently bricking nodes."
   default     = 10
+}
+
+variable "prepull_worker_enabled" {
+  type        = bool
+  description = "Enable the worker-node image pre-pull group in the system-hooks job."
+  default     = true
+}
+
+variable "prepull_core_enabled" {
+  type        = bool
+  description = "Enable the core-service image pre-pull group in the system-hooks job."
+  default     = true
 }
 
 variable "poststop_cleanup_image" {

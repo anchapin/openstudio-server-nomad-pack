@@ -1,0 +1,246 @@
+---
+# Prometheus alert rules for OpenStudio Server on Nomad
+#
+# Installation:
+#   Copy this file into your Prometheus configuration directory and add a
+#   rule_files: entry, or reference it in the Prometheus job template stanza.
+#
+# Nomad exposes job summary metrics via the Nomad telemetry endpoint
+# (prometheus_metrics = true in Nomad config).  The metric names below assume
+# the default Nomad telemetry prefix.  If your cluster uses a custom prefix,
+# adjust accordingly.
+#
+# Reference for Nomad Prometheus metrics:
+#   https://developer.hashicorp.com/nomad/docs/operations/metrics-reference
+
+groups:
+  - name: openstudio_worker
+    rules:
+
+      # -----------------------------------------------------------------------
+      # Worker alloc failure rate
+      # Fires when more than 50 % of desired worker allocations have failed.
+      # The most common cause is the openstudio-worker:local image alias being
+      # absent on worker nodes (Docker GC evicted the sentinel).
+      # Runbook: check system-hooks job; run scripts/verify-prepull.sh
+      # -----------------------------------------------------------------------
+      - alert: OpenStudioWorkerAllocHighFailureRate
+        expr: |
+          (
+            sum by (job) (nomad_nomad_job_summary_failed{exported_job="openstudio-server-worker"})
+            /
+            (
+              sum by (job) (nomad_nomad_job_summary_running{exported_job="openstudio-server-worker"}) + 1
+            )
+          ) > 0.5
+        for: 2m
+        labels:
+          severity: critical
+          team: infra
+        annotations:
+          summary: "Worker alloc failure rate > 50 % ({{ $value | humanizePercentage }})"
+          description: |
+            More than half of openstudio-server-worker allocations are in the
+            failed state. Most likely cause: openstudio-worker:local image alias
+            is missing on one or more worker nodes.
+            Immediate action:
+              1. Run: NOMAD_ADDR=... ./scripts/verify-prepull.sh
+              2. If sentinel is not running: NOMAD_ADDR=... nomad-pack run
+                 --var "enable_image_prepull=true" --name openstudio-server .
+              3. Check docs/infrastructure/pre-run-checklist.md item 2.
+
+      # -----------------------------------------------------------------------
+      # Worker alloc count well below desired
+      # Fires when running worker count is < 80 % of the autoscaler desired
+      # count for more than 5 minutes.  Indicates placement failures.
+      # -----------------------------------------------------------------------
+      - alert: OpenStudioWorkerCountBelowDesired
+        expr: |
+          (
+            sum(nomad_nomad_job_summary_running{exported_job="openstudio-server-worker"})
+            /
+            (sum(nomad_nomad_job_summary_running{exported_job="openstudio-server-worker"})
+             + sum(nomad_nomad_job_summary_queued{exported_job="openstudio-server-worker"}) + 1)
+          ) < 0.80
+        for: 5m
+        labels:
+          severity: warning
+          team: infra
+        annotations:
+          summary: "Worker running count < 80 % of desired for 5 min"
+          description: |
+            The running worker count has been more than 20 % below desired for
+            5+ minutes.  Check cluster resource pressure (RAM bottleneck is most
+            common on large queues) and alloc failure logs.
+
+      # -----------------------------------------------------------------------
+      # System-hooks sentinel not running
+      # Fires when the openstudio-server-system-hooks system job has any alloc
+      # in the failed state.  A fully-down sentinel means all nodes have lost
+      # the image cache and all future worker allocs will fail.
+      # -----------------------------------------------------------------------
+      - alert: OpenStudioSystemHooksSentinelFailing
+        expr: |
+          sum(nomad_nomad_job_summary_failed{exported_job="openstudio-server-system-hooks"}) > 0
+        for: 1m
+        labels:
+          severity: critical
+          team: infra
+        annotations:
+          summary: "system-hooks sentinel has failed allocations"
+          description: |
+            One or more allocations in openstudio-server-system-hooks are
+            failing.  The image-cache-ready sentinel task keeps Docker from
+            GC-ing openstudio-worker:local.  If the sentinel exits, all worker
+            nodes will lose the image alias within minutes.
+            Action: nomad job status openstudio-server-system-hooks
+
+      # -----------------------------------------------------------------------
+      # Queue depth critically high with no scale-up
+      # Fires when simulation queue depth stays above 5000 and worker count
+      # does not increase over a 10-minute window (autoscaler may be blocked).
+      # -----------------------------------------------------------------------
+      - alert: OpenStudioQueueHighNoScaleUp
+        expr: |
+          (
+            openstudio_queue_simulations_queued > 5000
+            and
+            delta(sum(nomad_nomad_job_summary_running{exported_job="openstudio-server-worker"})[10m:1m]) < 10
+          )
+        for: 10m
+        labels:
+          severity: warning
+          team: infra
+        annotations:
+          summary: "Queue depth > 5000 with no worker scale-up for 10 min"
+          description: |
+            The Redis simulation queue is above 5000 but the running worker count
+            has not increased for 10 minutes.  The Nomad Autoscaler may be blocked
+            by an active rolling deployment.
+            Action: check 'nomad job deployments openstudio-server-worker' for a
+            stuck deployment.  See docs/infrastructure/operations-guide.md for the
+            max_parallel=0 emergency procedure.
+
+      # -----------------------------------------------------------------------
+      # Autoscaler daemon not running
+      # Fires when the autoscaler job has no running allocations for >2 minutes.
+      # -----------------------------------------------------------------------
+      - alert: OpenStudioAutoscalerJobDead
+        expr: |
+          sum(nomad_nomad_job_summary_running{exported_job="openstudio-server-autoscaler"}) < 1
+        for: 2m
+        labels:
+          severity: critical
+          team: infra
+        annotations:
+          summary: "Nomad autoscaler daemon is not running"
+          description: |
+            openstudio-server-autoscaler has no running allocations.
+            Action:
+              1. nomad job status openstudio-server-autoscaler
+              2. nomad job deployments openstudio-server-autoscaler
+              3. nomad alloc logs -stderr <alloc-id> autoscaler
+
+      # -----------------------------------------------------------------------
+      # Autoscaler deployment unhealthy/blocked
+      # Fires when autoscaler is queued/failed and has no running alloc.
+      # -----------------------------------------------------------------------
+      - alert: OpenStudioAutoscalerDeploymentBlocked
+        expr: |
+          (
+            (sum(nomad_nomad_job_summary_queued{exported_job="openstudio-server-autoscaler"})
+             + sum(nomad_nomad_job_summary_failed{exported_job="openstudio-server-autoscaler"})) > 0
+          )
+          and
+          (sum(nomad_nomad_job_summary_running{exported_job="openstudio-server-autoscaler"}) < 1)
+        for: 3m
+        labels:
+          severity: warning
+          team: infra
+        annotations:
+          summary: "Nomad autoscaler deployment is blocked"
+          description: |
+            openstudio-server-autoscaler has queued/failed allocations and no
+            running instance. Check placement constraints and update health mode.
+            Action: nomad job deployments openstudio-server-autoscaler
+
+  - name: openstudio_resources
+    rules:
+
+      # -----------------------------------------------------------------------
+      # Cluster RAM near saturation
+      # Fires when the Nomad cluster's schedulable memory drops below 5 %.
+      # At this point, new worker allocs will queue rather than place.
+      # -----------------------------------------------------------------------
+      - alert: NomadClusterMemoryNearSaturation
+        expr: |
+          (
+            sum(nomad_nomad_node_memory_allocated)
+            /
+            sum(nomad_nomad_node_memory_total)
+          ) > 0.95
+        for: 5m
+        labels:
+          severity: warning
+          team: infra
+        annotations:
+          summary: "Nomad cluster memory allocation > 95 %"
+          description: |
+            The Nomad cluster has less than 5 % schedulable memory remaining.
+            New worker allocations will queue indefinitely.  Consider reducing
+            worker_max_replicas or adding nodes to the compute pool.
+
+  - name: openstudio_ingress
+    rules:
+
+      # -----------------------------------------------------------------------
+      # Traefik config failed to reload
+      # -----------------------------------------------------------------------
+      - alert: OpenStudioTraefikConfigReloadFailed
+        expr: |
+          traefik_config_last_reload_success == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: infra
+        annotations:
+          summary: "Traefik config reload is failing"
+          description: |
+            Traefik failed to apply its most recent configuration reload.
+            Confirm /etc/traefik/traefik.yml is valid and restart Traefik after correction.
+
+      # -----------------------------------------------------------------------
+      # OpenStudio router has no healthy backend server
+      # -----------------------------------------------------------------------
+      - alert: OpenStudioIngressNoHealthyBackend
+        expr: |
+          sum(traefik_service_server_up{service=~"openstudio-server(@consulcatalog)?"}) < 1
+        for: 2m
+        labels:
+          severity: critical
+          team: infra
+        annotations:
+          summary: "OpenStudio ingress has no healthy backend"
+          description: |
+            Traefik cannot see a healthy backend server for the OpenStudio router.
+            Check Consul health for openstudio-web and inspect web allocation failures.
+
+      # -----------------------------------------------------------------------
+      # 404 ratio on web entrypoint is elevated
+      # -----------------------------------------------------------------------
+      - alert: OpenStudioIngressHigh404Ratio
+        expr: |
+          (
+            sum(rate(traefik_entrypoint_requests_total{entrypoint="web",code="404"}[5m]))
+            /
+            clamp_min(sum(rate(traefik_entrypoint_requests_total{entrypoint="web"}[5m])), 1)
+          ) > 0.30
+        for: 10m
+        labels:
+          severity: warning
+          team: infra
+        annotations:
+          summary: "Traefik web entrypoint 404 ratio > 30 %"
+          description: |
+            The web entrypoint is serving an unusually high 404 ratio.
+            Validate router discovery via Consul Catalog and run scripts/check-openstack-ingress.sh.

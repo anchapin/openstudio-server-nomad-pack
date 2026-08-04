@@ -42,6 +42,7 @@ Before starting the rollout:
       `openstudio-rserve`, `openstudio-web`
 - [ ] Prometheus scraping queue metrics (required for queue-depth autoscaling)
 - [ ] Nomad Autoscaler daemon running (if `worker_autoscaling_enabled = true`)
+- [ ] Autoscaler policy checks clean (no recurring PromQL errors in alloc logs)
 - [ ] NFS host volume provisioned and mounted on all compute nodes
 - [ ] MongoDB and Redis volumes provisioned with correct UID/GID (`999:999`)
 - [ ] Baseline metrics captured (see §Evidence Collection)
@@ -163,6 +164,11 @@ nomad-pack run \
   -var-file openstack-site-local.hcl \
   .
 
+# Verify autoscaler deployment and policy evaluation health
+nomad job status openstudio-server-autoscaler
+nomad job deployments openstudio-server-autoscaler
+nomad alloc logs -stderr "$(nomad job allocs -json openstudio-server-autoscaler | jq -r '.[] | select(.ClientStatus=="running") | .ID' | head -n1)" autoscaler | tail -n 80
+
 # Ramp queue to 100 % of target load
 # Monitor for 2 hours
 ```
@@ -225,6 +231,9 @@ Capture the following at the **start of soak**, **midpoint**, and **end of soak*
 ### Nomad / Infrastructure
 
 - [ ] `nomad job status openstudio-server-worker` — allocation count, status, restart count
+- [ ] `nomad job status openstudio-server-autoscaler` — daemon running with 1 healthy alloc
+- [ ] `nomad job deployments openstudio-server-autoscaler` — deployment status is `successful`
+- [ ] Autoscaler logs have no recurring `failed to query` / `parse error` messages
 - [ ] `nomad node status` — node health for all compute nodes
 - [ ] CPU utilisation per Nomad client: `nomad node status -verbose <node-id>`
 - [ ] Memory utilisation per allocation: Nomad UI → Worker job → Allocations

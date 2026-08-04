@@ -50,6 +50,8 @@ on Nomad.
 | [swift-artifact-backend.md](swift-artifact-backend.md) | Swift container ACL setup and env var reference |
 | [infra/traefik-jump-host.md](infra/traefik-jump-host.md) | Traefik v2 on the jump host as a systemd service |
 
+Operational ingress check script (OpenStack): `scripts/check-openstack-ingress.sh`
+
 ## Migration
 
 | Guide | Description |

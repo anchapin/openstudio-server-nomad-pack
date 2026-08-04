@@ -16,6 +16,10 @@
 #   bash scripts/deploy-openstack.sh --deploy       # Pack deploy only (tunnel must be open)
 #   bash scripts/deploy-openstack.sh --bootstrap    # Consul + infra-setup only (no pack deploy)
 #   bash scripts/deploy-openstack.sh --status       # Show job/service status
+#   bash scripts/deploy-openstack.sh --ingress-check # Validate Traefik router + ingress path
+#   bash scripts/deploy-openstack.sh --traefik-reconcile # Reconcile Traefik config and validate ingress
+#   bash scripts/deploy-openstack.sh --conformance-audit # Audit role/constraint conformance
+#   bash scripts/deploy-openstack.sh --disk-audit   # Audit root-disk pressure across clients
 #   bash scripts/deploy-openstack.sh --logs [job]   # Tail logs (default: web)
 #   bash scripts/deploy-openstack.sh --ui           # Tunnel + open Nomad UI
 #   bash scripts/deploy-openstack.sh --teardown     # Stop pack + infra-setup
@@ -55,6 +59,10 @@ VAR_FILE="${OS_VAR_FILE:-${REPO_ROOT}/examples/advanced/openstack.hcl}"
 JOB_NAME="${OS_JOB_NAME:-openstudio-server}"
 INFRA_JOB="${REPO_ROOT}/infra-setup.nomad"
 PREFLIGHT_SCRIPT="${REPO_ROOT}/scripts/preflight-storage.sh"
+INGRESS_CHECK_SCRIPT="${REPO_ROOT}/scripts/check-openstack-ingress.sh"
+TRAEFIK_RECONCILE_SCRIPT="${REPO_ROOT}/scripts/reconcile-jumphost-traefik.sh"
+CONFORMANCE_AUDIT_SCRIPT="${REPO_ROOT}/scripts/audit-openstack-role-conformance.sh"
+DISK_REMEDIATION_SCRIPT="${REPO_ROOT}/scripts/remediate-low-disk-nodes.sh"
 CREATE_MISSING_CSI="${OS_CREATE_MISSING_CSI:-true}"
 BOOTSTRAP_WORKER_MAX_REPLICAS="${OS_BOOTSTRAP_WORKER_MAX_REPLICAS:-200}"
 BOOTSTRAP_AUTOSCALER_COOLDOWN="${OS_BOOTSTRAP_AUTOSCALER_COOLDOWN:-10m}"
@@ -217,6 +225,10 @@ check_prereqs() {
   [ -f "${VAR_FILE}" ] || { err "Var file not found: ${VAR_FILE}"; ok=false; }
   [ -f "${INFRA_JOB}" ] || { err "Infra job not found: ${INFRA_JOB}"; ok=false; }
   [ -f "${PREFLIGHT_SCRIPT}" ] || { err "Preflight script not found: ${PREFLIGHT_SCRIPT}"; ok=false; }
+  [ -x "${INGRESS_CHECK_SCRIPT}" ] || { err "Ingress check script not found or not executable: ${INGRESS_CHECK_SCRIPT}"; ok=false; }
+  [ -x "${TRAEFIK_RECONCILE_SCRIPT}" ] || { err "Traefik reconcile script not found or not executable: ${TRAEFIK_RECONCILE_SCRIPT}"; ok=false; }
+  [ -x "${CONFORMANCE_AUDIT_SCRIPT}" ] || { err "Conformance audit script not found or not executable: ${CONFORMANCE_AUDIT_SCRIPT}"; ok=false; }
+  [ -x "${DISK_REMEDIATION_SCRIPT}" ] || { err "Disk remediation script not found or not executable: ${DISK_REMEDIATION_SCRIPT}"; ok=false; }
 
   $ok || exit 1
 
@@ -698,11 +710,35 @@ deploy_pack() {
     --var-file "${VAR_FILE}"
     --nomad-addr "${NOMAD_API}"
     --namespace "${NOMAD_NAMESPACE:-default}"
+    --emit-topology-vars
   )
   if [ "${CREATE_MISSING_CSI}" = "true" ]; then
-    PREFLIGHT_ARGS+=(--create-missing-csi)
+    PREFLIGHT_ARGS+=(--rebind-stale)   # --rebind-stale implies --create-missing-csi
   fi
-  "${PREFLIGHT_SCRIPT}" "${PREFLIGHT_ARGS[@]}"
+  # Capture topology var output (lines like "db_csi_topology_node_id=<uuid>") from preflight.
+  # The preflight script emits these on stdout after "✓ Storage preflight passed" when
+  # --emit-topology-vars is set; all other lines go to stderr or are interleaved on stdout.
+  # We tee to stderr so the operator sees the full preflight output, then filter the
+  # assignment lines for eval.
+  preflight_output="$("${PREFLIGHT_SCRIPT}" "${PREFLIGHT_ARGS[@]}" 2>&1)" || {
+    echo "${preflight_output}" >&2
+    exit 1
+  }
+  echo "${preflight_output}" >&2 || true
+  db_csi_topology_node_id=""
+  redis_csi_topology_node_id=""
+  while IFS= read -r line; do
+    case "${line}" in
+      db_csi_topology_node_id=*)    db_csi_topology_node_id="${line#*=}" ;;
+      redis_csi_topology_node_id=*) redis_csi_topology_node_id="${line#*=}" ;;
+    esac
+  done <<< "${preflight_output}"
+  if [ -n "${db_csi_topology_node_id}" ]; then
+    ok "DB CSI topology node pinned to: ${db_csi_topology_node_id}"
+  fi
+  if [ -n "${redis_csi_topology_node_id}" ]; then
+    ok "Redis CSI topology node pinned to: ${redis_csi_topology_node_id}"
+  fi
 
   db_storage_type="$(extract_simple_var db_storage_type host_volume)"
   db_volume_source="$(extract_simple_var db_volume_source openstudio-mongodb)"
@@ -712,28 +748,39 @@ deploy_pack() {
   worker_max_replicas="$(extract_simple_var worker_max_replicas 10)"
   worker_autoscaling_scale_up_cooldown="$(extract_simple_var worker_autoscaling_scale_up_cooldown 10m)"
 
+  # ── Derive topology nodes for worker exclusion ─────────────────────────────
+  # Prefer the topology node IDs emitted by preflight (authoritative, post-rebind).
+  # Fall back to querying Nomad volume status / running alloc node IDs as before.
   topology_nodes=()
   db_nodes=()
   redis_nodes=()
   if [ "${db_storage_type}" = "csi" ]; then
-    while IFS= read -r node_id; do
-      [ -n "${node_id}" ] && db_nodes+=("${node_id}")
-    done < <(csi_volume_topology_nodes "${db_volume_source}")
-    if [ ${#db_nodes[@]} -eq 0 ]; then
+    if [ -n "${db_csi_topology_node_id:-}" ]; then
+      db_nodes+=("${db_csi_topology_node_id}")
+    else
       while IFS= read -r node_id; do
         [ -n "${node_id}" ] && db_nodes+=("${node_id}")
-      done < <(job_running_node_ids "${JOB_NAME}-db")
+      done < <(csi_volume_topology_nodes "${db_volume_source}")
+      if [ ${#db_nodes[@]} -eq 0 ]; then
+        while IFS= read -r node_id; do
+          [ -n "${node_id}" ] && db_nodes+=("${node_id}")
+        done < <(job_running_node_ids "${JOB_NAME}-db")
+      fi
     fi
     topology_nodes+=("${db_nodes[@]}")
   fi
   if [ "${redis_storage_type}" = "csi" ]; then
-    while IFS= read -r node_id; do
-      [ -n "${node_id}" ] && redis_nodes+=("${node_id}")
-    done < <(csi_volume_topology_nodes "${redis_volume_source}")
-    if [ ${#redis_nodes[@]} -eq 0 ]; then
+    if [ -n "${redis_csi_topology_node_id:-}" ]; then
+      redis_nodes+=("${redis_csi_topology_node_id}")
+    else
       while IFS= read -r node_id; do
         [ -n "${node_id}" ] && redis_nodes+=("${node_id}")
-      done < <(job_running_node_ids "${JOB_NAME}-redis")
+      done < <(csi_volume_topology_nodes "${redis_volume_source}")
+      if [ ${#redis_nodes[@]} -eq 0 ]; then
+        while IFS= read -r node_id; do
+          [ -n "${node_id}" ] && redis_nodes+=("${node_id}")
+        done < <(job_running_node_ids "${JOB_NAME}-redis")
+      fi
     fi
     topology_nodes+=("${redis_nodes[@]}")
   fi
@@ -778,6 +825,16 @@ deploy_pack() {
     --var "worker_max_replicas=${bootstrap_worker_max_replicas}"
     --var "worker_autoscaling_scale_up_cooldown=${BOOTSTRAP_AUTOSCALER_COOLDOWN}"
   )
+  # Inject CSI topology node pin variables so the DB/Redis jobs are constrained to
+  # the node that owns their CSI volume.  This prevents the scheduler from placing
+  # the alloc on a node where the CSI plugin cannot attach the volume, which is
+  # the root cause of: "pre-run hook csi_hook failed ... does not exist in volumes list"
+  if [ -n "${db_csi_topology_node_id:-}" ]; then
+    PHASE2_ARGS+=(--var "db_csi_topology_node_id=${db_csi_topology_node_id}")
+  fi
+  if [ -n "${redis_csi_topology_node_id:-}" ]; then
+    PHASE2_ARGS+=(--var "redis_csi_topology_node_id=${redis_csi_topology_node_id}")
+  fi
   if [ -n "${worker_excluded_node_ids_json}" ]; then
     PHASE2_ARGS+=(--var "worker_excluded_node_ids=${worker_excluded_node_ids_json}")
     info "Phase 2: restricting workers to pre-pulled nodes and protecting CSI topology node(s) (temporary bootstrap gate): ${worker_excluded_node_ids_json}"
@@ -806,6 +863,13 @@ deploy_pack() {
       --var "worker_max_replicas=${worker_max_replicas}"
       --var "worker_autoscaling_scale_up_cooldown=${worker_autoscaling_scale_up_cooldown}"
     )
+    # Carry CSI topology pins forward so they remain active for the lifetime of the jobs.
+    if [ -n "${db_csi_topology_node_id:-}" ]; then
+      PHASE3_ARGS+=(--var "db_csi_topology_node_id=${db_csi_topology_node_id}")
+    fi
+    if [ -n "${redis_csi_topology_node_id:-}" ]; then
+      PHASE3_ARGS+=(--var "redis_csi_topology_node_id=${redis_csi_topology_node_id}")
+    fi
     # Phase 3 drops the pre-pull not-ready exclusions; only CSI topology nodes stay excluded.
     # Passing the full Phase 2 list here would permanently lock workers off the majority of
     # the cluster whenever nodes hadn't finished pre-pulling at Phase 2 submit time.
@@ -1118,6 +1182,37 @@ case "${MODE}" in
     start_consul_tunnel || true
     show_status
     ;;
+  --ingress-check)
+    check_prereqs
+    "${INGRESS_CHECK_SCRIPT}" \
+      --jump-host "${JUMP_HOST}" \
+      --traefik-host "${NOMAD_SERVER}" \
+      --ingress-host "${NOMAD_SERVER_IP}" \
+      --ssh-key "${SSH_KEY}" \
+      --expected-router "${JOB_NAME}@consulcatalog"
+    ;;
+  --traefik-reconcile)
+    check_prereqs
+    JUMP_HOST="${JUMP_HOST}" \
+    NOMAD_SERVER_HOST="${NOMAD_SERVER}" \
+    INGRESS_HOST="${NOMAD_SERVER_IP}" \
+    SSH_KEY="${SSH_KEY}" \
+    "${TRAEFIK_RECONCILE_SCRIPT}"
+    ;;
+  --conformance-audit)
+    check_prereqs
+    start_tunnel
+    NOMAD_ADDR="${NOMAD_API}" "${CONFORMANCE_AUDIT_SCRIPT}"
+    ;;
+  --disk-audit)
+    check_prereqs
+    start_tunnel
+    NOMAD_ADDR="${NOMAD_API}" \
+      JUMP_HOST="${JUMP_HOST}" \
+      NOMAD_SERVER_HOST="${NOMAD_SERVER}" \
+      SSH_KEY="${SSH_KEY}" \
+      "${DISK_REMEDIATION_SCRIPT}" --threshold-mb 20480
+    ;;
   --logs)
     start_tunnel
     tail_logs "${2:-web}"
@@ -1145,7 +1240,7 @@ case "${MODE}" in
     ;;
   *)
     err "Unknown option: ${MODE}"
-    echo "Usage: $0 [--run|--bootstrap|--deploy|--redeploy|--stop|--teardown|--status|--logs [job]|--ui|--tunnel|--tunnel-stop]"
+    echo "Usage: $0 [--run|--bootstrap|--deploy|--redeploy|--stop|--teardown|--status|--ingress-check|--traefik-reconcile|--conformance-audit|--disk-audit|--logs [job]|--ui|--tunnel|--tunnel-stop]"
     exit 1
     ;;
 esac

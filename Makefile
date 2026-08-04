@@ -14,6 +14,10 @@
 #   make os-bootstrap Install Consul + configure all Nomad clients only
 #   make os-deploy    Deploy pack only (bootstrap must be done first)
 #   make os-status    Show job/node/service status
+#   make os-ingress-check Validate jump-host Traefik router + ingress path
+#   make os-traefik-reconcile Reconcile jump-host Traefik managed config + validate ingress
+#   make os-conformance-audit Audit role/constraint conformance for critical jobs
+#   make os-disk-audit Audit node free disk and report low-disk risk
 #   make os-logs      Tail web job logs
 #   make os-ui        Open SSH tunnels + launch Nomad/Consul UIs
 #   make os-stop      Stop pack jobs
@@ -304,6 +308,22 @@ os-redeploy: ## [OpenStack] Stop + redeploy the pack
 .PHONY: os-status
 os-status: ## [OpenStack] Show job, node, and Consul service status
 	$(OS_SCRIPT) --status
+
+.PHONY: os-ingress-check
+os-ingress-check: ## [OpenStack] Validate Traefik route + external ingress response
+	$(OS_SCRIPT) --ingress-check
+
+.PHONY: os-traefik-reconcile
+os-traefik-reconcile: ## [OpenStack] Reconcile jump-host Traefik config, restart, and validate ingress
+	$(OS_SCRIPT) --traefik-reconcile
+
+.PHONY: os-conformance-audit
+os-conformance-audit: ## [OpenStack] Audit critical job node-role constraints and placements
+	$(OS_SCRIPT) --conformance-audit
+
+.PHONY: os-disk-audit
+os-disk-audit: ## [OpenStack] Audit client root disk free-space risk (no mutations)
+	$(OS_SCRIPT) --disk-audit
 
 .PHONY: os-logs
 os-logs: ## [OpenStack] Tail web job logs (override: make os-logs JOB=worker)

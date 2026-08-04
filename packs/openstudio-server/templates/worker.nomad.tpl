@@ -273,6 +273,16 @@ EOT
 
       kill_timeout = "[[ var "worker_kill_timeout" . ]]"
 
+      # Restart policy: workers that exit with non-zero (including OOM/exit-137) get retried
+      # before being marked permanently failed. This prevents individual large-simulation
+      # OOM kills from counting as unhealthy allocs in rolling deployments.
+      restart {
+        attempts = [[ var "worker_restart_attempts" . ]]
+        delay    = "[[ var "worker_restart_delay" . ]]"
+        interval = "[[ var "worker_restart_interval" . ]]"
+        mode     = "delay"
+      }
+
       service {
         name     = "openstudio-worker"
         provider = "consul"

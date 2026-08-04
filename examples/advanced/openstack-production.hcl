@@ -60,6 +60,13 @@ enable_vector_collection  = true
 prometheus_image       = "prom/prometheus:v2.53.2"
 redis_exporter_image   = "oliver006/redis_exporter:v1.62.0"
 nomad_autoscaler_image = "hashicorp/nomad-autoscaler:0.5.0"
+prometheus_alert_rules_enabled = true
+
+# Scrape Nomad telemetry for worker alloc failure rate and sentinel alerts.
+# Requires Nomad server config: telemetry { prometheus_metrics = true }
+prometheus_scrape_nomad_enabled = true
+# prometheus_nomad_scrape_target defaults to "nomad.service.consul:4646";
+# override in openstack-site-local.hcl if Consul DNS is unavailable.
 
 # ---------- Web ----------
 # web_count MUST remain 1 — NFS does not provide distributed file-locking.
@@ -69,6 +76,78 @@ web_priority = 80
 web_cpu      = 6000   # MHz — sufficient for Passenger + request routing
 web_memory   = 51200  # MB  — covers Passenger workers + upload buffer
 web_memory_max = 61440
+web_constraints = [
+  {
+    attribute = "$${meta.node_role}"
+    operator  = "="
+    value     = "web"
+  },
+  {
+    attribute = "$${attr.driver.docker}"
+    operator  = "="
+    value     = "1"
+  },
+  {
+    attribute = "$${meta.disk_type}"
+    operator  = "="
+    value     = "local-large"
+  }
+]
+
+# Keep stateful/service jobs on web-role nodes and worker jobs on worker-role nodes.
+db_constraints = [
+  {
+    attribute = "$${meta.node_role}"
+    operator  = "="
+    value     = "web"
+  },
+  {
+    attribute = "$${attr.driver.docker}"
+    operator  = "="
+    value     = "1"
+  },
+  {
+    attribute = "$${meta.disk_type}"
+    operator  = "="
+    value     = "local-large"
+  }
+]
+
+redis_constraints = [
+  {
+    attribute = "$${meta.node_role}"
+    operator  = "="
+    value     = "web"
+  },
+  {
+    attribute = "$${attr.driver.docker}"
+    operator  = "="
+    value     = "1"
+  },
+  {
+    attribute = "$${meta.disk_type}"
+    operator  = "="
+    value     = "local-large"
+  }
+]
+
+rserve_constraints = [
+  {
+    attribute = "$${meta.node_role}"
+    operator  = "="
+    value     = "web"
+  },
+  {
+    attribute = "$${attr.driver.docker}"
+    operator  = "="
+    value     = "1"
+  },
+  {
+    attribute = "$${meta.disk_type}"
+    operator  = "="
+    value     = "local-large"
+  }
+]
 
 # Traefik Host rule — must match the DNS name or IP/hostname used to reach the cluster.
 # SITE-SPECIFIC: set this in openstack-site-local.hcl.
@@ -104,6 +183,23 @@ worker_memory_max    = 4000   # MB  — burst to full node memory before OOM
 worker_process_count = "3"    # 3 processes × 500 MHz ≈ 4 500 MHz per allocation; 50 % more concurrent sims at same alloc count
 worker_command = "/bin/sh"
 worker_args    = ["-c", "sh /local/patch-hosts.sh && exec /usr/local/bin/start-workers"]
+worker_constraints = [
+  {
+    attribute = "$${meta.node_role}"
+    operator  = "="
+    value     = "worker"
+  },
+  {
+    attribute = "$${attr.driver.docker}"
+    operator  = "="
+    value     = "1"
+  },
+  {
+    attribute = "$${meta.disk_type}"
+    operator  = "="
+    value     = "local-large"
+  }
+]
 
 # Seed count; keep this equal to worker_min_replicas to avoid an immediate
 # startup scale-down event that can put the policy into cooldown.
@@ -127,6 +223,8 @@ nomad_autoscaler_enabled = true
 #
 # Default: autoscaler_nomad_address      = "http://nomad.service.consul:4646"
 # Default: autoscaler_prometheus_address = "http://openstudio-prometheus.service.consul:9090"
+autoscaler_nomad_address      = "http://nomad.service.consul:4646"
+autoscaler_prometheus_address = "http://openstudio-prometheus.service.consul:9090"
 
 # Place Prometheus on web-role infrastructure nodes (same placement domain as
 # db/redis in this OpenStack profile). This cluster uses Nomad node metadata
@@ -141,23 +239,63 @@ prometheus_constraints = [
     attribute = "$${attr.driver.docker}"
     operator  = "="
     value     = "1"
+  },
+  {
+    attribute = "$${meta.disk_type}"
+    operator  = "="
+    value     = "local-large"
+  }
+]
+
+autoscaler_constraints = [
+  {
+    attribute = "$${attr.driver.docker}"
+    operator  = "="
+    value     = "1"
+  }
+]
+# Keep autoscaler schedulable during web-node drains; prefer (don't require) web-role nodes.
+autoscaler_affinities = [
+  {
+    attribute = "$${meta.node_role}"
+    operator  = "="
+    value     = "web"
+    weight    = 100
+  },
+  {
+    attribute = "$${meta.disk_type}"
+    operator  = "="
+    value     = "local-large"
+    weight    = 60
   }
 ]
 
 worker_autoscaling_enabled       = true
 worker_autoscaling_cpu_enabled   = false
 worker_autoscaling_queue_enabled = true   # Scale on Redis queue depth via Prometheus
+worker_queue_requeued_query      = "redis_key_size{key=\"resque:queue:requeued\"}"
+worker_queue_simulations_query   = "redis_key_size{key=\"resque:queue:simulations\"}"
 worker_min_replicas              = 2
-worker_max_replicas              = 10000    # Live-tested cap: fast ramp without allocation failures
+# Physical ceiling: floor((node_ram_mb - 2048) / worker_memory) × compute_node_count
+# floor((79872 - 2048) / 1250) = 62 allocs/node × 110 compute nodes = 6820
+# Observed practical capacity: 6521 (below theoretical due to OS/system overhead).
+#
+# Memory oversubscription cap (Mode 3 OOM protection):
+#   Cluster RAM: 110 nodes × 79872 MB = 8,585,920 MB total
+#   80% utilization target: 8,585,920 × 0.80 = 6,868,736 MB
+#   At worker_memory=1250 MB: 6,868,736 / 1250 = 5,495 → 5,500
+#   Leaves ~1,715 GB cluster-wide headroom for workers bursting above reservation.
+#   Reducing further only if mass-OOM events (>500 workers) recur in production.
+worker_max_replicas              = 5500
 
 # 60 % CPU target: conservative threshold to trigger scale-out before iowait spikes.
 worker_cpu_target_utilization = 60
 
-# Queue-depth targets:
-# - simulations: ~1 worker per 20 queued jobs (throughput-oriented)
-# - requeued:    ~1 worker per queued retry job (recovery-oriented)
-# Lower target => more aggressive scale-out. Raise if storage pressure appears.
-worker_queue_simulations_target = 6
+# Queue-depth target: ceil(queue_depth / target) = desired workers, clamped to [min, max].
+# Formula: choose target ≤ ceil(expected_peak_queue / worker_max_replicas)
+# At 32k queue and 6800 max: target ≤ ceil(32000 / 6800) = 5. Use 3 for headroom.
+# - requeued: 1 worker per queued retry (recovery-oriented; keep at 1)
+worker_queue_simulations_target = 3   # ceil(32000/3)=10667 → clamped to worker_max_replicas
 worker_queue_requeued_target    = 1
 
 # Scale-up cooldown: 2 min keeps queue bursts from waiting on long cooldown windows.
@@ -166,10 +304,13 @@ worker_autoscaling_scale_up_cooldown   = "2m"
 worker_autoscaling_scale_down_cooldown = "10m"
 
 # Rolling update — prevents simultaneous eviction of running simulations.
+# auto_revert=false: CRITICAL — prevents rollback to low-count version on partial placement failures.
+# progress_deadline="0": CRITICAL — disables 20m timeout; large deployments stall at cluster capacity.
 worker_update_max_parallel      = 1
 worker_update_min_healthy_time  = "1m"
 worker_update_healthy_deadline  = "10m"
-worker_update_progress_deadline = "20m"
+worker_update_progress_deadline = "0"
+worker_update_auto_revert       = false
 
 # ---------- MongoDB ----------
 # 2 000 MHz / 4 096 MB covers observed query load during Stage 3 soak.
