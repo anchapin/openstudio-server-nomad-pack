@@ -242,6 +242,10 @@
 | `alert_queue_growth_delta` | `number` | `50` | Alert when the simulations queue depth grows by at least this many items between successive queue-health-alert runs. The job stores its previous queue depth baseline in Redis. |
 | `alert_failed_job_threshold` | `number` | `500` | Alert when `LLEN resque:failed` reaches or exceeds this threshold. |
 | `alert_check_interval` | `string` | `"*/2 * * * *"` | Cron schedule (UTC) for the queue-health-alert periodic batch job. |
+| `enable_lock_sweeper` | `bool` | `true` | Enable the periodic batch job that removes orphaned analysis_zip.lock files from the shared OpenStudio NFS volume. Disable this when the deployment does not mount the shared NFS host volume, or override lock_sweeper_nfs_volume to the correct host volume name. |
+| `lock_sweeper_interval` | `string` | `"*/5 * * * *"` | Cron schedule for the lock-sweeper periodic batch job (UTC). Default: every 5 minutes. |
+| `lock_sweeper_stale_threshold_minutes` | `number` | `15` | Minimum age in minutes before an analysis_zip.lock file with no matching analysis_zip.receipt file is considered stale and eligible for deletion. |
+| `lock_sweeper_nfs_volume` | `string` | `"openstudio-nfs"` | Nomad host volume name mounted by the lock-sweeper job at /mnt/openstudio. Defaults to the production shared NFS volume name. |
 | `enable_queue_sweeper` | `bool` | `false` | Enable periodic batch job that automatically clears stale resque:analysis:*:queuing locks from Redis. A lock is stale if it has no TTL and has been idle for longer than queue_sweeper_max_lock_age_seconds. |
 | `queue_sweeper_cron` | `string` | `"*/2 * * * *"` | Cron schedule for the queue-sweeper periodic job (UTC). Runs every 2 minutes by default to recover stale locks quickly. |
 | `queue_sweeper_max_lock_age_seconds` | `number` | `120` | Minimum idle seconds (OBJECT IDLETIME) before a TTL-less queuing lock is considered stale and eligible for deletion. Default 120s (2 min) — shorter than a typical analysis enqueue cycle while long enough to avoid racing an active enqueue. |

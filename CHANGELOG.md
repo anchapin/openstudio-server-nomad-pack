@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added a pack-managed `lock-sweeper.nomad.tpl` periodic batch job, `enable_lock_sweeper` feature flag, lock-sweeper variables, and operations guidance so orphaned `analysis_zip.lock` cleanup is version-controlled instead of maintained as an ad hoc production job (#432).
 - Added configurable worker canary rollout controls, a dependency-aware worker readiness health gate, and a canary promote/revert runbook so bad worker deployments fail back to the last stable version instead of rolling fleet-wide (#435).
 - Added worker `preflight` startup checks that verify Consul health, Consul catalog address resolution, and TCP reachability for MongoDB, Redis, and Rserve before the worker container starts; failures now emit structured `preflight_check` logs and fail the allocation cleanly instead of allowing silent worker crash loops (#433).
 - Added queue-health alerting for simulations queue stagnation, failed-job acceleration, worker crash-loop restart thresholds, and stuck worker scheduling, plus alert-routing guidance for Prometheus/Alertmanager, Vector/Loki, and Nomad periodic job failures (#437).
