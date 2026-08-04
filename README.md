@@ -341,11 +341,13 @@ The `update` stanza ensures zero-downtime upgrades by rolling through allocation
 | Variable | Default | Description |
 |---|---|---|
 | `worker_update_max_parallel` | `1` | Number of allocations replaced simultaneously |
-| `worker_update_health_check` | `"task_states"` | Health check mode for promotion |
-| `worker_update_min_healthy_time` | `"30s"` | Time allocation must stay healthy before promotion |
+| `worker_canary_count` | `10` | Number of canary allocations placed before promotion |
+| `worker_auto_promote` | `false` | Whether Nomad promotes healthy canaries automatically |
+| `worker_min_healthy_time` | `"2m"` | Time a canary allocation must stay healthy before promotion |
 | `worker_update_healthy_deadline` | `"5m"` | Max time for an allocation to become healthy |
-| `worker_update_progress_deadline` | `"10m"` | Max time for the full rollout to progress |
-| `worker_update_auto_revert` | `true` | Revert deployment if rollout fails |
+| `worker_update_progress_deadline` | `"2h"` | Max time for the full rollout to progress |
+
+Worker updates always use `health_check = "checks"` and `auto_revert = true`.
 
 ### Nomad Autoscaler Integration
 
@@ -485,7 +487,7 @@ The pack registers Consul service checks for datastore and API telemetry:
   - TCP socket check on port `8080`
   - HTTP liveness check on `/up`
   - HTTP readiness check on `/`
-- `openstudio-worker`: script check (`pgrep -f resque`) — confirms at least one Resque process is running in the allocation
+- `openstudio-worker`: script check that verifies `db`, `queue`, and `rserve` are reachable over TCP and that at least one Resque process is running in the allocation
 
 ## Batch Verification Checks
 

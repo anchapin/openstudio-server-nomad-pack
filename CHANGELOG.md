@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added configurable worker canary rollout controls, a dependency-aware worker readiness health gate, and a canary promote/revert runbook so bad worker deployments fail back to the last stable version instead of rolling fleet-wide (#435).
 - Added worker `preflight` startup checks that verify Consul health, Consul catalog address resolution, and TCP reachability for MongoDB, Redis, and Rserve before the worker container starts; failures now emit structured `preflight_check` logs and fail the allocation cleanly instead of allowing silent worker crash loops (#433).
 - Added queue-health alerting for simulations queue stagnation, failed-job acceleration, worker crash-loop restart thresholds, and stuck worker scheduling, plus alert-routing guidance for Prometheus/Alertmanager, Vector/Loki, and Nomad periodic job failures (#437).
 - Added a pack-managed `queue-health-alert.nomad.tpl` periodic batch job, new queue-health alert threshold variables, and on-call routing documentation for Nomad/Vector→Slack/PagerDuty/email integration so the ad hoc production queue alert can be replaced with a maintained operational asset (#438).

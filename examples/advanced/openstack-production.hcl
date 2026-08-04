@@ -311,16 +311,15 @@ worker_autoscaling_scale_down_cooldown = "10m"
 
 # Rolling update — canary-first high-scale strategy to retire bad versions faster
 # than max_parallel=1 while preserving guardrails.
-# auto_revert=false: keeps worker target count stable during temporary placement pressure.
+# auto_revert is always enforced by the pack so failed canaries roll back automatically.
 # progress_deadline="0": disables rollout timeout at large cluster capacity.
-worker_update_canary            = 25
-worker_update_auto_promote      = false
+worker_canary_count             = 25
+worker_auto_promote             = false
 worker_update_max_parallel      = 100
 worker_update_stagger           = "15s"
-worker_update_min_healthy_time  = "1m"
+worker_min_healthy_time         = "1m"
 worker_update_healthy_deadline  = "10m"
 worker_update_progress_deadline = "0"
-worker_update_auto_revert       = false
 
 # ---------- MongoDB ----------
 # 2 000 MHz / 4 096 MB covers observed query load during Stage 3 soak.

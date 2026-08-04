@@ -9,7 +9,7 @@ job "[[ var "job_name" . ]]-worker" {
     deployment_marker = "[[ var "deployment_marker" . ]]"
   }
 
-  [[ template "openstudio_server.update_block" (dict "max_parallel" (var "worker_update_max_parallel" .) "canary" (var "worker_update_canary" .) "auto_promote" (var "worker_update_auto_promote" .) "stagger" (var "worker_update_stagger" .) "health_check" (var "worker_update_health_check" .) "min_healthy_time" (var "worker_update_min_healthy_time" .) "healthy_deadline" (var "worker_update_healthy_deadline" .) "progress_deadline" (var "worker_update_progress_deadline" .) "auto_revert" (var "worker_update_auto_revert" .)) ]]
+  [[ template "openstudio_server.update_block" (dict "max_parallel" (var "worker_update_max_parallel" .) "canary" (var "worker_canary_count" .) "auto_promote" (var "worker_auto_promote" .) "stagger" (var "worker_update_stagger" .) "health_check" "checks" "min_healthy_time" (var "worker_min_healthy_time" .) "healthy_deadline" (var "worker_update_healthy_deadline" .) "progress_deadline" (var "worker_update_progress_deadline" .) "auto_revert" true) ]]
 
   group "worker" {
     count = [[ var "worker_count" . ]]
@@ -270,10 +270,10 @@ EOT
         provider = "consul"
 
         check {
-          name     = "worker-alive"
+          name     = "worker-ready"
           type     = "script"
           command  = "/bin/sh"
-          args     = ["-c", "[[ var "worker_health_check_command" . ]]"]
+          args     = ["-c", [[ var "worker_health_check_command" . | toJson ]]]
           interval = "30s"
           timeout  = "5s"
         }

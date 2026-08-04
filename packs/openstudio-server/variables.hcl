@@ -381,8 +381,8 @@ variable "worker_args" {
 
 variable "worker_health_check_command" {
   type        = string
-  description = "Shell command used by the worker service health check."
-  default     = "pgrep -f resque > /dev/null"
+  description = "Shell command used by the worker service health check. The default verifies the worker has patched db/queue/rserve aliases into /etc/hosts, can open TCP connections to MongoDB, Redis, and Rserve, and still has a Resque process running."
+  default     = "for target in 'db 27017' 'queue 6379' 'rserve 6311'; do set -- $target; grep -Eq \"(^|[[:space:]])$1$\" /etc/hosts && nc -z -w 2 \"$1\" \"$2\" >/dev/null 2>&1 || exit 1; done && pgrep -f resque > /dev/null"
 }
 
 variable "worker_count" {
@@ -427,16 +427,16 @@ variable "worker_update_max_parallel" {
   default     = 1
 }
 
-variable "worker_update_canary" {
+variable "worker_canary_count" {
   type        = number
-  description = "Number of worker canary allocations to place before full rollout. Leave 0 to disable canary mode (default behavior)."
-  default     = 0
+  description = "Number of canary allocations to place before promoting a worker job update."
+  default     = 10
 }
 
-variable "worker_update_auto_promote" {
+variable "worker_auto_promote" {
   type        = bool
-  description = "When worker_update_canary > 0, automatically promote the deployment after canaries pass."
-  default     = true
+  description = "Automatically promote canary allocations if health checks pass. Set to true only with a reliable health check configured."
+  default     = false
 }
 
 variable "worker_update_stagger" {
@@ -445,16 +445,10 @@ variable "worker_update_stagger" {
   default     = ""
 }
 
-variable "worker_update_health_check" {
+variable "worker_min_healthy_time" {
   type        = string
-  description = "Health check mode for worker rolling updates."
-  default     = "task_states"
-}
-
-variable "worker_update_min_healthy_time" {
-  type        = string
-  description = "How long a worker allocation must remain healthy before promotion."
-  default     = "30s"
+  description = "Minimum time a worker canary allocation must be healthy before it is eligible for promotion."
+  default     = "2m"
 }
 
 variable "worker_update_healthy_deadline" {
@@ -467,12 +461,6 @@ variable "worker_update_progress_deadline" {
   type        = string
   description = "Maximum time for the worker rolling update to make progress. Must be greater than worker_kill_timeout (default 5200s ≈ 87m). Defaults to 2h to ensure kill_timeout never exceeds progress_deadline."
   default     = "2h"
-}
-
-variable "worker_update_auto_revert" {
-  type        = bool
-  description = "Automatically revert a worker deployment if the update fails."
-  default     = true
 }
 
 variable "wait_for_deps_max_attempts" {
