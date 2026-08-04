@@ -218,7 +218,8 @@ func TestNomadPackPlanScenarios(t *testing.T) {
 
 			output, err := runCommand(sc.args...)
 			require.NoError(t, err, "nomad-pack plan failed for scenario %s: %s", sc.name, output)
-			assert.Contains(t, output, "Plan successful")
+			assert.Contains(t, output, "Plan succeeded")
 		})
 	}
 }
+
