@@ -11,8 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `docs/infrastructure/runbooks/queue-stall.md`, linked it from the operations
   guide, and added `scripts/drain-workers.sh` for batched worker allocation drains during
   queue-stall recovery (#444).
-- Added a "Worker Effectiveness Monitoring" section to `docs/infrastructure/operations-guide.md` documenting Nomad, Resque, structured-log, Prometheus, and Grafana views that distinguish starting, crash-looping, initialization-blocked, and throughput-producing workers (#441).
-- Added Resque processed/failed counters (`resque:stat:processed`, `resque:stat:failed`) to the in-pack Redis exporter scrape so Prometheus can graph worker completions/minute and failure rate instead of only raw queue depth (#441).
+- Added a "Worker Effectiveness Monitoring" section to `docs/infrastructure/operations-guide.md` documenting Nomad, Resque, structured-log, Prometheus, and Grafana views that distinguish starting, crash-looping, initialization-blocked, and throughput-producing workers (#443).
+- Added Resque processed/failed counters (`resque:stat:processed`, `resque:stat:failed`) to the in-pack Redis exporter scrape so Prometheus can graph worker completions/minute and failure rate instead of only raw queue depth (#443).
 - Added Prometheus ingress alert rules for Traefik route availability, 404 surge, and backend health to `monitoring/prometheus-alert-rules.yml`: `TraefikRouterMissing` (fires when `openstudio-server@consulcatalog` router is absent), `TraefikIngressHighErrorRate` (fires on sustained router-level 404 rate > 10 %), and `TraefikBackendUnhealthy` (fires when Traefik has no healthy server for openstudio-web) (#412).
 - Added "Ingress Alerts" runbook section to `docs/infrastructure/operations-guide.md` with response steps for each new alert and instructions for loading/reloading alert rules in Prometheus (#412).
 - Added item 10 ("Prometheus ingress alerts loaded") to `docs/infrastructure/pre-run-checklist.md` with a validation command and pass criteria (#412).
