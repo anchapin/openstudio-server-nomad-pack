@@ -156,6 +156,126 @@ EOT
 }
 [[- end -]]
 
+[[- define "openstudio_server.worker_preflight_task" -]]
+task "preflight" {
+  lifecycle {
+    hook    = "prestart"
+    sidecar = false
+  }
+
+  driver = "docker"
+
+  config {
+    image        = "[[ var "verification_image" .root ]]"
+    network_mode = "host"
+    command      = "sh"
+    args = [
+      "-ec",
+      <<-EOT
+set -eu
+
+MAX_ATTEMPTS=[[ var "worker_preflight_max_attempts" .root ]]
+SLEEP_SECONDS=[[ var "worker_preflight_sleep_seconds" .root ]]
+CONNECT_TIMEOUT=[[ var "worker_preflight_connect_timeout_seconds" .root ]]
+CONSUL_ADDR="[[ var "consul_address" .root ]]"
+PROCEED_ON_TIMEOUT="[[ if var "worker_wait_for_deps_proceed_on_timeout" .root ]]true[[ else ]]false[[ end ]]"
+
+if [ "$MAX_ATTEMPTS" -lt 1 ]; then
+  echo "preflight_check service=all status=fail reason=invalid_max_attempts value=$MAX_ATTEMPTS" >&2
+  exit 1
+fi
+
+if [ "$SLEEP_SECONDS" -lt 1 ]; then
+  echo "preflight_check service=all status=fail reason=invalid_sleep_seconds value=$SLEEP_SECONDS" >&2
+  exit 1
+fi
+
+if [ "$CONNECT_TIMEOUT" -lt 1 ]; then
+  echo "preflight_check service=all status=fail reason=invalid_connect_timeout value=$CONNECT_TIMEOUT" >&2
+  exit 1
+fi
+
+service_is_passing() {
+  service="$1"
+  wget -qO- -T "$CONNECT_TIMEOUT" \
+    "http://$CONSUL_ADDR/v1/health/service/$service?passing=true" \
+    2>/dev/null | tr -d '[:space:]' | grep -q "\"Service\":\"$service\""
+}
+
+lookup_service_address() {
+  service="$1"
+  response=$(wget -qO- -T "$CONNECT_TIMEOUT" "http://$CONSUL_ADDR/v1/catalog/service/$service" 2>/dev/null || true)
+  address=$(printf '%s\n' "$response" | grep -o '"ServiceAddress":"[^"]*"' | head -1 | cut -d'"' -f4)
+  if [ -z "$address" ]; then
+    address=$(printf '%s\n' "$response" | grep -o '"Address":"[^"]*"' | head -1 | cut -d'"' -f4)
+  fi
+  if [ -n "$address" ]; then
+    printf '%s\n' "$address"
+    return 0
+  fi
+  return 1
+}
+
+check_service() {
+  service="$1"
+  port="$2"
+  attempt=1
+  last_reason="unknown"
+  last_address=""
+  reported_address="unknown"
+
+  while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
+    if ! service_is_passing "$service"; then
+      last_reason="healthcheck_not_passing"
+      echo "preflight_check service=$service status=fail reason=$last_reason attempt=$attempt" >&2
+    else
+      address=$(lookup_service_address "$service" || true)
+      if [ -z "$address" ]; then
+        last_reason="dns_unresolved"
+        echo "preflight_check service=$service status=fail reason=$last_reason attempt=$attempt" >&2
+      elif nc -z -w "$CONNECT_TIMEOUT" "$address" "$port" >/dev/null 2>&1; then
+        echo "preflight_check service=$service status=pass reason=dns_and_tcp_ok address=$address port=$port attempt=$attempt"
+        return 0
+      else
+        last_reason="tcp_connect_failed"
+        last_address="$address"
+        echo "preflight_check service=$service status=fail reason=$last_reason address=$address port=$port attempt=$attempt" >&2
+      fi
+    fi
+
+    if [ "$attempt" -ge "$MAX_ATTEMPTS" ]; then
+      break
+    fi
+
+    sleep "$SLEEP_SECONDS"
+    attempt=$((attempt + 1))
+  done
+
+  if [ -n "$last_address" ]; then
+    reported_address="$last_address"
+  fi
+
+  echo "preflight_check service=$service status=fail reason=$last_reason address=$reported_address port=$port attempts=$MAX_ATTEMPTS proceeding=$PROCEED_ON_TIMEOUT" >&2
+  if [ "$PROCEED_ON_TIMEOUT" = "true" ]; then
+    return 0
+  fi
+  return 1
+}
+
+check_service "openstudio-db" "27017"
+check_service "openstudio-redis" "6379"
+check_service "openstudio-rserve" "6311"
+EOT
+    ]
+  }
+
+  resources {
+    cpu    = 50
+    memory = 32
+  }
+}
+[[- end -]]
+
 [[- define "openstudio_server.wait_for_deps_task" -]]
 task "wait-for-deps" {
   lifecycle {
