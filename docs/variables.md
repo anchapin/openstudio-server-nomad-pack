@@ -286,6 +286,7 @@
 | `aws_region` | `string` | `"us-east-1"` | AWS region where the Batch compute environment is located. Only used when batch_engine = 'aws_batch'. |
 | `aws_batch_job_queue` | `string` | `""` | ARN or name of the AWS Batch job queue to which simulations are submitted. Only used when batch_engine = 'aws_batch'. |
 | `aws_batch_job_definition` | `string` | `""` | ARN or name of the AWS Batch job definition used for simulation jobs. Only used when batch_engine = 'aws_batch'. |
+| `enable_infra_setup` | `bool` | `false` | When true, renders the infra-setup client configuration system job. Disabled by default. |
 
 ## Job Priority
 

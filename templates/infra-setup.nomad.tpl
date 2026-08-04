@@ -12,9 +12,12 @@
 # Teardown when done testing:
 #   nomad stop -purge infra-setup
 
-job "infra-setup" {
+[[ if var "enable_infra_setup" . ]]
+job "[[ var "job_name" . ]]-infra-setup" {
+  region      = "[[ var "region" . ]]"
+  datacenters = [[ var "datacenters" . | toJson ]]
+  namespace   = "[[ var "nomad_namespace" . ]]"
   type        = "system"
-  datacenters = ["dc1"]
 
   group "configure-client" {
     restart {
@@ -53,11 +56,11 @@ pin_registry_host() {
   local hosts_file="/etc/hosts"
   [ -n "$host" ] && [ -n "$ip" ] || return 0
 
-  if grep -qE "[[:space:]]${host}([[:space:]]|$)" "$hosts_file"; then
-    sed -i.bak -E "/[[:space:]]${host}([[:space:]]|$)/d" "$hosts_file"
+  if grep -qE "( |^)$host( |$)" "$hosts_file"; then
+    sed -i.bak -E "/( |^)$host( |$)/d" "$hosts_file"
   fi
-  echo "${ip} ${host}" >> "$hosts_file"
-  log "Pinned registry host ${host} -> ${ip} in ${hosts_file}"
+  echo "$ip $host" >> "$hosts_file"
+  log "Pinned registry host $host -> $ip in $hosts_file"
 }
 
 NOMAD_RESTART_REQUIRED=false
@@ -198,12 +201,12 @@ if [ -f "$NOMAD_MAIN_CONF" ]; then
   fi
 
   if grep -q 'network_interface' "$NOMAD_MAIN_CONF"; then
-    current_iface="$(sed -n 's/^[[:space:]]*network_interface[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "$NOMAD_MAIN_CONF" | head -n1)"
+    current_iface="$(sed -n 's/^[ 	]*network_interface[ 	]*=[ 	]*"\([^"]*\)".*/\1/p' "$NOMAD_MAIN_CONF" | head -n1)"
     if [ "$current_iface" != "$PRIMARY_IFACE" ]; then
       current_iface_safe="$current_iface"
       [ -z "$current_iface_safe" ] &&       current_iface_safe="<unset>"
       log "Updating Nomad network_interface: $current_iface_safe -> $PRIMARY_IFACE"
-      sed -i.bak -E "s|^[[:space:]]*network_interface[[:space:]]*=.*$|  network_interface = \"$PRIMARY_IFACE\"|" "$NOMAD_MAIN_CONF"
+      sed -i.bak -E "s|^[ 	]*network_interface[ 	]*=.*$|  network_interface = \"$PRIMARY_IFACE\"|" "$NOMAD_MAIN_CONF"
       NOMAD_RESTART_REQUIRED=true
     else
       log "Nomad network_interface already set to $PRIMARY_IFACE"
@@ -275,3 +278,5 @@ SCRIPT
     }
   }
 }
+[[ end ]]
+
