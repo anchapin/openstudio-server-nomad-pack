@@ -37,7 +37,7 @@ for target in [[ range var "verification_targets" . ]]"[[ . ]]" [[ end ]]; do
     continue
   fi
 
-  total=$(expr "$total" + 1)
+  total=$((total + 1))
 
   component=$(echo "$target" | cut -d= -f1)
   endpoint=$(echo "$target" | cut -d= -f2)
@@ -59,13 +59,13 @@ for target in [[ range var "verification_targets" . ]]"[[ . ]]" [[ end ]]; do
   if [ "$ping_ok" -eq 1 ] && [ "$tcp_ok" -eq 1 ]; then
     status="pass"
   else
-    failed=$(expr "$failed" + 1)
+    failed=$((failed + 1))
   fi
 
   echo "batch_verification_result component=$component host=$host port=$port ping=$ping_ok tcp=$tcp_ok status=$status"
 done
 
-passed=$(expr "$total" - "$failed")
+passed=$((total - failed))
 echo "batch_verification_summary total=$total passed=$passed failed=$failed"
 
 if [ "$failed" -gt 0 ]; then

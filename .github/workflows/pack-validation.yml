@@ -41,6 +41,9 @@ jobs:
         # syntax"). Render is fast; keep it cheap.
         run: nomad-pack render packs/openstudio-server
 
+      - name: Warn on Nomad heredoc shell parameter expansions
+        run: ./scripts/check-nomad-heredoc-interpolation.sh
+
   render-matrix:
     name: Render Matrix (${{ matrix.scenario.name }})
     runs-on: ubuntu-latest
@@ -64,6 +67,8 @@ jobs:
             args: "-var-file examples/advanced/e2e-test.hcl packs/openstudio-server"
           - name: batch-verification
             args: "-var enable_batch_verification=true packs/openstudio-server"
+          - name: queue-sweeper
+            args: "-var enable_queue_sweeper=true packs/openstudio-server"
           - name: nomad-batch-engine
             args: "-var batch_engine=nomad_batch -var nomad_batch_datacenter=dc1 -var nomad_batch_namespace=default -var nomad_batch_job_name=openstudio-simulation packs/openstudio-server"
           - name: aws-batch-engine
@@ -82,8 +87,19 @@ jobs:
         with:
           version: 0.4.2
 
+      - name: Install shellcheck
+        run: |
+          if ! command -v shellcheck >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y shellcheck
+          fi
+          shellcheck --version
+
       - name: Render Nomad Pack matrix scenario
         run: nomad-pack render ${{ matrix.scenario.args }}
+
+      - name: Lint rendered POSIX shell snippets
+        run: ./scripts/lint-posix-shell.sh ${{ matrix.scenario.args }}
 
       - name: Validate batch verification rendering
         run: nomad-pack render --var "enable_batch_verification=true" packs/openstudio-server

@@ -29,6 +29,12 @@ nomad-pack plan --name openstudio-server-airgapped -var-file examples/advanced/a
 # Run the integration test script (render + plan across key scenarios)
 bash scripts/test_nomad_pack_integration.sh
 
+# Lint rendered /bin/sh scripts embedded in Nomad templates
+./scripts/lint-posix-shell.sh packs/openstudio-server
+
+# Warn on shell parameter expansion patterns that Nomad HCL heredocs can parse
+./scripts/check-nomad-heredoc-interpolation.sh
+
 # Run a single focused test script (fast iteration)
 ./scripts/test_pre_teardown.sh
 ./scripts/test_bump_metadata_version.sh
@@ -154,6 +160,51 @@ Nomad Pack templates use Go template syntax with **`[[` / `]]`** delimiters (not
 - Pass root context to named templates: `[[ template "openstudio_server.arch_constraint" . ]]`
 - Pass a constructed dict: `[[ template "openstudio_server.node_affinity" (dict "attribute" "..." "value" "..." "weight" 100) ]]`
 - JSON-encode a list variable: `[[ var "datacenters" . | toJson ]]`
+
+### Shell compatibility and heredoc interpolation pitfalls
+
+Many runtime scripts in the Nomad templates execute under **POSIX `/bin/sh`** inside containers.
+Do **not** use bash-only syntax such as arrays or `read -d` in template heredocs that start with `#!/bin/sh`.
+
+```sh
+# BAD
+targets=("db" "queue")
+read -r -d '' payload <<'EOF'
+...
+EOF
+
+# GOOD
+targets="db
+queue"
+printf '%s\n' "$targets" | while IFS= read -r target; do
+  :
+done
+```
+
+Also avoid `${VAR:-default}`, `${VAR:=default}`, and similar `${...:...}` shell parameter expansions inside Nomad `data = <<-EOT` heredocs.
+Nomad's HCL parser can consume the `${...}` expression before `/bin/sh` runs it.
+
+```hcl
+# BAD
+data = <<-EOT
+timeout="${WORKER_TIMEOUT:-30}"
+EOT
+
+# GOOD
+data = <<-EOT
+timeout="$WORKER_TIMEOUT"
+if [ -z "$timeout" ]; then
+  timeout=30
+fi
+EOT
+```
+
+Use these local guardrails before pushing:
+
+```bash
+./scripts/lint-posix-shell.sh packs/openstudio-server
+./scripts/check-nomad-heredoc-interpolation.sh
+```
 
 ### Variable flow
 
