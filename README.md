@@ -73,6 +73,7 @@ The pack renders a dedicated Nomad job for each service component:
 | `<job_name>-db` | `db.nomad.tpl` | always (MongoDB, Consul: `openstudio-db`) |
 | `<job_name>-redis` | `redis.nomad.tpl` | always (Consul: `openstudio-redis`) |
 | `<job_name>-rserve` | `rserve.nomad.tpl` | always (Consul: `openstudio-rserve`) |
+| `<job_name>-queue-health-alert` | `queue-health-alert.nomad.tpl` | `enable_queue_health_alert = true` (default) |
 | `<job_name>-queue-sweeper` | `queue-sweeper.nomad.tpl` | `enable_queue_sweeper` or `enable_stall_watchdog` (task groups: `queue-sweeper`, `stall-watchdog`) |
 | `<job_name>-system-hooks` | `system-hooks.nomad.tpl` | `enable_image_prepull = true` (default) |
 | `<job_name>-state-backup` | `state-backup.nomad.tpl` | `backup_enabled = false` (default; set `true` when backup storage is provisioned) |
@@ -318,6 +319,7 @@ redis_affinities = [
 - `packs/openstudio-server/templates/db.nomad.tpl`: MongoDB service (`<job_name>-db`, Consul: `openstudio-db`) on port `27017`.
 - `packs/openstudio-server/templates/redis.nomad.tpl`: Redis cache service (`<job_name>-redis`, Consul: `openstudio-redis`) on port `6379`.
 - `packs/openstudio-server/templates/rserve.nomad.tpl`: Rserve service (`<job_name>-rserve`, Consul: `openstudio-rserve`) on port `6311`.
+- `packs/openstudio-server/templates/queue-health-alert.nomad.tpl`: Periodic batch alert job (`<job_name>-queue-health-alert`) that emits `queue_health` lines and exits `2` on alert conditions.
 - `packs/openstudio-server/templates/queue-sweeper.nomad.tpl`: Periodic background maintenance job (`<job_name>-queue-sweeper`) containing `queue-sweeper` and `stall-watchdog` task groups.
 - `packs/openstudio-server/templates/stall-watchdog.nomad.tpl`: **Architecture marker file — renders no job.** Documents stall watchdog consolidation into `queue-sweeper.nomad.tpl` (fix #405).
 - `packs/openstudio-server/templates/system-hooks.nomad.tpl`: System job that pre-pulls all service images on every eligible node (`enable_image_prepull = true`, default).

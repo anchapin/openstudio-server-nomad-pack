@@ -236,6 +236,11 @@
 | `enable_batch_verification` | `bool` | `false` | Enable standalone batch connectivity verification job. |
 | `verification_image` | `string` | `"busybox:1.36"` | The image used for batch connectivity verification checks. |
 | `verification_targets` | `list(string)` | `[ "db=openstudio-db.service.consul:27017", "redis=openstudio-redis.service.consul:6379", "rserve=openstudio-rserve.service.consul:6311", ]` | Connectivity targets in component=host:port format for batch verification. |
+| `enable_queue_health_alert` | `bool` | `true` | Enable the periodic batch job that emits `queue_health` structured log lines and exits 2 when queue backlog growth, failed-job depth, stale queuing locks, or Redis reachability breach the configured thresholds. Enabled by default so production renders replace the ad hoc manual alert job with a pack-managed equivalent. |
+| `alert_stale_lock_threshold` | `number` | `10` | Alert when the number of TTL-less `resque:analysis:*:queuing` locks whose idle time is at least queue_sweeper_max_lock_age_seconds reaches or exceeds this threshold. |
+| `alert_queue_growth_delta` | `number` | `50` | Alert when the simulations queue depth grows by at least this many items between successive queue-health-alert runs. The job stores its previous queue depth baseline in Redis. |
+| `alert_failed_job_threshold` | `number` | `500` | Alert when `LLEN resque:failed` reaches or exceeds this threshold. |
+| `alert_check_interval` | `string` | `"*/2 * * * *"` | Cron schedule (UTC) for the queue-health-alert periodic batch job. |
 | `enable_queue_sweeper` | `bool` | `false` | Enable periodic batch job that automatically clears stale resque:analysis:*:queuing locks from Redis. A lock is stale if it has no TTL and has been idle for longer than queue_sweeper_max_lock_age_seconds. |
 | `queue_sweeper_cron` | `string` | `"*/2 * * * *"` | Cron schedule for the queue-sweeper periodic job (UTC). Runs every 2 minutes by default to recover stale locks quickly. |
 | `queue_sweeper_max_lock_age_seconds` | `number` | `120` | Minimum idle seconds (OBJECT IDLETIME) before a TTL-less queuing lock is considered stale and eligible for deletion. Default 120s (2 min) — shorter than a typical analysis enqueue cycle while long enough to avoid racing an active enqueue. |
