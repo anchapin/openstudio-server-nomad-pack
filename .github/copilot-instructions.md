@@ -33,10 +33,12 @@ bash scripts/test_nomad_pack_integration.sh
 
 # Run a single focused test script (fast iteration)
 ./scripts/test_pre_teardown.sh
+./scripts/test_validate_traefik_consul_endpoint.sh
 ./scripts/test_bump_metadata_version.sh
 ./scripts/test_backup_restore_docs_defaults.sh
 ./scripts/test_release_version_bump_workflow.sh
 ./scripts/test_migration_doc_variable_mapping.sh
+./scripts/test_openstack_autoscaler_render.sh
 
 # Render a specific scenario inline (e.g., verify a single template change)
 nomad-pack render -var "enable_vector_collection=false" .
@@ -312,11 +314,13 @@ update {
 
 ### Deep-dive docs
 
-`docs/` contains operator-facing reference material:
+`docs/` contains operator and modeler reference material:
 
 | File | Content |
 |---|---|
-| `docs/modelers/getting-started-single-node.md` | Step-by-step single-node deploy guide |
+| `docs/modelers/quickstart.md` | Modeler quickstart for deploying in 3 steps |
+| `docs/modelers/submitting-osw-jobs.md` | Submitting OSW/PAT/API simulation jobs |
+| `docs/infrastructure/getting-started-single-node.md` | Step-by-step single-node infrastructure deploy guide |
 | `docs/infrastructure/operations-guide.md` | Day-2 operations: scaling, draining, updating |
 | `docs/infrastructure/storage.md` | Host volume, CSI, NFS configuration detail |
 | `docs/infrastructure/upgrading.md` | Version upgrade procedures |
@@ -452,6 +456,6 @@ cp templates/*.tpl templates/*.nomad.tpl packs/openstudio-server/templates/
 |---|---|---|
 | `pack-validation.yml` | push to `develop` or `main`, PR to `develop` or `main`, `workflow_dispatch` | fmt, render, plan (dry-run for multiple example var-files), `examples/test-batch.nomad` job spec validation, Vagrantfile syntax, script syntax, version-bump tests, `variables.md` diff, backup/restore default-doc consistency, README links to `docs/variables.md`, `compatibility.md` version gate, `packs/` registry sync, integration test script |
 | `acl-policy-validation.yml` | push/PR to `develop` or `main` on `policies/**` or `scripts/apply-acl-policies.sh` changes | `nomad fmt -check policies/` |
-| `integration-test.yml` | PR to `develop` (path-filtered) | template render + e2e stack test |
+| `integration-test.yml` | PR to `develop` or `main` (path-filtered) | template render + e2e stack test |
 | `release-version-bump.yml` | push to `main` | **Step 1:** auto-bumps patch version in `metadata.hcl`, syncs `packs/openstudio-server/metadata.hcl`, commits both files, creates and pushes `v*` git tag — triggers `release.yml` |
 | `release.yml` | push of tag matching `v*` | **Step 2:** reads version from `metadata.hcl`, publishes GitHub Release with auto-generated notes |
