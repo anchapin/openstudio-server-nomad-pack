@@ -44,6 +44,24 @@ jobs:
       - name: Warn on Nomad heredoc shell parameter expansions
         run: ./scripts/check-nomad-heredoc-interpolation.sh
 
+      - name: Detect worker startup-related changes
+        id: worker_startup_changes
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch --no-tags --depth=1 origin "${GITHUB_BASE_REF}"
+          CHANGED_FILES="$(git diff --name-only "origin/${GITHUB_BASE_REF}"...HEAD)"
+          echo "Changed files:"
+          printf '%s\n' "${CHANGED_FILES}"
+          if printf '%s\n' "${CHANGED_FILES}" | grep -Eq '^(packs/openstudio-server/templates/worker\.nomad\.tpl|packs/openstudio-server/templates/_helpers\.tpl|scripts/test_worker_startup_dns_resolution\.sh)$'; then
+            echo "should_run=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "should_run=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Check worker startup DNS/service resolution
+        if: github.event_name != 'pull_request' || steps.worker_startup_changes.outputs.should_run == 'true'
+        run: ./scripts/test_worker_startup_dns_resolution.sh
+
   render-matrix:
     name: Render Matrix (${{ matrix.scenario.name }})
     runs-on: ubuntu-latest

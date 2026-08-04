@@ -251,6 +251,35 @@ func TestQueueSweeperWatchdogCronInvariant(t *testing.T) {
 	assert.Contains(t, output, "queue_sweeper_cron == stall_watchdog_cron")
 }
 
+func TestWorkerStartupDNSResolution(t *testing.T) {
+	t.Parallel()
+
+	repoRoot, err := filepath.Abs("../../")
+	require.NoError(t, err)
+	packPath := filepath.Join(repoRoot, "packs/openstudio-server")
+
+	output, err := runCommand("render", packPath)
+	require.NoError(t, err, "nomad-pack render failed: %s", output)
+
+	renderedFiles := splitRenderOutput(output)
+	workerSpec, ok := renderedFiles["openstudio-server/worker.nomad"]
+	require.True(t, ok, "worker.nomad was not present in render output")
+	require.NotEmpty(t, strings.TrimSpace(workerSpec), "worker.nomad render output should not be empty")
+
+	assert.Contains(t, workerSpec, `task "wait-for-deps"`)
+	assert.Contains(t, workerSpec, `http://$CONSUL_ADDR/v1/health/service/$service?passing=true`)
+	assert.Contains(t, workerSpec, `check_service "openstudio-db"`)
+	assert.Contains(t, workerSpec, `check_service "openstudio-redis"`)
+
+	assert.Contains(t, workerSpec, `http://${CONSUL_ADDR}/v1/catalog/service/${service}`)
+	assert.Contains(t, workerSpec, `resolve_alias "openstudio-db" "db"`)
+	assert.Contains(t, workerSpec, `resolve_alias "openstudio-redis" "queue"`)
+	assert.Contains(t, workerSpec, `resolve_alias "openstudio-rserve" "rserve"`)
+
+	assert.NotContains(t, workerSpec, `getent hosts`)
+	assert.NotContains(t, workerSpec, `.service.consul`)
+}
+
 func TestNomadPackPlanScenarios(t *testing.T) {
 	t.Parallel()
 
