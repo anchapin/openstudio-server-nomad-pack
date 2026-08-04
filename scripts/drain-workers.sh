@@ -2,76 +2,79 @@
 #
 # drain-workers.sh
 #
-# Safely stop old worker allocations in batches after a worker rollback or image fix.
-#
-# Usage:
-#   ./scripts/drain-workers.sh --target-version <job-version> [options]
-#   JOB_NAME=openstudio-server-worker ./scripts/drain-workers.sh --target-version 41
-#
-# Options:
-#   --target-version <n>   Required Nomad job version that should remain running
-#   --job-name <name>      Worker job name (default: $JOB_NAME or openstudio-server-worker)
-#   --batch-size <n>       Number of allocation stop requests per batch (default: 25)
-#   --delay-seconds <n>    Delay between batches (default: 10)
-#   --retry-delay <n>      Delay after HTTP 429 before retrying (default: 15)
-#   --max-retries <n>      Maximum retries for one stop request (default: 5)
-#   --dry-run              Print matching allocations without stopping them
-#   --help                 Show this help text
+# Stop old worker allocations in controlled batches after a rollback or image fix.
 
 set -euo pipefail
 
-NOMAD_ADDR="${NOMAD_ADDR:-http://127.0.0.1:4646}"
+DEFAULT_NOMAD_ADDR="${NOMAD_ADDR:-http://127.0.0.1:4646}"
+NOMAD_ADDR="${DEFAULT_NOMAD_ADDR}"
 NOMAD_NAMESPACE="${NOMAD_NAMESPACE:-default}"
 JOB_NAME="${JOB_NAME:-openstudio-server-worker}"
 TARGET_VERSION=""
-BATCH_SIZE=25
-DELAY_SECONDS=10
-RETRY_DELAY=15
-MAX_RETRIES=5
+BATCH_SIZE=100
+SLEEP_SECONDS=20
+MAX_ROUNDS=0
 DRY_RUN=false
 
 usage() {
   cat <<'EOF'
-Usage:
-  ./scripts/drain-workers.sh --target-version <job-version> [options]
-  JOB_NAME=openstudio-server-worker ./scripts/drain-workers.sh --target-version 41
+Usage: scripts/drain-workers.sh [options]
+  --job NAME         Nomad job name (default: openstudio-server-worker)
+  --target-version N Stop only running allocations older than this version
+  --batch N          Allocations to stop per round (default: 100)
+  --sleep N          Seconds between rounds (default: 20)
+  --rounds N         Max rounds (default: unlimited until done)
+  --dry-run          Print what would be stopped without stopping
+  --nomad-addr URL   Nomad address (default: $NOMAD_ADDR or http://127.0.0.1:4646)
+  --help             Show this help text
 
-Options:
-  --target-version <n>   Required Nomad job version that should remain running
-  --job-name <name>      Worker job name (default: $JOB_NAME or openstudio-server-worker)
-  --batch-size <n>       Number of allocation stop requests per batch (default: 25)
-  --delay-seconds <n>    Delay between batches (default: 10)
-  --retry-delay <n>      Delay after HTTP 429 before retrying (default: 15)
-  --max-retries <n>      Maximum retries for one stop request (default: 5)
-  --dry-run              Print matching allocations without stopping them
-  --help                 Show this help text
+Compatibility aliases:
+  --job-name, --batch-size, --delay-seconds
 EOF
+}
+
+is_non_negative_integer() {
+  [[ "${1}" =~ ^[0-9]+$ ]]
+}
+
+require_option_value() {
+  if [[ $# -lt 2 || -z "${2}" || "${2}" == --* ]]; then
+    echo "ERROR: missing value for ${1}" >&2
+    usage >&2
+    exit 1
+  fi
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --job|--job-name)
+      require_option_value "$@"
+      JOB_NAME="$2"
+      shift 2
+      ;;
     --target-version)
-      TARGET_VERSION="${2:-}"
+      require_option_value "$@"
+      TARGET_VERSION="$2"
       shift 2
       ;;
-    --job-name)
-      JOB_NAME="${2:-}"
+    --batch|--batch-size)
+      require_option_value "$@"
+      BATCH_SIZE="$2"
       shift 2
       ;;
-    --batch-size)
-      BATCH_SIZE="${2:-}"
+    --sleep|--delay-seconds)
+      require_option_value "$@"
+      SLEEP_SECONDS="$2"
       shift 2
       ;;
-    --delay-seconds)
-      DELAY_SECONDS="${2:-}"
+    --rounds)
+      require_option_value "$@"
+      MAX_ROUNDS="$2"
       shift 2
       ;;
-    --retry-delay)
-      RETRY_DELAY="${2:-}"
-      shift 2
-      ;;
-    --max-retries)
-      MAX_RETRIES="${2:-}"
+    --nomad-addr)
+      require_option_value "$@"
+      NOMAD_ADDR="$2"
       shift 2
       ;;
     --dry-run)
@@ -83,46 +86,65 @@ while [[ $# -gt 0 ]]; do
       exit 0
       ;;
     *)
-      echo "Unknown option: $1" >&2
+      echo "ERROR: unknown option: $1" >&2
       usage >&2
       exit 1
       ;;
   esac
 done
 
-for value_name in TARGET_VERSION BATCH_SIZE DELAY_SECONDS RETRY_DELAY MAX_RETRIES; do
-  value="${!value_name}"
-  if [[ ! "$value" =~ ^[0-9]+$ ]]; then
-    echo "ERROR: ${value_name} must be an integer (got '$value')" >&2
-    exit 1
-  fi
-done
-
-if [[ -z "$TARGET_VERSION" ]]; then
+if [[ -z "${TARGET_VERSION}" ]]; then
   echo "ERROR: --target-version is required" >&2
   usage >&2
   exit 1
 fi
 
-export NOMAD_ADDR NOMAD_NAMESPACE
+for numeric_arg in TARGET_VERSION BATCH_SIZE SLEEP_SECONDS MAX_ROUNDS; do
+  value="${!numeric_arg}"
+  if ! is_non_negative_integer "${value}"; then
+    echo "ERROR: ${numeric_arg} must be a non-negative integer (got '${value}')" >&2
+    exit 1
+  fi
+done
 
-alloc_lines="$(
-  nomad job allocs -json "$JOB_NAME" \
-    | python3 -c $'
-import json
+if (( BATCH_SIZE == 0 )); then
+  echo "ERROR: --batch must be greater than 0" >&2
+  exit 1
+fi
+
+NOMAD_ADDR="${NOMAD_ADDR%/}"
+
+urlencode() {
+  python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$1"
+}
+
+curl_nomad() {
+  local curl_args=(
+    -fsS
+    --max-time 30
+    -H "X-Nomad-Namespace: ${NOMAD_NAMESPACE}"
+  )
+  if [[ -n "${NOMAD_TOKEN:-}" ]]; then
+    curl_args+=(-H "X-Nomad-Token: ${NOMAD_TOKEN}")
+  fi
+  curl "${curl_args[@]}" "$@"
+}
+
+fetch_allocations_json() {
+  local encoded_job
+  encoded_job="$(urlencode "${JOB_NAME}")"
+  curl_nomad "${NOMAD_ADDR}/v1/job/${encoded_job}/allocations"
+}
+
+candidate_lines_from_json() {
+  python3 -c 'import json
 import sys
 
 target = int(sys.argv[1])
 allocs = json.load(sys.stdin)
+candidates = []
 
-for alloc in sorted(
-    allocs,
-    key=lambda a: (
-        int(a.get("JobVersion", a.get("Version", -1)) or -1),
-        a.get("NodeName", ""),
-        a.get("ID", ""),
-    ),
-):
+for alloc in allocs:
     version = alloc.get("JobVersion", alloc.get("Version"))
     if version is None:
         continue
@@ -132,119 +154,208 @@ for alloc in sorted(
         continue
     if alloc.get("ClientStatus") != "running":
         continue
-    if version == target:
+    if version >= target:
         continue
-    print(
-        "\\t".join(
-            [
-                str(version),
-                alloc.get("ID", ""),
-                alloc.get("NodeName", ""),
-                alloc.get("DesiredStatus", ""),
-            ]
+    candidates.append(
+        (
+            version,
+            alloc.get("ID", ""),
+            alloc.get("NodeName", ""),
+            alloc.get("DesiredStatus", ""),
         )
     )
-' "$TARGET_VERSION"
-)"
 
-if [[ -z "$alloc_lines" ]]; then
-  echo "No running allocations need draining for ${JOB_NAME}; all running allocs already match version ${TARGET_VERSION}."
-  exit 0
-fi
+for version, alloc_id, node_name, desired_status in sorted(
+    candidates,
+    key=lambda item: (item[0], item[2], item[1]),
+):
+    print(f"{version}\t{alloc_id}\t{node_name}\t{desired_status}")' \
+    "${TARGET_VERSION}"
+}
 
-echo "==> Candidate allocations for drain"
-echo "    Job:            ${JOB_NAME}"
-echo "    Target version: ${TARGET_VERSION}"
-echo "    Batch size:     ${BATCH_SIZE}"
-echo "    Batch delay:    ${DELAY_SECONDS}s"
-echo "    Retry delay:    ${RETRY_DELAY}s"
-echo "    Max retries:    ${MAX_RETRIES}"
-echo "    Dry run:        ${DRY_RUN}"
-echo
-printf '%s\n' "$alloc_lines" | while IFS=$'\t' read -r version alloc_id node_name desired_status; do
-  printf '  version=%s alloc=%s node=%s desired=%s\n' \
-    "$version" "${alloc_id:0:8}" "${node_name:-unknown}" "${desired_status:-unknown}"
-done
-echo
+version_breakdown_from_json() {
+  python3 -c 'import collections
+import json
+import sys
 
-if [[ "$DRY_RUN" == "true" ]]; then
-  echo "Dry run only; no allocations were stopped."
-  exit 0
-fi
+target = int(sys.argv[1])
+allocs = json.load(sys.stdin)
+running = collections.Counter()
+old_running = collections.Counter()
 
-stop_alloc() {
+for alloc in allocs:
+    version = alloc.get("JobVersion", alloc.get("Version"))
+    if version is None:
+        continue
+    try:
+        version = int(version)
+    except (TypeError, ValueError):
+        continue
+    if alloc.get("ClientStatus") != "running":
+        continue
+    running[version] += 1
+    if version < target:
+        old_running[version] += 1
+
+if not running:
+    print("version=none running=0 old_running=0")
+    raise SystemExit(0)
+
+for version in sorted(running):
+    print(
+        f"version={version} running={running[version]} old_running={old_running.get(version, 0)}"
+    )' \
+    "${TARGET_VERSION}"
+}
+
+count_lines() {
+  awk 'NF { count++ } END { print count + 0 }' <<<"${1}"
+}
+
+print_candidates() {
+  local candidates="$1"
+  while IFS=$'\t' read -r version alloc_id node_name desired_status; do
+    [[ -n "${alloc_id}" ]] || continue
+    printf 'dry_run alloc=%s version=%s node=%s desired=%s\n' \
+      "${alloc_id}" "${version}" "${node_name:-unknown}" "${desired_status:-unknown}"
+  done <<<"${candidates}"
+}
+
+stop_allocation() {
   local alloc_id="$1"
-  local attempt=1
+  local version="$2"
+  local response
+  local body
+  local status
+  local eval_id
+  local curl_args=(
+    -sS
+    --max-time 30
+    -H "X-Nomad-Namespace: ${NOMAD_NAMESPACE}"
+    -X POST
+  )
 
-  while (( attempt <= MAX_RETRIES )); do
-    local response
-    local body
-    local status
+  if [[ -n "${NOMAD_TOKEN:-}" ]]; then
+    curl_args+=(-H "X-Nomad-Token: ${NOMAD_TOKEN}")
+  fi
 
-    response="$(
-      curl -sS --max-time 30 \
-        -H "X-Nomad-Namespace: ${NOMAD_NAMESPACE}" \
-        ${NOMAD_TOKEN:+-H "X-Nomad-Token: ${NOMAD_TOKEN}"} \
-        -X POST \
-        "${NOMAD_ADDR}/v1/allocation/${alloc_id}/stop" \
-        -w $'\n%{http_code}'
+  response="$(
+    curl "${curl_args[@]}" \
+      "${NOMAD_ADDR}/v1/allocation/${alloc_id}/stop" \
+      -w $'\n%{http_code}'
+  )"
+  status="${response##*$'\n'}"
+  body="${response%$'\n'*}"
+
+  if [[ "${status}" =~ ^2[0-9][0-9]$ ]]; then
+    eval_id="$(
+      python3 -c 'import json,sys
+body = sys.stdin.read().strip()
+if not body:
+    print("")
+    raise SystemExit(0)
+try:
+    payload = json.loads(body)
+except json.JSONDecodeError:
+    print("")
+    raise SystemExit(0)
+print(payload.get("EvalID", ""))' <<<"${body}"
     )"
-    status="${response##*$'\n'}"
-    body="${response%$'\n'*}"
+    printf 'stopped alloc=%s version=%s eval=%s\n' \
+      "${alloc_id}" "${version}" "${eval_id}"
+    return 0
+  fi
 
-    if [[ "$status" == "200" ]]; then
-      local eval_id
-      eval_id="$(
-        python3 -c 'import json,sys; print(json.loads(sys.stdin.read() or "{}").get("EvalID",""))' \
-          <<<"$body"
-      )"
-      printf '  stopped alloc=%s eval=%s\n' "${alloc_id:0:8}" "${eval_id:0:8}"
-      return 0
-    fi
-
-    if [[ "$status" == "429" ]]; then
-      printf '  retrying alloc=%s after HTTP 429 (attempt %s/%s)\n' "${alloc_id:0:8}" "$attempt" "$MAX_RETRIES" >&2
-      sleep "$RETRY_DELAY"
-      (( attempt++ ))
-      continue
-    fi
-
-    printf '  failed alloc=%s http=%s body=%s\n' "${alloc_id:0:8}" "$status" "$body" >&2
-    return 1
-  done
-
-  printf '  failed alloc=%s exhausted retries after repeated HTTP 429 responses\n' "${alloc_id:0:8}" >&2
+  printf 'stop_failed alloc=%s version=%s http=%s body=%s\n' \
+    "${alloc_id}" "${version}" "${status}" "${body}" >&2
   return 1
 }
 
-stopped=0
-failed=0
-batch_count=0
-total_count="$(printf '%s\n' "$alloc_lines" | wc -l | tr -d ' ')"
+echo "job=${JOB_NAME} target_version=${TARGET_VERSION} batch=${BATCH_SIZE} sleep=${SLEEP_SECONDS} rounds=${MAX_ROUNDS:-0} dry_run=${DRY_RUN} nomad_addr=${NOMAD_ADDR}"
 
-while IFS=$'\t' read -r version alloc_id node_name desired_status; do
-  if stop_alloc "$alloc_id"; then
-    (( stopped++ )) || true
+initial_allocations_json="$(fetch_allocations_json)"
+initial_candidates="$(candidate_lines_from_json <<<"${initial_allocations_json}")"
+initial_old_running="$(count_lines "${initial_candidates}")"
+
+if [[ "${DRY_RUN}" == "true" ]]; then
+  print_candidates "${initial_candidates}"
+  echo "round=1 old_running=${initial_old_running} stopped=0"
+  echo "final_version_breakdown_begin"
+  version_breakdown_from_json <<<"${initial_allocations_json}"
+  echo "final_version_breakdown_end"
+  if (( initial_old_running == 0 )); then
+    echo "summary rounds_completed=0 stopped_total=0 remaining_old_running=0 dry_run=true"
   else
-    (( failed++ )) || true
+    echo "summary rounds_completed=1 stopped_total=0 remaining_old_running=${initial_old_running} dry_run=true"
+  fi
+  exit 0
+fi
+
+round=0
+stopped_total=0
+last_old_running="${initial_old_running}"
+
+while :; do
+  allocations_json="$(fetch_allocations_json)"
+  candidates="$(candidate_lines_from_json <<<"${allocations_json}")"
+  old_running="$(count_lines "${candidates}")"
+  last_old_running="${old_running}"
+
+  if (( old_running == 0 )); then
+    break
   fi
 
-  (( batch_count++ )) || true
-
-  if (( batch_count == BATCH_SIZE && stopped + failed < total_count )); then
-    echo "==> Batch complete; sleeping ${DELAY_SECONDS}s before next batch"
-    echo
-    sleep "$DELAY_SECONDS"
-    batch_count=0
+  if (( MAX_ROUNDS > 0 && round >= MAX_ROUNDS )); then
+    break
   fi
-done <<<"$alloc_lines"
 
-echo
-echo "==> Drain summary"
-echo "    Stopped: ${stopped}"
-echo "    Failed:  ${failed}"
-echo "    Total:   ${total_count}"
+  round=$(( round + 1 ))
+  round_stopped=0
+  round_failed=0
 
-if (( failed > 0 )); then
+  while IFS=$'\t' read -r version alloc_id node_name desired_status; do
+    [[ -n "${alloc_id}" ]] || continue
+    if stop_allocation "${alloc_id}" "${version}"; then
+      round_stopped=$(( round_stopped + 1 ))
+      stopped_total=$(( stopped_total + 1 ))
+    else
+      round_failed=$(( round_failed + 1 ))
+    fi
+  done < <(printf '%s\n' "${candidates}" | head -n "${BATCH_SIZE}")
+
+  echo "round=${round} old_running=${old_running} stopped=${round_stopped}"
+
+  if (( round_failed > 0 )); then
+    echo "round_failed=${round} failed=${round_failed}" >&2
+  fi
+
+  if (( round_stopped == 0 && round_failed > 0 )); then
+    break
+  fi
+
+  if (( MAX_ROUNDS > 0 && round >= MAX_ROUNDS )); then
+    break
+  fi
+
+  if (( old_running > round_stopped )); then
+    sleep "${SLEEP_SECONDS}"
+  fi
+done
+
+final_allocations_json="$(fetch_allocations_json)"
+final_candidates="$(candidate_lines_from_json <<<"${final_allocations_json}")"
+remaining_old_running="$(count_lines "${final_candidates}")"
+
+echo "final_version_breakdown_begin"
+version_breakdown_from_json <<<"${final_allocations_json}"
+echo "final_version_breakdown_end"
+echo "summary rounds_completed=${round} stopped_total=${stopped_total} remaining_old_running=${remaining_old_running} dry_run=false"
+
+if (( remaining_old_running > 0 )); then
+  if (( MAX_ROUNDS > 0 && round >= MAX_ROUNDS )); then
+    echo "ERROR: reached --rounds limit with ${remaining_old_running} old running allocations still present" >&2
+  else
+    echo "ERROR: ${remaining_old_running} old running allocations remain after drain attempt" >&2
+  fi
   exit 1
 fi

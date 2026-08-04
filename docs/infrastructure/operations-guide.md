@@ -748,6 +748,51 @@ autoscaler:
 > ⚠️ Never leave `max_parallel=0` in place. A future rolling update will replace all
 > running workers simultaneously, causing a complete worker outage during the transition.
 
+## Bulk Worker Drain
+
+Use `scripts/drain-workers.sh` when a rollback or fixed deploy leaves a mixed worker fleet
+and you need to stop only the older running allocations in controlled batches.
+
+```bash
+scripts/drain-workers.sh \
+  --job openstudio-server-worker \
+  --target-version 42 \
+  --dry-run
+```
+
+The dry-run prints one line per matching allocation:
+
+```text
+dry_run alloc=<alloc_id> version=<job_version> node=<node_name> desired=run
+```
+
+Run the drain live once the target version is confirmed:
+
+```bash
+scripts/drain-workers.sh \
+  --job openstudio-server-worker \
+  --target-version 42 \
+  --batch 100 \
+  --sleep 20
+```
+
+Optional controls:
+
+- `--rounds N`: stop after `N` rounds instead of draining until complete
+- `--nomad-addr URL`: override `NOMAD_ADDR`
+- `NOMAD_NAMESPACE` / `NOMAD_TOKEN`: passed through to Nomad API requests
+
+Each live round emits structured progress:
+
+```text
+round=1 old_running=237 stopped=100
+round=2 old_running=137 stopped=100
+round=3 old_running=37 stopped=37
+```
+
+The script uses `POST /v1/allocation/:id/stop` and finishes with a structured running
+version breakdown so operators can confirm whether any pre-target allocations remain.
+
 
 
 **Always verify the image immediately after an auto-revert:**

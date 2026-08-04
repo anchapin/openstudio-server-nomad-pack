@@ -269,13 +269,13 @@ blast the entire fleet with `nomad job restart`.
 Preview the drain set:
 
 ```bash
-./scripts/drain-workers.sh --job-name "${WORKER_JOB}" --target-version <good-version> --dry-run
+./scripts/drain-workers.sh --job "${WORKER_JOB}" --target-version <good-version> --dry-run
 ```
 
 Drain in controlled batches:
 
 ```bash
-./scripts/drain-workers.sh --job-name "${WORKER_JOB}" --target-version <good-version>
+./scripts/drain-workers.sh --job "${WORKER_JOB}" --target-version <good-version>
 ```
 
 The script uses `POST /v1/allocation/:id/stop` and batches stop requests so large fleets
