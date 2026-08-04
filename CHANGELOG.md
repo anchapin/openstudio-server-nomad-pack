@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added `docs/infrastructure/runbooks/queue-stall.md`, linked it from the operations
+  guide, and added `scripts/drain-workers.sh` for batched worker allocation drains during
+  queue-stall recovery (#444).
 - Added Prometheus ingress alert rules for Traefik route availability, 404 surge, and backend health to `monitoring/prometheus-alert-rules.yml`: `TraefikRouterMissing` (fires when `openstudio-server@consulcatalog` router is absent), `TraefikIngressHighErrorRate` (fires on sustained router-level 404 rate > 10 %), and `TraefikBackendUnhealthy` (fires when Traefik has no healthy server for openstudio-web) (#412).
 - Added "Ingress Alerts" runbook section to `docs/infrastructure/operations-guide.md` with response steps for each new alert and instructions for loading/reloading alert rules in Prometheus (#412).
 - Added item 10 ("Prometheus ingress alerts loaded") to `docs/infrastructure/pre-run-checklist.md` with a validation command and pass criteria (#412).
