@@ -21,7 +21,7 @@
 #   make os-logs      Tail web job logs
 #   make os-ui        Open SSH tunnels + launch Nomad/Consul UIs
 #   make os-stop      Stop pack jobs
-#   make os-teardown  Stop pack + infra-setup
+#   make os-teardown  Stop pack + infra-setup job
 #   make os-tunnel    Open SSH tunnels only (foreground)
 #
 # OpenStack var-file: examples/advanced/openstack.hcl

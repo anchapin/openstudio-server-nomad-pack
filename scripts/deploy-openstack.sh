@@ -57,7 +57,7 @@ CONSUL_API="http://127.0.0.1:${CONSUL_LOCAL_PORT}"
 
 VAR_FILE="${OS_VAR_FILE:-${REPO_ROOT}/examples/advanced/openstack.hcl}"
 JOB_NAME="${OS_JOB_NAME:-openstudio-server}"
-INFRA_JOB="${REPO_ROOT}/infra-setup.nomad"
+INFRA_JOB_TPL="${REPO_ROOT}/templates/infra-setup.nomad.tpl"
 PREFLIGHT_SCRIPT="${REPO_ROOT}/scripts/preflight-storage.sh"
 INGRESS_CHECK_SCRIPT="${REPO_ROOT}/scripts/check-openstack-ingress.sh"
 TRAEFIK_RECONCILE_SCRIPT="${REPO_ROOT}/scripts/reconcile-jumphost-traefik.sh"
@@ -223,7 +223,7 @@ check_prereqs() {
 
   [ -f "${SSH_KEY}" ] || { err "SSH key not found: ${SSH_KEY}"; ok=false; }
   [ -f "${VAR_FILE}" ] || { err "Var file not found: ${VAR_FILE}"; ok=false; }
-  [ -f "${INFRA_JOB}" ] || { err "Infra job not found: ${INFRA_JOB}"; ok=false; }
+  [ -f "${INFRA_JOB_TPL}" ] || { err "Infra job template not found: ${INFRA_JOB_TPL}"; ok=false; }
   [ -f "${PREFLIGHT_SCRIPT}" ] || { err "Preflight script not found: ${PREFLIGHT_SCRIPT}"; ok=false; }
   [ -x "${INGRESS_CHECK_SCRIPT}" ] || { err "Ingress check script not found or not executable: ${INGRESS_CHECK_SCRIPT}"; ok=false; }
   [ -x "${TRAEFIK_RECONCILE_SCRIPT}" ] || { err "Traefik reconcile script not found or not executable: ${TRAEFIK_RECONCILE_SCRIPT}"; ok=false; }
@@ -235,7 +235,7 @@ check_prereqs() {
   ok "nomad-pack: $(nomad-pack --version 2>&1 | head -1)"
   ok "nomad:      $(nomad version 2>&1 | head -1)"
   ok "var-file:   ${VAR_FILE}"
-  ok "infra-job:  ${INFRA_JOB}"
+  ok "infra-job:  ${INFRA_JOB_TPL}"
 
   # Test jump host connectivity
   info "Testing SSH jump host (${JUMP_HOST})..."
@@ -316,7 +316,7 @@ deploy_infra_setup() {
   fi
 
   # Check if already complete (all allocations in 'running' state)
-  RUNNING=$(nomad_api "/v1/job/infra-setup/allocations" 2>/dev/null | \
+  RUNNING=$(nomad_api "/v1/job/openstudio-server-infra-setup/allocations" 2>/dev/null | \
     python3 -c "
 import sys, json
 try:
@@ -334,7 +334,11 @@ except Exception:
   fi
 
   info "Deploying infra-setup system job to all Nomad clients..."
-  NOMAD_ADDR="${NOMAD_API}" nomad job run "${INFRA_JOB}"
+  local spec
+  spec="$(mktemp)"
+  nomad-pack render --var-file "${VAR_FILE}" --var "enable_infra_setup=true" --var "job_name=${JOB_NAME}" "${REPO_ROOT}" > "${spec}"
+  NOMAD_ADDR="${NOMAD_API}" nomad job run "${spec}"
+  rm -f "${spec}"
   ok "infra-setup submitted"
 
   info "Waiting for all client nodes to complete setup (up to 5 min)..."
@@ -343,7 +347,7 @@ except Exception:
     "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null) || NODE_COUNT=34
 
   for i in $(seq 1 60); do
-    RUNNING=$(nomad_api "/v1/job/infra-setup/allocations" 2>/dev/null | \
+    RUNNING=$(nomad_api "/v1/job/${JOB_NAME}-infra-setup/allocations" 2>/dev/null | \
       python3 -c "
 import sys, json
 try:
@@ -365,7 +369,7 @@ except Exception:
     # Check for failures
     if echo "${RUNNING}" | grep -qE "[1-9]+ failed"; then
       echo ""
-      warn "Some allocations failed. Check: ${NOMAD_API}/ui/jobs/infra-setup"
+      warn "Some allocations failed. Check: ${NOMAD_API}/ui/jobs/${JOB_NAME}-infra-setup"
     fi
 
     # Done when running count equals node count
@@ -1107,7 +1111,7 @@ teardown() {
   stop_pack
 
   info "Stopping infra-setup system job..."
-  NOMAD_ADDR="${NOMAD_API}" nomad job stop -purge infra-setup 2>/dev/null \
+  NOMAD_ADDR="${NOMAD_API}" nomad job stop -purge "${JOB_NAME}-infra-setup" 2>/dev/null \
     && ok "infra-setup stopped" \
     || warn "infra-setup not running (already stopped?)"
 

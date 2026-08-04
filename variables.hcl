@@ -1754,3 +1754,10 @@ variable "aws_batch_job_definition" {
   description = "ARN or name of the AWS Batch job definition used for simulation jobs. Only used when batch_engine = 'aws_batch'."
   default     = ""
 }
+
+variable "enable_infra_setup" {
+  type        = bool
+  description = "When true, renders the infra-setup client configuration system job. Disabled by default."
+  default     = false
+}
+
