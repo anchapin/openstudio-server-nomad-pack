@@ -169,7 +169,8 @@ worker_min_replicas              = 2
 # Physical ceiling: floor((node_ram_mb - 2048) / worker_memory) × compute_node_count
 # floor((79872 - 2048) / 1250) = 62 allocs/node × 110 compute nodes = 6820
 # Setting above physical ceiling wastes scheduler cycles on permanently unplaceable allocs.
-worker_max_replicas              = 6800
+# Observed practical capacity: 6521 (headroom below theoretical 6820 due to OS/system overhead).
+worker_max_replicas              = 6521
 
 # 60 % CPU target: conservative threshold to trigger scale-out before iowait spikes.
 worker_cpu_target_utilization = 60
@@ -187,10 +188,13 @@ worker_autoscaling_scale_up_cooldown   = "2m"
 worker_autoscaling_scale_down_cooldown = "10m"
 
 # Rolling update — prevents simultaneous eviction of running simulations.
+# auto_revert=false: CRITICAL — prevents rollback to low-count version on partial placement failures.
+# progress_deadline="0": CRITICAL — disables 20m timeout; large deployments stall at cluster capacity.
 worker_update_max_parallel      = 1
 worker_update_min_healthy_time  = "1m"
 worker_update_healthy_deadline  = "10m"
-worker_update_progress_deadline = "20m"
+worker_update_progress_deadline = "0"
+worker_update_auto_revert       = false
 
 # ---------- MongoDB ----------
 # 2 000 MHz / 4 096 MB covers observed query load during Stage 3 soak.
