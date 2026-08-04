@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added `scripts/check-csi-topology.sh` for automated CSI topology pin drift detection: reads `db_csi_topology_node_id` / `redis_csi_topology_node_id` from the running Nomad job spec, compares against the actual CSI volume topology, emits a structured warning and exits non-zero on drift; accepts `--auto-remediate` to re-run `preflight-storage.sh --rebind-stale --emit-topology-vars` and print updated var overrides (#416).
 - Added `--csi-topology-key` flag and `DB_CSI_TOPOLOGY_KEY` / `REDIS_CSI_TOPOLOGY_KEY` env vars to `scripts/preflight-storage.sh` to handle non-hostpath CSI plugins; defaults to `topology.hostpath.csi/node` for backward compatibility; resolved values that are not 36-char hyphenated UUIDs are warned and skipped rather than emitting an unsatisfiable node constraint (#415).
 - Added Node Replacement runbook section to `docs/infrastructure/operations-guide.md` covering CSI topology pin staleness detection and automated/manual remediation (#417).
 - Added matrix strategy `render-matrix` job to `.github/workflows/pack-validation.yml` to automate `nomad-pack render` verification across key configuration scenarios (default, minimal-dev, simple, production-ha, airgapped, openstack-production, e2e-test, batch-verification, nomad-batch-engine, aws-batch-engine, vector-disabled) (#408).
