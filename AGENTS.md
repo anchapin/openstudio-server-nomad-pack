@@ -129,6 +129,7 @@ Each Nomad job is a separate `.nomad.tpl` file under `templates/`. The pack rend
 | `nomad-batch-worker.nomad.tpl` | `<job_name>-nomad-batch-worker` | `batch_engine == "nomad_batch"` |
 | `state-backup.nomad.tpl` | `<job_name>-state-backup` (periodic batch) | `backup_enabled = false` (default) |
 | `state-restore.nomad.tpl` | `<job_name>-state-restore` (on-demand batch) | `restore_enabled = false` (default) |
+| `infra-setup.nomad.tpl` | `<job_name>-infra-setup` (system job for client config) | `enable_infra_setup = false` (default) |
 | `openstudio_test.nomad.tpl` | `<job_name>-test` (parameterized batch) | always |
 
 `templates/_helpers.tpl` defines reusable named templates called throughout all job templates:

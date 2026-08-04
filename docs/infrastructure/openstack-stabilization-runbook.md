@@ -83,7 +83,7 @@ Run the infra convergence job to ensure:
 Use:
 
 ```bash
-nomad run infra-setup.nomad
+nomad-pack render -var "enable_infra_setup=true" . | nomad job run -
 ```
 
 ### 4. Confirm storage prerequisites

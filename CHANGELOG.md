@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `queue_sweeper_replay_dirty_exit` variable (default `true`): enables auto-replay of `PruneDeadWorkerDirtyExit` and `TermException` failures from `resque:failed` in the queue-sweeper. Replayed jobs use the correct single-arg format (`args: [dp_id]`). Previously required ~1,847 manual replays.
 - Added `queue_sweeper_replay_delay_seconds` variable (default `10`): stagger interval between individual re-enqueues when auto-replaying failed jobs. Prevents bulk-push silent drops under high load.
 - Added Terratest integration suite (`tests/terratest`) for rendering and planning Nomad Pack template scenarios, migrating integration tests from shell scripts (#407).
+- Relocated loose root-level `infra-setup.nomad` file into `templates/infra-setup.nomad.tpl` and `packs/openstudio-server/templates/infra-setup.nomad.tpl` controlled by new `enable_infra_setup` boolean variable (default `false`) (#403).
 
 ### Changed
 - Removed local state overrides file `user-overrides.hcl` from git tracking and renamed it to `user-overrides.hcl.example`, updating `.gitignore` to ignore local override files (`user-overrides.hcl`, `*.override.hcl`) (#402).
