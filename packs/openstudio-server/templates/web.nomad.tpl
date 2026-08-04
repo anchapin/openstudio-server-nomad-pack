@@ -193,12 +193,12 @@ if [ "$RUNTIME_RESOLUTION_ENABLED" != "true" ]; then
 fi
 
 if [ "$MAX_ATTEMPTS" -lt 1 ]; then
-  echo "web_runtime_invalid_attempts value=${MAX_ATTEMPTS}" >&2
+  echo "web_runtime_invalid_attempts value=$MAX_ATTEMPTS" >&2
   exit 1
 fi
 
 if [ "$BASE_DELAY" -lt 1 ]; then
-  echo "web_runtime_invalid_backoff value=${BASE_DELAY}" >&2
+  echo "web_runtime_invalid_backoff value=$BASE_DELAY" >&2
   exit 1
 fi
 
@@ -210,14 +210,14 @@ resolve_alias() {
   while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
     ip=""
     if command -v getent >/dev/null 2>&1; then
-      ip="$(getent hosts "${service}.service.consul" 2>/dev/null | awk 'NR==1 {print $1}')"
+      ip="$(getent hosts "$service.service.consul" 2>/dev/null | awk 'NR==1 {print $1}')"
     fi
     if [ -z "$ip" ] && command -v nslookup >/dev/null 2>&1; then
-      ip="$(nslookup "${service}.service.consul" 2>/dev/null | awk '/^Address [0-9]+: / {print $3; exit} /^Address: / {print $2; exit}')"
+      ip="$(nslookup "$service.service.consul" 2>/dev/null | awk '/^Address [0-9]+: / {print $3; exit} /^Address: / {print $2; exit}')"
     fi
     if [ -n "$ip" ]; then
-      echo "${ip} ${alias}" >> /etc/hosts
-      echo "web_runtime_resolve_ok service=${service} alias=${alias} ip=${ip} attempt=${attempt}"
+      echo "$ip $alias" >> /etc/hosts
+      echo "web_runtime_resolve_ok service=$service alias=$alias ip=$ip attempt=$attempt"
       return 0
     fi
     sleep "$delay"
@@ -225,7 +225,7 @@ resolve_alias() {
     delay=$((delay * 2))
     [ "$delay" -gt 8 ] && delay=8
   done
-  echo "web_runtime_resolve_failed service=${service} alias=${alias}" >&2
+  echo "web_runtime_resolve_failed service=$service alias=$alias" >&2
   return 1
 }
 
@@ -472,12 +472,12 @@ if [ "$RUNTIME_RESOLUTION_ENABLED" != "true" ]; then
 fi
 
 if [ "$MAX_ATTEMPTS" -lt 1 ]; then
-  echo "web_background_runtime_invalid_attempts value=${MAX_ATTEMPTS}" >&2
+  echo "web_background_runtime_invalid_attempts value=$MAX_ATTEMPTS" >&2
   exit 1
 fi
 
 if [ "$BASE_DELAY" -lt 1 ]; then
-  echo "web_background_runtime_invalid_backoff value=${BASE_DELAY}" >&2
+  echo "web_background_runtime_invalid_backoff value=$BASE_DELAY" >&2
   exit 1
 fi
 
@@ -489,14 +489,14 @@ resolve_alias() {
   while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
     ip=""
     if command -v getent >/dev/null 2>&1; then
-      ip="$(getent hosts "${service}.service.consul" 2>/dev/null | awk 'NR==1 {print $1}')"
+      ip="$(getent hosts "$service.service.consul" 2>/dev/null | awk 'NR==1 {print $1}')"
     fi
     if [ -z "$ip" ] && command -v nslookup >/dev/null 2>&1; then
-      ip="$(nslookup "${service}.service.consul" 2>/dev/null | awk '/^Address [0-9]+: / {print $3; exit} /^Address: / {print $2; exit}')"
+      ip="$(nslookup "$service.service.consul" 2>/dev/null | awk '/^Address [0-9]+: / {print $3; exit} /^Address: / {print $2; exit}')"
     fi
     if [ -n "$ip" ]; then
-      echo "${ip} ${alias}" >> /etc/hosts
-      echo "web_background_runtime_resolve_ok service=${service} alias=${alias} ip=${ip} attempt=${attempt}"
+      echo "$ip $alias" >> /etc/hosts
+      echo "web_background_runtime_resolve_ok service=$service alias=$alias ip=$ip attempt=$attempt"
       return 0
     fi
     sleep "$delay"
@@ -504,7 +504,7 @@ resolve_alias() {
     delay=$((delay * 2))
     [ "$delay" -gt 8 ] && delay=8
   done
-  echo "web_background_runtime_resolve_failed service=${service} alias=${alias}" >&2
+  echo "web_background_runtime_resolve_failed service=$service alias=$alias" >&2
   return 1
 }
 

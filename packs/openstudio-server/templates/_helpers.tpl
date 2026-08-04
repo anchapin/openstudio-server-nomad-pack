@@ -181,17 +181,17 @@ CONSUL_ADDR="[[ var "consul_address" .root ]]"
 PROCEED_ON_TIMEOUT="[[ if .proceed_on_timeout ]]true[[ else ]]false[[ end ]]"
 
 if [ "$MAX_ATTEMPTS" -lt 1 ]; then
-  echo "wait_for_deps_invalid_max_attempts value=${MAX_ATTEMPTS}" >&2
+  echo "wait_for_deps_invalid_max_attempts value=$MAX_ATTEMPTS" >&2
   exit 1
 fi
 
 if [ "$SLEEP_SECONDS" -lt 1 ]; then
-  echo "wait_for_deps_invalid_sleep value=${SLEEP_SECONDS}" >&2
+  echo "wait_for_deps_invalid_sleep value=$SLEEP_SECONDS" >&2
   exit 1
 fi
 
 if [ "$CONNECT_TIMEOUT" -lt 1 ]; then
-  echo "wait_for_deps_invalid_connect_timeout value=${CONNECT_TIMEOUT}" >&2
+  echo "wait_for_deps_invalid_connect_timeout value=$CONNECT_TIMEOUT" >&2
   exit 1
 fi
 
@@ -200,17 +200,17 @@ check_service() {
   attempt=1
   while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
     if wget -qO- -T "$CONNECT_TIMEOUT" \
-        "http://${CONSUL_ADDR}/v1/health/service/${service}?passing=true" \
-        2>/dev/null | tr -d '[:space:]' | grep -q "\"Service\":\"${service}\""; then
-      echo "wait_for_deps_ready service=${service} attempt=${attempt}"
+        "http://$CONSUL_ADDR/v1/health/service/$service?passing=true" \
+        2>/dev/null | tr -d '[:space:]' | grep -q "\"Service\":\"$service\""; then
+      echo "wait_for_deps_ready service=$service attempt=$attempt"
       return 0
     fi
-    echo "wait_for_deps_retry service=${service} attempt=${attempt}" >&2
+    echo "wait_for_deps_retry service=$service attempt=$attempt" >&2
     sleep "$SLEEP_SECONDS"
     attempt=$((attempt + 1))
   done
 
-  echo "wait_for_deps_timeout service=${service} attempts=${MAX_ATTEMPTS} proceeding=${PROCEED_ON_TIMEOUT}" >&2
+  echo "wait_for_deps_timeout service=$service attempts=$MAX_ATTEMPTS proceeding=$PROCEED_ON_TIMEOUT" >&2
   if [ "$PROCEED_ON_TIMEOUT" = "true" ]; then
     return 0
   fi
