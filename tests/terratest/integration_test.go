@@ -203,11 +203,11 @@ func TestNomadPackPlanScenarios(t *testing.T) {
 	planScenarios := []scenario{
 		{
 			name: "plan-default",
-			args: []string{"plan", "--name", "openstudio-server-test", packPath},
+			args: []string{"plan", "--name", "openstudio-server-terratest-plan-default", "--var", "job_name=openstudio-server-terratest-plan-default", packPath},
 		},
 		{
 			name: "plan-minimal-dev",
-			args: []string{"plan", "--name", "openstudio-server-minimal-test", "--var-file", filepath.Join(packPath, "examples/quickstart/minimal-dev.hcl"), packPath},
+			args: []string{"plan", "--name", "openstudio-server-terratest-plan-minimal", "--var", "job_name=openstudio-server-terratest-plan-minimal", "--var-file", filepath.Join(packPath, "examples/quickstart/minimal-dev.hcl"), packPath},
 		},
 	}
 
@@ -217,9 +217,16 @@ func TestNomadPackPlanScenarios(t *testing.T) {
 			t.Parallel()
 
 			output, err := runCommand(sc.args...)
-			require.NoError(t, err, "nomad-pack plan failed for scenario %s: %s", sc.name, output)
+			if err != nil {
+				if exitErr, ok := err.(*exec.ExitError); ok {
+					assert.LessOrEqual(t, exitErr.ExitCode(), 1, "nomad-pack plan exit code for scenario %s: %s", sc.name, output)
+				} else {
+					t.Fatalf("nomad-pack plan failed for scenario %s: %v", sc.name, err)
+				}
+			}
 			assert.Contains(t, output, "Plan succeeded")
 		})
 	}
 }
+
 
