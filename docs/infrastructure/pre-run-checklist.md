@@ -58,6 +58,24 @@ again — and fail if the registry is unavailable.
 
 ---
 
+## 2a. Stateful services are pinned to web-role nodes
+
+> **Root cause:** Missing `db_constraints` allowed MongoDB placement on worker nodes under
+> high image churn, coupling stateful services to disk-starved workers.
+
+```bash
+nomad job inspect openstudio-server-db | grep -E 'meta.node_role|disk_type'
+nomad job inspect openstudio-server-redis | grep -E 'meta.node_role|disk_type'
+nomad job inspect openstudio-server-rserve | grep -E 'meta.node_role|disk_type'
+```
+
+**Pass criteria:** Each service job has role constraints equivalent to:
+- `${meta.node_role} = web`
+- `${meta.disk_type} = local-large`
+- `${attr.driver.docker} = 1`
+
+---
+
 ## 3. No stuck or pending deployments
 
 > **Root cause:** An in-flight deployment blocked `nomad job scale`, requiring the
@@ -174,11 +192,32 @@ nomad job status openstudio-server-batch-verify
 
 ---
 
+## 9. Ingress route smoke check (required for OpenStack)
+
+> **Root cause:** Traefik returned 404 because the Consul Catalog endpoint was misconfigured
+> (`http://127.0.0.1:8500` instead of `127.0.0.1:8500`), so no `openstudio-web` router loaded.
+
+```bash
+# Validates Traefik config guardrail + router presence + HTTP path:
+./scripts/check-openstack-ingress.sh
+
+# Equivalent Makefile wrapper:
+make os-ingress-check
+```
+
+**Pass criteria:** script exits 0 and reports:
+- `providers.consulCatalog.endpoint.address` is valid `host:port`
+- router `openstudio-server@consulcatalog` is enabled
+- local and external HTTP checks return 2xx/3xx
+
+---
+
 ## Summary checklist
 
 | # | Check | Command | Pass criteria |
 |---|-------|---------|---------------|
 | 1 | Disk headroom | `df -h` or `nomad node status -json` | ≥ 20 GiB free on all nodes |
+| 2a | Stateful service placement | `nomad job inspect <job>` | db/redis/rserve constrained to web-role nodes |
 | 2 | Pre-pull complete | `./scripts/verify-prepull.sh` | Exit 0, all `sentinel=running` |
 | 3 | No stuck deployment | `nomad job deployments openstudio-server-worker` | Latest = `successful` |
 | 4 | Failed queue clear | `redis-cli LLEN resque:failed` | 0 (or only app-bug entries) |
@@ -186,3 +225,4 @@ nomad job status openstudio-server-batch-verify
 | 6 | Workers at correct count | `nomad job status openstudio-server-worker` | Count correct, all `running` |
 | 7 | Stable baseline image correct | `nomad job history openstudio-server-worker` | Stable version = correct image |
 | 8 | Connectivity smoke check | `./scripts/run-batch-verification.sh` | `failed=0` |
+| 9 | Ingress route smoke check (OpenStack) | `./scripts/check-openstack-ingress.sh` | Exit 0 + router enabled + HTTP 2xx/3xx |

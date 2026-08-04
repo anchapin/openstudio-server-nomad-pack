@@ -85,6 +85,66 @@ web_constraints = [
     attribute = "$${attr.driver.docker}"
     operator  = "="
     value     = "1"
+  },
+  {
+    attribute = "$${meta.disk_type}"
+    operator  = "="
+    value     = "local-large"
+  }
+]
+
+# Keep stateful/service jobs on web-role nodes and worker jobs on worker-role nodes.
+db_constraints = [
+  {
+    attribute = "$${meta.node_role}"
+    operator  = "="
+    value     = "web"
+  },
+  {
+    attribute = "$${attr.driver.docker}"
+    operator  = "="
+    value     = "1"
+  },
+  {
+    attribute = "$${meta.disk_type}"
+    operator  = "="
+    value     = "local-large"
+  }
+]
+
+redis_constraints = [
+  {
+    attribute = "$${meta.node_role}"
+    operator  = "="
+    value     = "web"
+  },
+  {
+    attribute = "$${attr.driver.docker}"
+    operator  = "="
+    value     = "1"
+  },
+  {
+    attribute = "$${meta.disk_type}"
+    operator  = "="
+    value     = "local-large"
+  }
+]
+
+rserve_constraints = [
+  {
+    attribute = "$${meta.node_role}"
+    operator  = "="
+    value     = "web"
+  },
+  {
+    attribute = "$${attr.driver.docker}"
+    operator  = "="
+    value     = "1"
+  },
+  {
+    attribute = "$${meta.disk_type}"
+    operator  = "="
+    value     = "local-large"
   }
 ]
 
@@ -122,6 +182,23 @@ worker_memory_max    = 4000   # MB  — burst to full node memory before OOM
 worker_process_count = "3"    # 3 processes × 500 MHz ≈ 4 500 MHz per allocation; 50 % more concurrent sims at same alloc count
 worker_command = "/bin/sh"
 worker_args    = ["-c", "sh /local/patch-hosts.sh && exec /usr/local/bin/start-workers"]
+worker_constraints = [
+  {
+    attribute = "$${meta.node_role}"
+    operator  = "="
+    value     = "worker"
+  },
+  {
+    attribute = "$${attr.driver.docker}"
+    operator  = "="
+    value     = "1"
+  },
+  {
+    attribute = "$${meta.disk_type}"
+    operator  = "="
+    value     = "local-large"
+  }
+]
 
 # Seed count; keep this equal to worker_min_replicas to avoid an immediate
 # startup scale-down event that can put the policy into cooldown.
@@ -159,6 +236,29 @@ prometheus_constraints = [
     attribute = "$${attr.driver.docker}"
     operator  = "="
     value     = "1"
+  },
+  {
+    attribute = "$${meta.disk_type}"
+    operator  = "="
+    value     = "local-large"
+  }
+]
+
+autoscaler_constraints = [
+  {
+    attribute = "$${meta.node_role}"
+    operator  = "="
+    value     = "web"
+  },
+  {
+    attribute = "$${attr.driver.docker}"
+    operator  = "="
+    value     = "1"
+  },
+  {
+    attribute = "$${meta.disk_type}"
+    operator  = "="
+    value     = "local-large"
   }
 ]
 

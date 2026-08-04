@@ -775,6 +775,12 @@ variable "db_volume_source" {
   default     = "openstudio-mongodb"
 }
 
+variable "db_csi_topology_node_id" {
+  type        = string
+  description = "Nomad node ID (full UUID) that hosts the CSI volume for MongoDB. When set and db_storage_type = \"csi\", a hard constraint is added to the db task group so it can only schedule on this node, preventing the alloc from landing on a node where the volume is inaccessible. Populated automatically by scripts/preflight-storage.sh --create-missing-csi and scripts/deploy-openstack.sh. Leave empty to let the scheduler choose freely (not recommended for single-node-writer CSI volumes)."
+  default     = ""
+}
+
 # Intentionally uses redis:6.2-alpine (newer, smaller) instead of the Helm chart's
 # redis:6.0.9. Operators should align the Redis major.minor version with their
 # target OpenStudio Server release requirements.
@@ -860,6 +866,12 @@ variable "redis_volume_source" {
   type        = string
   description = "Nomad volume source name for Redis persistent storage (host_volume name or CSI volume ID)."
   default     = "openstudio-redis"
+}
+
+variable "redis_csi_topology_node_id" {
+  type        = string
+  description = "Nomad node ID (full UUID) that hosts the CSI volume for Redis. When set and redis_storage_type = \"csi\", a hard constraint is added to the redis task group so it can only schedule on this node, preventing the alloc from landing on a node where the volume is inaccessible. Populated automatically by scripts/preflight-storage.sh --create-missing-csi and scripts/deploy-openstack.sh. Leave empty to let the scheduler choose freely (not recommended for single-node-writer CSI volumes)."
+  default     = ""
 }
 
 variable "redis_health_check_interval" {

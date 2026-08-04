@@ -11,6 +11,7 @@ job "[[ var "job_name" . ]]-system-hooks" {
     value     = "1"
   }
 
+  [[ if var "prepull_worker_enabled" . ]]
   group "prepull-worker-images" {
     [[ template "constraints" (var "worker_constraints" .) ]]
     [[ if ne (var "worker_instance_type" .) "" ]]
@@ -118,7 +119,9 @@ job "[[ var "job_name" . ]]-system-hooks" {
       }
     }
   }
+  [[ end ]]
 
+  [[ if var "prepull_core_enabled" . ]]
   group "prepull-core-images" {
     [[ template "constraints" (var "web_constraints" .) ]]
 
@@ -300,6 +303,30 @@ job "[[ var "job_name" . ]]-system-hooks" {
     }
     [[ end ]]
 
+    task "pull-poststop-cleanup-image" {
+      driver = "docker"
+
+      kill_timeout = "[[ var "prepull_kill_timeout" . ]]"
+
+      config {
+        image   = "[[ var "poststop_cleanup_image" . ]]"
+        command = "sh"
+        args    = ["-c", "echo pulled poststop cleanup image"]
+        logging {
+          type = "[[ var "log_driver_type" . ]]"
+          config {
+            max-size = "[[ var "log_max_size" . ]]"
+            max-file = "[[ var "log_max_files" . ]]"
+          }
+        }
+      }
+
+      resources {
+        cpu    = 100
+        memory = 64
+      }
+    }
+
     task "image-cache-ready-core" {
       driver = "docker"
 
@@ -324,5 +351,6 @@ job "[[ var "job_name" . ]]-system-hooks" {
       }
     }
   }
+  [[ end ]]
 }
 [[ end ]]

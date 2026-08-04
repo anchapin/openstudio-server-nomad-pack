@@ -16,6 +16,13 @@ job "[[ var "job_name" . ]]-db" {
     [[ template "affinities" (var "db_affinities" .) ]]
     [[ template "spreads" (var "db_spreads" .) ]]
 
+    [[ if and (eq (var "db_storage_type" .) "csi") (var "db_csi_topology_node_id" .) ]]
+    constraint {
+      attribute = "${node.unique.id}"
+      value     = "[[ var "db_csi_topology_node_id" . ]]"
+    }
+    [[ end ]]
+
     [[ if ne (var "db_storage_type" .) "ephemeral" ]]
     [[ if eq (var "db_storage_type" .) "csi" ]]
     volume "mongodb-data" {

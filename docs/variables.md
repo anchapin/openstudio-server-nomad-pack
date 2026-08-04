@@ -134,6 +134,7 @@
 | `db_health_check_timeout` | `string` | `"2s"` | Timeout for Consul health checks for the MongoDB service. |
 | `db_storage_type` | `string` | `"host_volume"` | MongoDB storage type: host_volume, csi, or ephemeral. Use ephemeral to disable persistent volume wiring. |
 | `db_volume_source` | `string` | `"openstudio-mongodb"` | Nomad volume source name for MongoDB persistent storage (host_volume name or CSI volume ID). |
+| `db_csi_topology_node_id` | `string` | `""` | Nomad node ID (full UUID) that hosts the CSI volume for MongoDB. When set and db_storage_type = \"csi\", a hard constraint is added to the db task group so it can only schedule on this node, preventing the alloc from landing on a node where the volume is inaccessible. Populated automatically by scripts/preflight-storage.sh --create-missing-csi and scripts/deploy-openstack.sh. Leave empty to let the scheduler choose freely (not recommended for single-node-writer CSI volumes). |
 | `redis_image` | `string` | `"redis:6.2-alpine"` | The Redis image name and tag. Intentionally diverges from the Helm chart default (redis:6.0.9) by using redis:6.2-alpine; align Redis major.minor with your target OpenStudio Server release requirements. |
 | `redis_cpu` | `number` | `250` | CPU shares allocated to the Redis task. |
 | `redis_memory` | `number` | `1024` | Memory (MB) allocated to the Redis task. |
@@ -148,6 +149,7 @@
 | `redis_memory_max` | `number` | `0` | Memory hard limit (MB) for the Redis task (Nomad memory_max). Set to 0 to disable. Recommended: set to ~1.5× redis_memory so Redis can absorb a mass-enqueue spike without being OOM-killed while staying below the Nomad hard limit. |
 | `redis_storage_type` | `string` | `"host_volume"` | Redis storage type: host_volume, csi, or ephemeral. Use ephemeral to disable persistent volume wiring. |
 | `redis_volume_source` | `string` | `"openstudio-redis"` | Nomad volume source name for Redis persistent storage (host_volume name or CSI volume ID). |
+| `redis_csi_topology_node_id` | `string` | `""` | Nomad node ID (full UUID) that hosts the CSI volume for Redis. When set and redis_storage_type = \"csi\", a hard constraint is added to the redis task group so it can only schedule on this node, preventing the alloc from landing on a node where the volume is inaccessible. Populated automatically by scripts/preflight-storage.sh --create-missing-csi and scripts/deploy-openstack.sh. Leave empty to let the scheduler choose freely (not recommended for single-node-writer CSI volumes). |
 | `redis_health_check_interval` | `string` | `"10s"` | Interval between Consul health checks for the Redis service. |
 | `redis_health_check_timeout` | `string` | `"2s"` | Timeout for Consul health checks for the Redis service. |
 | `nfs_shared_volume_enabled` | `bool` | `false` | When true, an NFS shared volume is declared and mounted in both web and worker task groups. Volume type is controlled by nfs_volume_type. |

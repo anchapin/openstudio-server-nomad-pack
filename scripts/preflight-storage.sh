@@ -1,4 +1,37 @@
 #!/usr/bin/env bash
+# preflight-storage.sh — Verify (and optionally create/rebind) CSI and host volumes
+# before nomad-pack deploy.
+#
+# Usage:
+#   ./scripts/preflight-storage.sh [OPTIONS]
+#
+# Options:
+#   --var-file <path>        Override var-file (repeatable; last value wins per key)
+#   --nomad-addr <url>       Nomad API address (default: $NOMAD_ADDR or http://127.0.0.1:4646)
+#   --namespace <ns>         Nomad namespace (default: $NOMAD_NAMESPACE or default)
+#   --create-missing-csi     Create CSI volume registrations that are absent from Nomad but
+#                            needed by the pack.  Requires a healthy CSI plugin.
+#   --rebind-stale           Deregister and re-register CSI volumes whose Nomad registration
+#                            is stale (wrong plugin ID, no topology, or 0 healthy nodes).
+#                            Implies --create-missing-csi.  Safe to run on every deploy.
+#   --csi-plugin-id <id>     Default CSI plugin ID (override with env DB_CSI_PLUGIN_ID /
+#                            REDIS_CSI_PLUGIN_ID per-volume).
+#   --emit-topology-vars     After all checks pass, print shell-eval-safe lines:
+#                              db_csi_topology_node_id=<uuid>
+#                              redis_csi_topology_node_id=<uuid>
+#                            Intended for capture by deploy-openstack.sh via eval.
+#
+# Exit codes:
+#   0  All required volumes are present, correctly registered, and healthy.
+#   1  A required volume is missing or unhealthy AND --create-missing-csi / --rebind-stale
+#      were not given (or creation/rebind failed).
+#   2  Invalid arguments.
+#
+# Environment:
+#   DB_CSI_PLUGIN_ID     CSI plugin ID for the MongoDB volume (overrides --csi-plugin-id)
+#   REDIS_CSI_PLUGIN_ID  CSI plugin ID for the Redis volume (overrides --csi-plugin-id)
+#   DB_CSI_CAPACITY_MIN / DB_CSI_CAPACITY_MAX    Capacity range for auto-created MongoDB volume
+#   REDIS_CSI_CAPACITY_MIN / REDIS_CSI_CAPACITY_MAX  Capacity range for auto-created Redis volume
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -9,6 +42,8 @@ VAR_FILES_SET=false
 NOMAD_ADDR="${NOMAD_ADDR:-http://127.0.0.1:4646}"
 NOMAD_NAMESPACE="${NOMAD_NAMESPACE:-default}"
 CREATE_MISSING_CSI=false
+REBIND_STALE=false
+EMIT_TOPOLOGY_VARS=false
 CSI_PLUGIN_ID="${CSI_PLUGIN_ID:-nfs}"
 DB_CSI_PLUGIN_ID="${DB_CSI_PLUGIN_ID:-}"
 REDIS_CSI_PLUGIN_ID="${REDIS_CSI_PLUGIN_ID:-}"
@@ -39,13 +74,26 @@ while [ $# -gt 0 ]; do
       CREATE_MISSING_CSI=true
       shift
       ;;
+    --rebind-stale)
+      REBIND_STALE=true
+      CREATE_MISSING_CSI=true   # rebind implies create
+      shift
+      ;;
+    --emit-topology-vars)
+      EMIT_TOPOLOGY_VARS=true
+      shift
+      ;;
     --csi-plugin-id)
       CSI_PLUGIN_ID="$2"
       shift 2
       ;;
     *)
       echo "Unknown arg: $1" >&2
-      echo "Usage: $0 [--var-file <path> ...] [--nomad-addr <url>] [--namespace <ns>] [--create-missing-csi] [--csi-plugin-id <id>]" >&2
+      cat >&2 <<'USAGE'
+Usage: preflight-storage.sh [--var-file <path> ...] [--nomad-addr <url>] [--namespace <ns>]
+                             [--create-missing-csi] [--rebind-stale] [--emit-topology-vars]
+                             [--csi-plugin-id <id>]
+USAGE
       exit 2
       ;;
   esac
@@ -139,8 +187,133 @@ if [ ${#required_csi[@]} -gt 0 ]; then
     exit 1
   fi
 
+  # Helper: resolve the Nomad node UUID that owns a CSI volume's topology.
+  # Returns empty string if topology is absent or unresolvable.
+  _csi_volume_topology_node_id() {
+    local vol_json="$1"
+    python3 - <<'PY'
+import json, os, sys
+
+raw = os.environ.get("_VOL_JSON", "")
+try:
+    data = json.loads(raw)
+except Exception:
+    sys.exit(0)
+
+# Walk Topologies → Segments and look for keys ending in /node or containing "node"
+for topo in (data.get("Topologies") or []):
+    segs = topo.get("Segments") or {}
+    for k, v in segs.items():
+        if v and ("node" in k.lower()):
+            # This is a hostname/node-name segment; resolve to Nomad node UUID via the API
+            import urllib.request
+            addr = os.environ.get("NOMAD_ADDR", "http://127.0.0.1:4646").rstrip("/")
+            ns   = os.environ.get("NOMAD_NAMESPACE", "default")
+            try:
+                req = urllib.request.Request(f"{addr}/v1/nodes")
+                with urllib.request.urlopen(req, timeout=10) as r:
+                    nodes = json.load(r)
+                for n in nodes:
+                    name = (n.get("Name") or "")
+                    nid  = (n.get("ID")   or "")
+                    if name == v or nid.startswith(v) or v.startswith(nid[:8]):
+                        print(nid)
+                        sys.exit(0)
+            except Exception:
+                pass
+            # Fallback: print the segment value as-is (may be UUID already)
+            print(v)
+            sys.exit(0)
+PY
+  }
+
+  # Associates emit_vars state
+  declare -A _topology_node_ids=()
+
+  _create_csi_volume() {
+    local vol="$1"
+    local expected_plugin="$2"
+    local cap_min="$3"
+    local cap_max="$4"
+
+    local tmp_spec
+    tmp_spec="$(mktemp)"
+
+    cat > "${tmp_spec}" <<EOF
+id        = "${vol}"
+name      = "${vol}"
+type      = "csi"
+plugin_id = "${expected_plugin}"
+
+capacity_min = "${cap_min}"
+capacity_max = "${cap_max}"
+
+capability {
+  access_mode     = "single-node-writer"
+  attachment_mode = "file-system"
+}
+EOF
+
+    local create_output
+    create_output="$(NOMAD_ADDR="${NOMAD_ADDR}" NOMAD_NAMESPACE="${NOMAD_NAMESPACE}" nomad volume create "${tmp_spec}" 2>&1)" || {
+      rm -f "${tmp_spec}"
+      echo "✗ Failed creating CSI volume: ${vol} (plugin=${expected_plugin})" >&2
+      echo "  ${create_output}" >&2
+      return 1
+    }
+    rm -f "${tmp_spec}"
+    if NOMAD_ADDR="${NOMAD_ADDR}" NOMAD_NAMESPACE="${NOMAD_NAMESPACE}" nomad volume status "${vol}" >/dev/null 2>&1; then
+      echo "✓ Created CSI volume: ${vol} (plugin=${expected_plugin}, min=${cap_min}, max=${cap_max})"
+      return 0
+    else
+      echo "✗ Failed creating CSI volume: ${vol} (plugin=${expected_plugin})" >&2
+      return 1
+    fi
+  }
+
+  # _is_stale_registration VOL_JSON EXPECTED_PLUGIN
+  # Returns 0 (true) if the registration should be replaced; non-zero otherwise.
+  _is_stale_registration() {
+    local vol_json="$1"
+    local expected_plugin="$2"
+    EXPECTED_PLUGIN="${expected_plugin}" python3 - <<'PY'
+import json, os, sys
+
+raw = os.environ.get("_VOL_JSON", "")
+try:
+    data = json.loads(raw)
+except Exception:
+    sys.exit(1)   # can't parse — treat as not stale
+
+expected = os.environ.get("EXPECTED_PLUGIN", "")
+actual   = (data.get("PluginID") or "").strip()
+
+# Wrong plugin
+if expected and actual and expected != actual:
+    print(f"  stale: plugin mismatch (registered={actual}, expected={expected})", file=sys.stderr)
+    sys.exit(0)
+
+# No topology at all
+topos = data.get("Topologies") or []
+if not topos:
+    print("  stale: volume has no topology segments", file=sys.stderr)
+    sys.exit(0)
+
+# ControllersHealthy == 0 → plugin node detached or volume not attached to any node
+healthy = int(data.get("ControllersHealthy") or 0)
+nodes_healthy = int(data.get("NodesHealthy") or 0)
+if healthy == 0 and nodes_healthy == 0:
+    print(f"  stale: ControllersHealthy={healthy}, NodesHealthy={nodes_healthy}", file=sys.stderr)
+    sys.exit(0)
+
+sys.exit(1)
+PY
+  }
+
   for vol in "${required_csi[@]}"; do
     expected_plugin="$(plugin_for_volume "${vol}")"
+
+    # ── Plugin existence check ────────────────────────────────────────────────
     if [ -n "${expected_plugin}" ]; then
       if ! PLUGIN_ID="${expected_plugin}" PLUGIN_JSON="${plugin_json}" python3 - <<'PY'
 import json, os, sys
@@ -155,8 +328,8 @@ PY
         echo "✗ Required CSI plugin ID '${expected_plugin}' not found for volume '${vol}'" >&2
         exit 1
       fi
-    fi
-    if [ -n "${expected_plugin}" ]; then
+
+      # ── Plugin health check ─────────────────────────────────────────────────
       if ! PLUGIN_ID="${expected_plugin}" PLUGIN_JSON="${plugin_json}" python3 - <<'PY'
 import json, os, sys
 pid = os.environ.get("PLUGIN_ID", "")
@@ -179,20 +352,49 @@ PY
       fi
     fi
 
+    # ── Volume existence + stale-registration handling ────────────────────────
+    vol_json=""
+    vol_exists=false
     if NOMAD_ADDR="${NOMAD_ADDR}" NOMAD_NAMESPACE="${NOMAD_NAMESPACE}" nomad volume status "${vol}" >/dev/null 2>&1; then
-      actual_plugin="$(NOMAD_ADDR="${NOMAD_ADDR}" NOMAD_NAMESPACE="${NOMAD_NAMESPACE}" nomad volume status -json "${vol}" | python3 -c 'import json,sys; print((json.load(sys.stdin).get("PluginID") or "").strip())' 2>/dev/null || true)"
+      vol_exists=true
+      vol_json="$(NOMAD_ADDR="${NOMAD_ADDR}" NOMAD_NAMESPACE="${NOMAD_NAMESPACE}" nomad volume status -json "${vol}" 2>/dev/null || true)"
+    fi
+
+    if [ "${vol_exists}" = "true" ]; then
+      actual_plugin="$(echo "${vol_json}" | python3 -c 'import json,sys; print((json.load(sys.stdin).get("PluginID") or "").strip())' 2>/dev/null || true)"
+
+      # Plugin mismatch — fail fast (or rebind if requested)
       if [ -n "${expected_plugin}" ] && [ -n "${actual_plugin}" ] && [ "${expected_plugin}" != "${actual_plugin}" ]; then
-        echo "✗ CSI volume '${vol}' is bound to plugin '${actual_plugin}' but expected '${expected_plugin}'" >&2
-        exit 1
+        if [ "${REBIND_STALE}" = "true" ]; then
+          echo "⚠ CSI volume '${vol}' registered with wrong plugin '${actual_plugin}' (expected '${expected_plugin}') — deregistering for rebind" >&2
+          NOMAD_ADDR="${NOMAD_ADDR}" NOMAD_NAMESPACE="${NOMAD_NAMESPACE}" nomad volume deregister "${vol}" 2>/dev/null || true
+          vol_exists=false
+          vol_json=""
+        else
+          echo "✗ CSI volume '${vol}' is bound to plugin '${actual_plugin}' but expected '${expected_plugin}'" >&2
+          echo "  Run with --rebind-stale to automatically deregister and re-register the volume." >&2
+          exit 1
+        fi
       fi
-      echo "✓ CSI volume present: ${vol}"
-    else
+
+      # Stale check — no topology or 0 healthy nodes (implies csi_hook will fail)
+      if [ "${vol_exists}" = "true" ] && [ "${REBIND_STALE}" = "true" ]; then
+        if _VOL_JSON="${vol_json}" NOMAD_ADDR="${NOMAD_ADDR}" _is_stale_registration "${vol_json}" "${expected_plugin}" 2>&1; then
+          echo "⚠ CSI volume '${vol}' has a stale registration — deregistering for rebind" >&2
+          NOMAD_ADDR="${NOMAD_ADDR}" NOMAD_NAMESPACE="${NOMAD_NAMESPACE}" nomad volume deregister "${vol}" 2>/dev/null || true
+          vol_exists=false
+          vol_json=""
+        fi
+      fi
+    fi
+
+    # ── Create if absent (covers first-run and post-deregister rebind) ────────
+    if [ "${vol_exists}" = "false" ]; then
       if [ "${CREATE_MISSING_CSI}" = "true" ]; then
         if [ -z "${expected_plugin}" ]; then
           echo "✗ Missing CSI volume '${vol}' and no plugin ID configured. Set DB_CSI_PLUGIN_ID/REDIS_CSI_PLUGIN_ID or CSI_PLUGIN_ID." >&2
           exit 1
         fi
-        tmp_spec="$(mktemp)"
 
         if [ "${vol}" = "${db_volume_source}" ]; then
           cap_min="${DB_CSI_CAPACITY_MIN}"
@@ -205,38 +407,27 @@ PY
           cap_max="${DB_CSI_CAPACITY_MAX}"
         fi
 
-        cat > "${tmp_spec}" <<EOF
-id        = "${vol}"
-name      = "${vol}"
-type      = "csi"
-plugin_id = "${expected_plugin}"
+        _create_csi_volume "${vol}" "${expected_plugin}" "${cap_min}" "${cap_max}" || exit 1
 
-capacity_min = "${cap_min}"
-capacity_max = "${cap_max}"
-
-capability {
-  access_mode     = "single-node-writer"
-  attachment_mode = "file-system"
-}
-EOF
-
-        create_output="$(NOMAD_ADDR="${NOMAD_ADDR}" NOMAD_NAMESPACE="${NOMAD_NAMESPACE}" nomad volume create "${tmp_spec}" 2>&1)" || {
-          rm -f "${tmp_spec}"
-          echo "✗ Failed creating CSI volume: ${vol} (plugin=${expected_plugin})" >&2
-          echo "  ${create_output}" >&2
-          exit 1
-        }
-        if NOMAD_ADDR="${NOMAD_ADDR}" NOMAD_NAMESPACE="${NOMAD_NAMESPACE}" nomad volume status "${vol}" >/dev/null 2>&1; then
-          rm -f "${tmp_spec}"
-          echo "✓ Created CSI volume: ${vol} (plugin=${expected_plugin}, min=${cap_min}, max=${cap_max})"
-        else
-          rm -f "${tmp_spec}"
-          echo "✗ Failed creating CSI volume: ${vol} (plugin=${expected_plugin})" >&2
-          exit 1
-        fi
+        # Refresh vol_json after creation
+        vol_json="$(NOMAD_ADDR="${NOMAD_ADDR}" NOMAD_NAMESPACE="${NOMAD_NAMESPACE}" nomad volume status -json "${vol}" 2>/dev/null || true)"
       else
         echo "✗ Missing CSI volume: ${vol}" >&2
+        echo "  Run with --create-missing-csi to create it automatically." >&2
         exit 1
+      fi
+    else
+      echo "✓ CSI volume present: ${vol}"
+    fi
+
+    # ── Topology node ID extraction ────────────────────────────────────────────
+    if [ "${EMIT_TOPOLOGY_VARS}" = "true" ] && [ -n "${vol_json}" ]; then
+      topology_node_id="$(_VOL_JSON="${vol_json}" NOMAD_ADDR="${NOMAD_ADDR}" NOMAD_NAMESPACE="${NOMAD_NAMESPACE}" _csi_volume_topology_node_id "${vol_json}" 2>/dev/null || true)"
+      if [ -n "${topology_node_id}" ]; then
+        _topology_node_ids["${vol}"]="${topology_node_id}"
+        echo "✓ CSI topology node for '${vol}': ${topology_node_id}"
+      else
+        echo "  (no topology node ID resolvable for '${vol}' — constraint will not be emitted)"
       fi
     fi
   done
@@ -280,3 +471,17 @@ PY
 fi
 
 echo "✓ Storage preflight passed"
+
+# ── Emit topology node IDs for scheduler pinning ──────────────────────────────
+# When --emit-topology-vars is set, print shell-eval-safe assignments so the
+# caller (deploy-openstack.sh) can pin DB/Redis jobs to their CSI topology node.
+if [ "${EMIT_TOPOLOGY_VARS}" = "true" ]; then
+  if [ "${db_storage_type}" = "csi" ]; then
+    db_topo_node="${_topology_node_ids[${db_volume_source}]:-}"
+    echo "db_csi_topology_node_id=${db_topo_node}"
+  fi
+  if [ "${redis_storage_type}" = "csi" ]; then
+    redis_topo_node="${_topology_node_ids[${redis_volume_source}]:-}"
+    echo "redis_csi_topology_node_id=${redis_topo_node}"
+  fi
+fi

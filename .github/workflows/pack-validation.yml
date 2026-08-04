@@ -61,6 +61,7 @@ jobs:
       - name: Run pre-teardown script tests
         run: |
           ./scripts/test_pre_teardown.sh
+          ./scripts/test_validate_traefik_consul_endpoint.sh
 
       - name: Check migration docs variable mapping
         run: |

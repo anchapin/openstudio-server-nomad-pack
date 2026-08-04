@@ -34,7 +34,8 @@ log:
 providers:
   consulCatalog:
     endpoint:
-      address: 'http://127.0.0.1:8500'
+      # Consul Catalog endpoint must be host:port (no URL scheme).
+      address: '127.0.0.1:8500'
     exposedByDefault: false
     defaultRule: 'PathPrefix(`/`)'
 ```
@@ -81,4 +82,18 @@ ssh ubuntu@10.60.126.125 "sudo mv /tmp/traefik /usr/local/bin/traefik && sudo ch
 sudo systemctl status traefik
 sudo systemctl restart traefik
 sudo journalctl -u traefik -f
+```
+
+## Ingress Smoke Check (recommended after every Traefik restart)
+
+Run from the pack repo root:
+
+```bash
+./scripts/check-openstack-ingress.sh
+```
+
+Or through the OpenStack helper wrapper:
+
+```bash
+make os-ingress-check
 ```

@@ -31,8 +31,9 @@ This guide covers everything you need to set up persistent storage for MongoDB a
 4. [Persistent Volume Examples](#4-persistent-volume-examples)
 5. [NFS Shared Volume (web and worker)](#5-nfs-shared-volume-web-and-worker)
 6. [Volume Permissions and Ownership](#6-volume-permissions-and-ownership)
-7. [Teardown and Cleanup](#7-teardown-and-cleanup)
-8. [OpenStack Provisioning](#8-openstack-provisioning)
+7. [CSI Persistence and Topology Pinning](#7-csi-persistence-and-topology-pinning)
+8. [Teardown and Cleanup](#8-teardown-and-cleanup)
+9. [OpenStack Provisioning](#9-openstack-provisioning)
 
 ---
 
@@ -598,9 +599,83 @@ nomad job status openstudio-volume-init   # wait for status = dead (batch comple
 
 ---
 
-## 7. Teardown and Cleanup
+## 7. CSI Persistence and Topology Pinning
 
-### 7.1 Stop the Pack and Purge Jobs
+### 7.1 Why `csi_hook` fails after cluster recovery
+
+When the cluster is recovered using ephemeral DB/Redis storage (a common emergency measure),
+the CSI volume registrations are often deleted via `nomad volume deregister`.  When persistent
+mode is subsequently re-enabled, the following failure path is triggered:
+
+```
+pre-run hook "csi_hook" failed: volume id "openstudio-mongodb" does not exist in the
+volumes list
+```
+
+**Root causes:**
+
+1. **Missing Nomad volume registration** — the Cinder-backed volume exists in OpenStack but
+   is no longer registered in Nomad.  The CSI hook cannot find it.
+2. **Alloc scheduled on wrong node** — the Nomad scheduler places the DB/Redis alloc on a
+   node where the CSI plugin node component is not running or the volume is not accessible.
+   The `single-node-writer` access mode means only one node can attach the volume at a time.
+
+### 7.2 Automated fix: `--rebind-stale` + topology pinning
+
+`scripts/preflight-storage.sh` has been extended with two flags:
+
+| Flag | Effect |
+|---|---|
+| `--rebind-stale` | Detects stale registrations (wrong plugin, no topology, 0 healthy nodes) and deregisters + re-creates them before the deploy |
+| `--emit-topology-vars` | Emits `db_csi_topology_node_id=<node-uuid>` and `redis_csi_topology_node_id=<node-uuid>` after checks pass |
+
+`scripts/deploy-openstack.sh` captures these IDs and passes them as
+`--var db_csi_topology_node_id=<uuid>` and `--var redis_csi_topology_node_id=<uuid>` to
+`nomad-pack run`.  The DB and Redis job templates then inject:
+
+```hcl
+constraint {
+  attribute = "${node.unique.id}"
+  value     = "<uuid>"
+}
+```
+
+This hard constraint ensures the scheduler only places the alloc on the node that owns the
+CSI volume, preventing the `csi_hook` failure permanently.
+
+### 7.3 Manual audit and remediation
+
+```bash
+# Audit CSI volume state
+NOMAD_ADDR=http://localhost:4646 \
+DB_CSI_PLUGIN_ID=hostpath-web-plugin0 \
+./scripts/preflight-storage.sh \
+  --var-file examples/advanced/openstack.hcl
+
+# Auto-fix stale registrations and emit topology pins
+NOMAD_ADDR=http://localhost:4646 \
+DB_CSI_PLUGIN_ID=hostpath-web-plugin0 \
+./scripts/preflight-storage.sh \
+  --var-file examples/advanced/openstack.hcl \
+  --rebind-stale \
+  --emit-topology-vars
+
+# Break-glass: manually deregister a stale volume so it can be re-created
+nomad volume deregister openstudio-mongodb
+nomad volume deregister openstudio-redis
+
+# Then re-run preflight with --rebind-stale to recreate
+DB_CSI_PLUGIN_ID=hostpath-web-plugin0 \
+./scripts/preflight-storage.sh \
+  --var-file examples/advanced/openstack.hcl \
+  --rebind-stale
+```
+
+---
+
+## 8. Teardown and Cleanup
+
+### 8.1 Stop the Pack and Purge Jobs
 
 ```bash
 nomad-pack destroy .
@@ -608,7 +683,7 @@ nomad-pack destroy .
 nomad job stop -purge openstudio-server
 ```
 
-### 7.2 Remove Host Volume Data
+### 8.2 Remove Host Volume Data
 
 ```bash
 # macOS
@@ -623,7 +698,7 @@ sudo rm -rf /opt/nomad/volumes/mongodb /opt/nomad/volumes/redis
 > migration steps, plus the [migration guide](./migration-k8s-to-nomad.md) for
 > Kubernetes-to-Nomad data-move workflows).
 
-### 7.3 Delete CSI Volumes
+### 8.3 Delete CSI Volumes
 
 Deregister volumes only after all allocations using them have stopped:
 
@@ -639,7 +714,7 @@ nomad volume delete openstudio-mongodb
 nomad volume delete openstudio-redis
 ```
 
-### 7.4 Remove CSI Plugin (Optional)
+### 8.4 Remove CSI Plugin (Optional)
 
 If no other workloads use the plugin:
 
@@ -672,7 +747,7 @@ That guide covers:
 - Step-by-step `/etc/fstab`, systemd mount unit, and `client.hcl` integration
 ---
 
-## 8. OpenStack Provisioning
+## 9. OpenStack Provisioning
 
 When deploying on an OpenStack cloud, storage resources must be provisioned **before**
 `nomad-pack run`. The pack supports two OpenStack storage backends:

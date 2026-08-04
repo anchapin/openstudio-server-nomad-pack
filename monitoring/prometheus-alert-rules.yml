@@ -146,3 +146,58 @@ groups:
             The Nomad cluster has less than 5 % schedulable memory remaining.
             New worker allocations will queue indefinitely.  Consider reducing
             worker_max_replicas or adding nodes to the compute pool.
+
+  - name: openstudio_ingress
+    rules:
+
+      # -----------------------------------------------------------------------
+      # Traefik config failed to reload
+      # -----------------------------------------------------------------------
+      - alert: OpenStudioTraefikConfigReloadFailed
+        expr: |
+          traefik_config_last_reload_success == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: infra
+        annotations:
+          summary: "Traefik config reload is failing"
+          description: |
+            Traefik failed to apply its most recent configuration reload.
+            Confirm /etc/traefik/traefik.yml is valid and restart Traefik after correction.
+
+      # -----------------------------------------------------------------------
+      # OpenStudio router has no healthy backend server
+      # -----------------------------------------------------------------------
+      - alert: OpenStudioIngressNoHealthyBackend
+        expr: |
+          sum(traefik_service_server_up{service=~"openstudio-server(@consulcatalog)?"}) < 1
+        for: 2m
+        labels:
+          severity: critical
+          team: infra
+        annotations:
+          summary: "OpenStudio ingress has no healthy backend"
+          description: |
+            Traefik cannot see a healthy backend server for the OpenStudio router.
+            Check Consul health for openstudio-web and inspect web allocation failures.
+
+      # -----------------------------------------------------------------------
+      # 404 ratio on web entrypoint is elevated
+      # -----------------------------------------------------------------------
+      - alert: OpenStudioIngressHigh404Ratio
+        expr: |
+          (
+            sum(rate(traefik_entrypoint_requests_total{entrypoint="web",code="404"}[5m]))
+            /
+            clamp_min(sum(rate(traefik_entrypoint_requests_total{entrypoint="web"}[5m])), 1)
+          ) > 0.30
+        for: 10m
+        labels:
+          severity: warning
+          team: infra
+        annotations:
+          summary: "Traefik web entrypoint 404 ratio > 30 %"
+          description: |
+            The web entrypoint is serving an unusually high 404 ratio.
+            Validate router discovery via Consul Catalog and run scripts/check-openstack-ingress.sh.

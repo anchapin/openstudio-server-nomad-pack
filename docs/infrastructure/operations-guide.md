@@ -231,6 +231,39 @@ Before running `nomad-pack run` for the first time:
 - [ ] If Vault is enabled: secrets written to the correct KV v2 paths and Nomad policies applied
 - [ ] If `worker_autoscaling_enabled = true`: Nomad Autoscaler is deployed and running
 
+### OpenStack reliability checks (recommended cadence)
+
+Run these from the pack root after bootstrap/deploy and then on a schedule (for example, every 15 minutes for ingress and daily for audits):
+
+```bash
+# Ingress route + external URL + Traefik metrics endpoint
+make os-ingress-check
+
+# Reconcile jump-host Traefik config to managed baseline, then validate ingress
+make os-traefik-reconcile
+
+# Verify critical jobs are constrained to the intended node_role
+make os-conformance-audit
+
+# Report low-disk Nomad clients before ENOSPC causes allocation failures
+make os-disk-audit
+```
+
+To automatically quarantine low-disk nodes, run:
+
+```bash
+NOMAD_ADDR=http://127.0.0.1:4646 \
+JUMP_HOST=ubuntu@10.60.105.39 \
+NOMAD_SERVER_HOST=ubuntu@10.60.126.125 \
+./scripts/remediate-low-disk-nodes.sh --apply --drain --threshold-mb 20480
+```
+
+By default, the script will **not** quarantine `node_role=web` nodes. Override only when you have replacement web-role capacity:
+
+```bash
+./scripts/remediate-low-disk-nodes.sh --apply --drain --threshold-mb 20480 --allow-web-role-quarantine
+```
+
 ---
 
 ## Disk Reservation — Automatic Node Ineligibility
