@@ -91,8 +91,8 @@ Conditional templates:
 - `queue-sweeper.nomad.tpl` (`enable_queue_sweeper` or `enable_stall_watchdog`)
 - `stall-watchdog.nomad.tpl` (marker; consolidated into queue-sweeper template)
 - `nomad-batch-worker.nomad.tpl` (`batch_engine == "nomad_batch"`)
-- `state-backup.nomad.tpl` (`backup_enabled`)
-- `state-restore.nomad.tpl` (`restore_enabled`)
+- `state-backup.nomad.tpl` (`backup_enabled = false` by default)
+- `state-restore.nomad.tpl` (`restore_enabled = false` by default)
 - `infra-setup.nomad.tpl` (`enable_infra_setup`)
 
 ### Reusable template helpers
