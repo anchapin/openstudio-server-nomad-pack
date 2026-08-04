@@ -491,6 +491,117 @@ due to this bug. Its results are unavailable. Re-initiate from the web UI if req
 
 ---
 
+## Node Replacement
+
+When a Nomad client node is replaced (e.g., an OpenStack VM is terminated and a new VM
+joins the cluster with a different UUID), any CSI volume that was pinned to the old node
+via `topology_required` will become unschedulable. This section describes how to detect
+the staleness and restore service.
+
+### Detection
+
+**Step 1 — Observe unschedulable DB job:**
+
+```bash
+nomad job status openstudio-server-db
+```
+
+Look for an allocation stuck in `pending` with a placement failure like:
+
+```
+Placement Failure
+  Task Group "db" (failed to place 1 allocation):
+    * Constraint "topology" filtered 1 nodes
+```
+
+**Step 2 — Confirm the volume topology pin is stale:**
+
+```bash
+nomad volume status openstudio-mongodb
+```
+
+The `Topology` field will list the old node UUID. Compare it against the current client
+nodes:
+
+```bash
+nomad node status
+```
+
+If the node UUID in the volume's topology does not appear in the node list, the pin is
+stale and must be updated.
+
+---
+
+### Automated Remediation (preferred)
+
+If you are using the `deploy-openstack.sh` helper script, re-running it with `--deploy`
+automatically re-executes preflight with `--rebind-stale --emit-topology-vars` and
+re-deploys the pack with updated topology pins:
+
+```bash
+./scripts/deploy-openstack.sh --deploy
+```
+
+The script performs these steps internally:
+1. Runs `preflight-storage.sh --rebind-stale --emit-topology-vars` to detect the new
+   node UUID and emit updated `*_csi_topology_node_id` variable values.
+2. Passes those values to `nomad-pack run` to update the DB and Redis job topology pins.
+3. Validates that the DB and Redis jobs reach a healthy state before returning.
+
+No manual intervention is required when this path is available.
+
+---
+
+### Manual Remediation
+
+Use this path when the automated deploy script is unavailable or when you need to
+perform the update step-by-step.
+
+**Step 1 — Re-run preflight to capture the new node UUID:**
+
+```bash
+DB_CSI_PLUGIN_ID=hostpath-web-plugin0 \
+  ./scripts/preflight-storage.sh \
+    --var-file examples/advanced/openstack.hcl \
+    --rebind-stale --emit-topology-vars 2>/dev/null \
+  | grep _csi_topology_node_id
+```
+
+Example output:
+
+```
+db_csi_topology_node_id    = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+redis_csi_topology_node_id = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+```
+
+**Step 2 — Re-deploy with updated topology pins:**
+
+```bash
+nomad-pack run \
+  -var-file examples/advanced/openstack.hcl \
+  -var "db_csi_topology_node_id=<new-uuid>" \
+  -var "redis_csi_topology_node_id=<new-uuid>" \
+  --name openstudio-server .
+```
+
+Replace `<new-uuid>` with the UUID captured in Step 1.
+
+**Step 3 — Verify recovery:**
+
+```bash
+nomad job status openstudio-server-db
+nomad job status openstudio-server-redis
+```
+
+Both jobs should show all allocations in `running` state within a few minutes.
+
+> **Note:** If `nomad volume status openstudio-mongodb` still shows the old node UUID
+> after re-deploying, the CSI plugin may need to be restarted or the volume deregistered
+> and re-registered. Consult the [Storage guide](storage.md) for volume lifecycle
+> operations.
+
+---
+
 ## Teardown Order
 
 Before destroying the pack, stop the stateless jobs first so that all Nomad allocations
