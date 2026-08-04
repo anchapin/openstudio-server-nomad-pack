@@ -911,6 +911,14 @@ Rollback path:
 
 ---
 
+## Incident Response Runbooks
+
+Use these runbooks for production incident diagnosis and recovery:
+
+- [runbooks/queue-stall.md](./runbooks/queue-stall.md) — diagnose queue growth, identify
+  bad worker versions, clear stale `analysis_zip.lock` files, drain old worker
+  allocations safely, and validate recovery.
+
 ## Further Reading
 
 - [Nomad Pack documentation](https://developer.hashicorp.com/nomad/tools/nomad-pack)
