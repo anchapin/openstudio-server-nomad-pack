@@ -339,6 +339,7 @@ EOT
     [[ end ]]
     [[ end ]]
 
+    [[ if var "nfs_shared_volume_enabled" . ]]
     # Prestart: create and chmod the shared analysis directory on NFS before workers start.
     # Mirrors the helm chart's init-fix-shared-storage-perms init container.
     # Without this, a fresh NFS volume may lack the analyses directory; partial
@@ -353,13 +354,11 @@ EOT
       driver = "docker"
       user   = "0:0"
 
-      [[ if var "nfs_shared_volume_enabled" . ]]
       volume_mount {
         volume      = "nfs-shared"
         destination = "[[ var "nfs_volume_mount_path" . ]]"
         read_only   = false
       }
-      [[ end ]]
 
       config {
         image = "[[ var "poststop_cleanup_image" . ]]"
@@ -385,6 +384,7 @@ EOF
         memory = 32
       }
     }
+    [[ end ]]
 
     [[ template "openstudio_server.wait_for_deps_task" (dict "root" . "include_rserve" true "proceed_on_timeout" (var "web_wait_for_deps_proceed_on_timeout" .)) ]]
 
