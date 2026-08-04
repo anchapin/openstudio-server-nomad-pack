@@ -6,7 +6,7 @@
 # Usage:
 #   nomad-pack run -var-file examples/quickstart/simple.hcl .
 #
-# To customize further (worker count, port, job name), copy user-overrides.hcl
+# To customize further (worker count, port, job name), copy user-overrides.hcl.example
 # from the repository root and add your changes there.
 
 # ------------------------------------------------------------
