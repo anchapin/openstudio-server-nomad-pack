@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Relocated loose root-level `infra-setup.nomad` file into `templates/infra-setup.nomad.tpl` and `packs/openstudio-server/templates/infra-setup.nomad.tpl` controlled by new `enable_infra_setup` boolean variable (default `false`) (#403).
 
 ### Changed
+- Extended `scripts/drain-workers.sh` with supported bulk-drain flags (`--job`, `--batch`, `--sleep`, `--rounds`, `--dry-run`, `--nomad-addr`), per-round structured progress, final running-version summaries, CI syntax validation, and operations-guide usage documentation (#436).
 - Removed local state overrides file `user-overrides.hcl` from git tracking and renamed it to `user-overrides.hcl.example`, updating `.gitignore` to ignore local override files (`user-overrides.hcl`, `*.override.hcl`) (#402).
 - Reverted worker back to its own Nomad job (`<job_name>-worker`, `worker.nomad.tpl`) with `priority = worker_priority` (default 40), restoring the scheduler-priority separation from the web job (`priority = web_priority`, default 80). The consolidation introduced in #405 silently elevated workers to web-priority, breaking the eviction contract (workers should be evicted before the web UI under resource contention) and orphaning the `worker_priority` variable. The `stall-watchdog` consolidation into `queue-sweeper` from #405 is retained.
 
