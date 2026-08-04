@@ -68,7 +68,8 @@ The pack renders a dedicated Nomad job for each service component:
 
 | Job | Template | Conditional |
 |---|---|---|
-| `<job_name>-web` | `web.nomad.tpl` | always (task groups: `web`, `web-background`, `worker`) |
+| `<job_name>-web` | `web.nomad.tpl` | always (task groups: `web`, `web-background`) |
+| `<job_name>-worker` | `worker.nomad.tpl` | `batch_engine = "internal"` (default) |
 | `<job_name>-db` | `db.nomad.tpl` | always (MongoDB, Consul: `openstudio-db`) |
 | `<job_name>-redis` | `redis.nomad.tpl` | always (Consul: `openstudio-redis`) |
 | `<job_name>-rserve` | `rserve.nomad.tpl` | always (Consul: `openstudio-rserve`) |

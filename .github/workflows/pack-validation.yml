@@ -115,6 +115,10 @@ jobs:
         run: |
           ./scripts/test_openstack_autoscaler_render.sh
 
+      - name: Check service discovery guardrails
+        run: |
+          ./scripts/test_service_discovery_guardrails.sh
+
       - name: Check variables.md is up-to-date
         run: |
           GENERATED_DOC=docs/variables.generated.md

@@ -51,7 +51,7 @@ variable "ingress_tls_enabled" {
 variable "deploy_traefik" {
   type        = bool
   description = "When true, deploy a Traefik ingress job alongside the OpenStudio Server stack."
-  default     = false
+  default     = true
 }
 
 variable "traefik_image" {
@@ -106,6 +106,12 @@ variable "traefik_write_timeout" {
   type        = string
   description = "Traefik entrypoint write timeout (time to write the full response to the client). Only applies when deploy_traefik = true."
   default     = "300s"
+}
+
+variable "traefik_consul_catalog_address" {
+  type        = string
+  description = "Consul HTTP endpoint used by Traefik's Consul Catalog provider (host:port). Use 127.0.0.1:8500 when Consul agent is local on Nomad clients; override when Traefik cannot reach local Consul."
+  default     = "127.0.0.1:8500"
 }
 
 variable "nomad_namespace" {
@@ -225,8 +231,26 @@ variable "web_container_port" {
 
 variable "web_redis_url" {
   type        = string
-  description = "REDIS_URL env var injected into web and worker containers. Defaults to 'redis://queue:6379' which resolves via /etc/hosts patch to the Consul-registered Redis address. Set to empty string when Vault injects REDIS_URL directly. Override with 'redis://host.docker.internal:6379' on macOS dev."
+  description = "REDIS_URL env var injected into web and worker containers. Defaults to 'redis://queue:6379' which resolves via startup-time /etc/hosts aliasing from Consul DNS names. Set to empty string when Vault injects REDIS_URL directly. Override with 'redis://host.docker.internal:6379' on macOS dev."
   default     = "redis://queue:6379"
+}
+
+variable "web_worker_runtime_service_resolution_enabled" {
+  type        = bool
+  description = "Controls startup-time runtime DNS alias resolution for web, web-background, and worker tasks. Keep true (default). The legacy Consul-template `{{ range service ... }}` alias-watch path is intentionally removed to prevent control-plane watch pressure during large worker churn events."
+  default     = true
+}
+
+variable "web_worker_runtime_service_resolution_attempts" {
+  type        = number
+  description = "Maximum DNS resolution attempts per service alias when web_worker_runtime_service_resolution_enabled = true. Uses exponential backoff and fails task startup if any required alias is unresolved."
+  default     = 5
+}
+
+variable "web_worker_runtime_service_resolution_backoff_seconds" {
+  type        = number
+  description = "Initial backoff in seconds for runtime DNS alias resolution retries when web_worker_runtime_service_resolution_enabled = true. Delay doubles each retry (capped in-template)."
+  default     = 1
 }
 
 variable "os_server_sampling_backend" {
@@ -257,6 +281,24 @@ variable "web_update_max_parallel" {
   type        = number
   description = "Maximum number of web allocations updated in parallel."
   default     = 1
+}
+
+variable "web_update_canary" {
+  type        = number
+  description = "Number of canary allocations to place before promoting a web update. Leave 0 to disable canary mode (default behavior)."
+  default     = 0
+}
+
+variable "web_update_auto_promote" {
+  type        = bool
+  description = "When canary mode is enabled (web_update_canary > 0), automatically promote the deployment after canaries pass."
+  default     = true
+}
+
+variable "web_update_stagger" {
+  type        = string
+  description = "Optional delay between web allocation updates. Leave empty for Nomad default behavior."
+  default     = ""
 }
 
 variable "web_update_health_check" {
@@ -381,8 +423,26 @@ variable "worker_excluded_node_ids" {
 
 variable "worker_update_max_parallel" {
   type        = number
-  description = "Maximum number of worker allocations updated in parallel."
+  description = "Maximum number of worker allocations updated in parallel. Increase in high-scale fleets to retire bad worker versions faster than single-file rolling updates."
   default     = 1
+}
+
+variable "worker_update_canary" {
+  type        = number
+  description = "Number of worker canary allocations to place before full rollout. Leave 0 to disable canary mode (default behavior)."
+  default     = 0
+}
+
+variable "worker_update_auto_promote" {
+  type        = bool
+  description = "When worker_update_canary > 0, automatically promote the deployment after canaries pass."
+  default     = true
+}
+
+variable "worker_update_stagger" {
+  type        = string
+  description = "Optional delay between worker allocation updates. Leave empty for Nomad default behavior."
+  default     = ""
 }
 
 variable "worker_update_health_check" {
@@ -412,6 +472,36 @@ variable "worker_update_progress_deadline" {
 variable "worker_update_auto_revert" {
   type        = bool
   description = "Automatically revert a worker deployment if the update fails."
+  default     = true
+}
+
+variable "wait_for_deps_max_attempts" {
+  type        = number
+  description = "Maximum number of bounded wait-for-deps retries per dependency endpoint before timeout."
+  default     = 120
+}
+
+variable "wait_for_deps_sleep_seconds" {
+  type        = number
+  description = "Sleep duration (seconds) between bounded wait-for-deps retry attempts."
+  default     = 3
+}
+
+variable "wait_for_deps_connect_timeout_seconds" {
+  type        = number
+  description = "TCP connect timeout (seconds) for each bounded wait-for-deps dependency check attempt."
+  default     = 2
+}
+
+variable "web_wait_for_deps_proceed_on_timeout" {
+  type        = bool
+  description = "If true, web and web-background wait-for-deps timeouts log and continue startup. If false (default), timeout fails prestart so Nomad retries explicitly."
+  default     = false
+}
+
+variable "worker_wait_for_deps_proceed_on_timeout" {
+  type        = bool
+  description = "If true, worker wait-for-deps timeouts log and continue startup (default). If false, timeout fails prestart so Nomad retries explicitly."
   default     = true
 }
 
@@ -513,7 +603,7 @@ variable "nomad_autoscaler_image" {
 
 variable "autoscaler_nomad_address" {
   type        = string
-  description = "Address of the Nomad server for the Nomad Autoscaler to connect to. Use the private IP when Consul DNS is not available (e.g. 'http://192.168.100.87:4646')."
+  description = "Fallback address of the Nomad server for the Nomad Autoscaler, used when the 'nomad' Consul service cannot be resolved (e.g. 'http://192.168.100.87:4646'). The template first tries to resolve the address via the Consul 'nomad' service; this value is used only if that lookup returns no results."
   default     = "http://nomad.service.consul:4646"
 }
 
@@ -645,7 +735,7 @@ variable "prometheus_nomad_scrape_target" {
 
 variable "worker_queue_requeued_query" {
   type        = string
-  description = "Prometheus instant-vector selector for the requeued queue depth. Must be a bare vector selector (metric name + labels only) — do not include range brackets, sum(), or or vector(0). The template wraps this in max_over_time(...[window]) and appends 'or vector(0)' so the series always resolves to 0 (not empty/error) when the queue key does not yet exist in Redis, enabling scale-to-zero. Worker count math is applied via a pass-through strategy."
+  description = "Prometheus instant-vector selector for the requeued queue depth. Must be a bare vector selector (metric name + labels only) — do not include range brackets, sum(), or or vector(0). The template wraps this in sum(max_over_time(...[window])) to collapse multiple scrape-target label streams into a single result, then appends 'or vector(0)' so the series always resolves to 0 (not empty/error) when the queue key does not yet exist in Redis, enabling scale-to-zero. Worker count math is applied via a pass-through strategy."
   default     = "redis_key_size{key=\"resque:queue:requeued\"}"
 }
 
@@ -663,7 +753,7 @@ variable "worker_queue_requeued_target" {
 
 variable "worker_queue_simulations_query" {
   type        = string
-  description = "Prometheus instant-vector selector for the simulations queue depth. Must be a bare vector selector (metric name + labels only) — do not include range brackets, sum(), or or vector(0). The template wraps this in max_over_time(...[window]) and appends 'or vector(0)' so the series always resolves to 0 (not empty/error) when the queue key doesn't exist yet in Redis, enabling scale-to-zero. Worker count math is applied via a pass-through strategy."
+  description = "Prometheus instant-vector selector for the simulations queue depth. Must be a bare vector selector (metric name + labels only) — do not include range brackets, sum(), or or vector(0). The template wraps this in sum(max_over_time(...[window])) to collapse multiple scrape-target label streams into a single result, then appends 'or vector(0)' so the series always resolves to 0 (not empty/error) when the queue key doesn't exist yet in Redis, enabling scale-to-zero. Worker count math is applied via a pass-through strategy."
   default     = "redis_key_size{key=\"resque:queue:simulations\"}"
 }
 
@@ -1020,6 +1110,12 @@ variable "vector_image" {
   type        = string
   description = "The Vector image name and tag."
   default     = "timberio/vector:0.30.0-alpine"
+}
+
+variable "vector_memory_mb" {
+  type        = number
+  description = "Memory allocation in MB for the Vector sidecar."
+  default     = 256
 }
 
 # Scheduling helper inputs
@@ -1390,6 +1486,18 @@ variable "queue_sweeper_replay_delay_seconds" {
   default     = 10
 }
 
+variable "queue_sweeper_consul_retry_attempts" {
+  type        = number
+  description = "Maximum fallback Consul health-API retries when queue-sweeper cannot reach Redis via `openstudio-redis.service.consul` DNS. Transient 429/5xx responses are treated as non-fatal skip-cycle after this bounded retry budget."
+  default     = 3
+}
+
+variable "queue_sweeper_consul_retry_backoff_seconds" {
+  type        = number
+  description = "Initial backoff (seconds) for queue-sweeper fallback Consul health-API retries. Delay doubles each retry and is capped in-template."
+  default     = 1
+}
+
 # ── Stall watchdog ──────────────────────────────────────────────────────────
 variable "enable_stall_watchdog" {
   type        = bool
@@ -1443,6 +1551,18 @@ variable "stall_watchdog_memory" {
   type        = number
   description = "Memory (MiB) reserved for the stall-watchdog task."
   default     = 128
+}
+
+variable "stall_watchdog_consul_retry_attempts" {
+  type        = number
+  description = "Maximum Consul health-API retries used by stall-watchdog when DNS-first web resolution falls back to Consul HTTP. Transient 429/5xx exhaustion causes skip-cycle (exit 0), not task failure."
+  default     = 3
+}
+
+variable "stall_watchdog_consul_retry_backoff_seconds" {
+  type        = number
+  description = "Initial backoff in seconds for stall-watchdog Consul fallback retries. Delay doubles each retry and is capped in-template."
+  default     = 1
 }
 
 # Vault KV secrets integration variables (vault_integration_enabled mechanism)
@@ -1560,6 +1680,12 @@ variable "enable_openstudio_test" {
   type        = bool
   description = "When true, renders the parameterized openstudio-test batch job used for post-deploy health checks. Set to false to omit the job from lightweight or production deployments that do not require the test harness."
   default     = true
+}
+
+variable "enable_runtime_discovery_canary_test" {
+  type        = bool
+  description = "When true, adds a runtime-discovery canary task to the openstudio-test job that validates bounded DNS alias resolution for db/queue/rserve/web before full rollout."
+  default     = false
 }
 
 variable "test_web_port" {
@@ -1766,4 +1892,3 @@ variable "enable_infra_setup" {
   description = "When true, renders the infra-setup client configuration system job. Disabled by default."
   default     = false
 }
-

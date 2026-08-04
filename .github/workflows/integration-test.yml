@@ -239,6 +239,11 @@ jobs:
           REDIS_ALLOC=$(nomad job allocs -json "${E2E_REDIS_JOB}" 2>/dev/null \
             | python3 -c "import json,sys; a=json.load(sys.stdin); print(next((x['ID'] for x in a if x.get('ClientStatus')=='failed'), ''))" 2>/dev/null || echo "")
           [ -n "${REDIS_ALLOC}" ] && { echo "=== Redis Alloc Status ==="; nomad alloc status -verbose "${REDIS_ALLOC}" || true; }
+          echo "=== Web Job Allocations ==="
+          nomad job allocs "${E2E_WEB_JOB}" 2>/dev/null || true
+          WEB_ALLOC=$(nomad job allocs -json "${E2E_WEB_JOB}" 2>/dev/null \
+            | python3 -c "import json,sys; a=json.load(sys.stdin); print(next((x['ID'] for x in a if x.get('ClientStatus')=='failed'), ''))" 2>/dev/null || echo "")
+          [ -n "${WEB_ALLOC}" ] && { echo "=== Web Alloc Status ==="; nomad alloc status -verbose "${WEB_ALLOC}" || true; }
           echo "=== Docker containers ==="
           docker ps -a || true
           echo "=== Consul catalog services ==="

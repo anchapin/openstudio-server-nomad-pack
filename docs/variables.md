@@ -13,7 +13,7 @@
 | `vault_integration_enabled` | `bool` | `false` | Enable Vault KV v2 secrets injection via Nomad template stanzas (`secrets/env`). Typically enabled together with vault_enabled so tasks use explicit Vault roles. |
 | `ingress_domain` | `string` | `"localhost"` | Ingress domain used when constructing service hostnames and Traefik router rules. |
 | `ingress_tls_enabled` | `bool` | `false` | When true, adds Traefik TLS router tags for the websecure entrypoint on the web service. |
-| `deploy_traefik` | `bool` | `false` | When true, deploy a Traefik ingress job alongside the OpenStudio Server stack. |
+| `deploy_traefik` | `bool` | `true` | When true, deploy a Traefik ingress job alongside the OpenStudio Server stack. |
 | `traefik_image` | `string` | `"traefik:v3"` | Traefik Docker image to use. |
 | `traefik_http_port` | `number` | `80` | Traefik HTTP entrypoint port. |
 | `traefik_https_port` | `number` | `443` | Traefik HTTPS entrypoint port. |
@@ -23,6 +23,7 @@
 | `traefik_max_request_body_size` | `string` | `"524288000"` | Maximum request body size allowed by the Traefik buffering middleware on the web service, in bytes (integer). Set to 0 to disable the limit. Must be a plain integer — Traefik does not accept size strings like '500MB' in this tag. Default is 524288000 (500 MiB). Only applies when deploy_traefik = true. |
 | `traefik_read_timeout` | `string` | `"300s"` | Traefik entrypoint read timeout (time to read the full request from the client). Only applies when deploy_traefik = true. |
 | `traefik_write_timeout` | `string` | `"300s"` | Traefik entrypoint write timeout (time to write the full response to the client). Only applies when deploy_traefik = true. |
+| `traefik_consul_catalog_address` | `string` | `"127.0.0.1:8500"` | Consul HTTP endpoint used by Traefik's Consul Catalog provider (host:port). Use 127.0.0.1:8500 when Consul agent is local on Nomad clients; override when Traefik cannot reach local Consul. |
 | `nomad_namespace` | `string` | `"default"` | The Nomad namespace in which all pack jobs are registered. Use 'default' for the built-in namespace. |
 | `region` | `string` | `"global"` | The Nomad region where the job will be deployed. |
 | `datacenters` | `list(string)` | `["dc1"]` | A list of datacenters in the region which are eligible for task placement. |
@@ -42,12 +43,18 @@
 | `web_count` | `number` | `1` | The number of web task group allocations. MUST remain 1 (the default). The OpenStudio Server web process writes uploaded analysis artefacts to local container filesystem without a distributed file-locking scheme. When nfs_shared_volume_enabled = true, NFS provides a shared filesystem but does NOT guarantee POSIX file-locking across multiple simultaneous web writers — each allocation still has its own isolated view of open file handles. Setting web_count > 1 therefore causes split-brain: requests routed to replica B cannot find files written by replica A. This mirrors the Kubernetes Helm chart constraint (web-hpa.yaml maxReplicas: 1). To safely run web_count > 1 you must first implement either: (a) a distributed lock manager such as Redlock via Redis wrapping every filesystem operation, or (b) stateless file handling by moving all persistent artefacts to object storage (e.g. S3/MinIO). See docs/infrastructure/storage.md §'Web Replica Constraint' for details. |
 | `web_port` | `number` | `80` | Host-side static port mapped to the web container HTTP port. |
 | `web_container_port` | `number` | `80` | Port that the web container's nginx listens on internally. The OpenStudio Server image listens on port 80 by default. Must match the nginx listen directive in the image. |
-| `web_redis_url` | `string` | `"redis://queue:6379"` | REDIS_URL env var injected into web and worker containers. Defaults to 'redis://queue:6379' which resolves via /etc/hosts patch to the Consul-registered Redis address. Set to empty string when Vault injects REDIS_URL directly. Override with 'redis://host.docker.internal:6379' on macOS dev. |
+| `web_redis_url` | `string` | `"redis://queue:6379"` | REDIS_URL env var injected into web and worker containers. Defaults to 'redis://queue:6379' which resolves via startup-time /etc/hosts aliasing from Consul DNS names. Set to empty string when Vault injects REDIS_URL directly. Override with 'redis://host.docker.internal:6379' on macOS dev. |
+| `web_worker_runtime_service_resolution_enabled` | `bool` | `true` | Controls startup-time runtime DNS alias resolution for web, web-background, and worker tasks. Keep true (default). The legacy Consul-template `{{ range service ... }}` alias-watch path is intentionally removed to prevent control-plane watch pressure during large worker churn events. |
+| `web_worker_runtime_service_resolution_attempts` | `number` | `5` | Maximum DNS resolution attempts per service alias when web_worker_runtime_service_resolution_enabled = true. Uses exponential backoff and fails task startup if any required alias is unresolved. |
+| `web_worker_runtime_service_resolution_backoff_seconds` | `number` | `1` | Initial backoff in seconds for runtime DNS alias resolution retries when web_worker_runtime_service_resolution_enabled = true. Delay doubles each retry (capped in-template). |
 | `os_server_sampling_backend` | `string` | `""` | Optional override for OS_SERVER_SAMPLING_BACKEND in web and web-background tasks. Valid values: 'rserve' (default app behavior) or 'ruby' (Rserve-independent LHS sampling fallback). Leave empty to use the image default. |
 | `worker_extra_hosts` | `list(string)` | `[]` | Additional /etc/hosts entries for the worker container, in 'hostname:ip' format. Use 'host-gateway' as the IP value to map to the Docker host machine. Required on macOS dev when the worker's start-workers script uses hostnames (db, queue) that must resolve to the host running MongoDB/Redis. |
 | `web_health_check_interval` | `string` | `"10s"` | Interval between Consul health checks for the web service. |
 | `web_health_check_timeout` | `string` | `"2s"` | Timeout for Consul health checks for the web service. |
 | `web_update_max_parallel` | `number` | `1` | Maximum number of web allocations updated in parallel. |
+| `web_update_canary` | `number` | `0` | Number of canary allocations to place before promoting a web update. Leave 0 to disable canary mode (default behavior). |
+| `web_update_auto_promote` | `bool` | `true` | When canary mode is enabled (web_update_canary > 0), automatically promote the deployment after canaries pass. |
+| `web_update_stagger` | `string` | `""` | Optional delay between web allocation updates. Leave empty for Nomad default behavior. |
 | `web_update_health_check` | `string` | `"checks"` | Health check mode for web rolling updates. |
 | `web_update_min_healthy_time` | `string` | `"30s"` | How long a web allocation must remain healthy before promotion. |
 | `web_update_healthy_deadline` | `string` | `"5m"` | Maximum time for a web allocation to become healthy. |
@@ -68,12 +75,20 @@
 | `worker_affinities` | `any` | `[]` | Placement affinities for the worker group. |
 | `worker_spreads` | `any` | `[]` | Spread rules for the worker group. |
 | `worker_excluded_node_ids` | `list(string)` | `[]` | Node IDs that workers must not run on. Useful for protecting stateful service nodes (for example CSI topology-pinned MongoDB/Redis nodes) from worker placement. |
-| `worker_update_max_parallel` | `number` | `1` | Maximum number of worker allocations updated in parallel. |
+| `worker_update_max_parallel` | `number` | `1` | Maximum number of worker allocations updated in parallel. Increase in high-scale fleets to retire bad worker versions faster than single-file rolling updates. |
+| `worker_update_canary` | `number` | `0` | Number of worker canary allocations to place before full rollout. Leave 0 to disable canary mode (default behavior). |
+| `worker_update_auto_promote` | `bool` | `true` | When worker_update_canary > 0, automatically promote the deployment after canaries pass. |
+| `worker_update_stagger` | `string` | `""` | Optional delay between worker allocation updates. Leave empty for Nomad default behavior. |
 | `worker_update_health_check` | `string` | `"task_states"` | Health check mode for worker rolling updates. |
 | `worker_update_min_healthy_time` | `string` | `"30s"` | How long a worker allocation must remain healthy before promotion. |
 | `worker_update_healthy_deadline` | `string` | `"5m"` | Maximum time for a worker allocation to become healthy. |
 | `worker_update_progress_deadline` | `string` | `"2h"` | Maximum time for the worker rolling update to make progress. Must be greater than worker_kill_timeout (default 5200s ≈ 87m). Defaults to 2h to ensure kill_timeout never exceeds progress_deadline. |
 | `worker_update_auto_revert` | `bool` | `true` | Automatically revert a worker deployment if the update fails. |
+| `wait_for_deps_max_attempts` | `number` | `120` | Maximum number of bounded wait-for-deps retries per dependency endpoint before timeout. |
+| `wait_for_deps_sleep_seconds` | `number` | `3` | Sleep duration (seconds) between bounded wait-for-deps retry attempts. |
+| `wait_for_deps_connect_timeout_seconds` | `number` | `2` | TCP connect timeout (seconds) for each bounded wait-for-deps dependency check attempt. |
+| `web_wait_for_deps_proceed_on_timeout` | `bool` | `false` | If true, web and web-background wait-for-deps timeouts log and continue startup. If false (default), timeout fails prestart so Nomad retries explicitly. |
+| `worker_wait_for_deps_proceed_on_timeout` | `bool` | `true` | If true, worker wait-for-deps timeouts log and continue startup (default). If false, timeout fails prestart so Nomad retries explicitly. |
 | `worker_priority` | `number` | `40` | Nomad job priority for calculation workers (Nomad scale 1–100). Must always be less than web_priority so the web UI is scheduled preferentially during resource contention. Mirrors the Kubernetes low-priority PriorityClass (value 10000) used by the Helm chart. WARNING: do not set this higher than or equal to web_priority. |
 | `worker_queues` | `string` | `"requeued,simulations"` | Comma-separated queue list processed by worker tasks. |
 | `worker_process_count` | `string` | `"1"` | COUNT environment variable passed to worker containers. Also injected into web and web-background as OS_SERVER_NUMBER_OF_WORKERS so analyses can enqueue simulation datapoints. |
@@ -90,7 +105,7 @@
 | `worker_cpu_target_utilization` | `number` | `50` | Target worker CPU utilization percentage used by the nomad-apm avg_cpu scaling check. |
 | `nomad_autoscaler_enabled` | `bool` | `false` | Render an optional Nomad Autoscaler daemon job stub. When false (default), the autoscaler job template is omitted. |
 | `nomad_autoscaler_image` | `string` | `"hashicorp/nomad-autoscaler:0.4.7"` | The image name and tag for the Nomad Autoscaler daemon. See https://github.com/hashicorp/nomad-autoscaler/releases for available versions. |
-| `autoscaler_nomad_address` | `string` | `"http://nomad.service.consul:4646"` | Address of the Nomad server for the Nomad Autoscaler to connect to. Use the private IP when Consul DNS is not available (e.g. 'http://192.168.100.87:4646'). |
+| `autoscaler_nomad_address` | `string` | `"http://nomad.service.consul:4646"` | Fallback address of the Nomad server for the Nomad Autoscaler, used when the 'nomad' Consul service cannot be resolved (e.g. 'http://192.168.100.87:4646'). The template first tries to resolve the address via the Consul 'nomad' service; this value is used only if that lookup returns no results. |
 | `autoscaler_prometheus_address` | `string` | `"http://openstudio-prometheus.service.consul:9090"` | Address of the Prometheus server used by the Nomad Autoscaler APM plugin to evaluate scaling checks. |
 | `worker_autoscaling_scale_up_cooldown` | `string` | `"10m"` | Cooldown between scale-up events for the worker group. Longer values prevent storage shock on shared NFS by limiting how quickly new workers are added during a burst. Recommended minimum 10m for NFS-backed deployments. Only applies when worker_autoscaling_enabled = true. |
 | `worker_autoscaling_scale_down_cooldown` | `string` | `"20m"` | Cooldown between scale-down events for the worker group. A longer scale-down window (default 20m) avoids thrashing when the queue briefly empties between simulation batches. Only applies when worker_autoscaling_enabled = true. |
@@ -112,10 +127,10 @@
 | `prometheus_alert_failed_jobs_minutes` | `number` | `5` | Minutes the Resque failed queue must remain non-empty before the OpenStudioFailedJobs alert fires. Any failure is notable; a brief grace period avoids noise from transient restarts. |
 | `prometheus_scrape_nomad_enabled` | `bool` | `false` | Add a Nomad telemetry scrape target to the in-pack Prometheus job. When true, Prometheus scrapes the Nomad metrics endpoint at prometheus_nomad_scrape_target and enables worker alloc failure rate and system-hooks sentinel alert rules. Requires prometheus_enabled = true and Nomad prometheus_metrics = true in Nomad server config. |
 | `prometheus_nomad_scrape_target` | `string` | `"nomad.service.consul:4646"` | Host:port of the Nomad server telemetry endpoint to scrape. Used only when prometheus_scrape_nomad_enabled = true. Format: host:port (no scheme). Prometheus appends metrics_path=/v1/metrics?format=prometheus automatically. |
-| `worker_queue_requeued_query` | `string` | `"redis_key_size{key=\"resque:queue:requeued\"}"` | Prometheus instant-vector selector for the requeued queue depth. Must be a bare vector selector (metric name + labels only) — do not include range brackets, sum(), or or vector(0). The template wraps this in max_over_time(...[window]) and appends 'or vector(0)' so the series always resolves to 0 (not empty/error) when the queue key does not yet exist in Redis, enabling scale-to-zero. Worker count math is applied via a pass-through strategy. |
+| `worker_queue_requeued_query` | `string` | `"redis_key_size{key=\"resque:queue:requeued\"}"` | Prometheus instant-vector selector for the requeued queue depth. Must be a bare vector selector (metric name + labels only) — do not include range brackets, sum(), or or vector(0). The template wraps this in sum(max_over_time(...[window])) to collapse multiple scrape-target label streams into a single result, then appends 'or vector(0)' so the series always resolves to 0 (not empty/error) when the queue key does not yet exist in Redis, enabling scale-to-zero. Worker count math is applied via a pass-through strategy. |
 | `worker_queue_query_window` | `string` | `"1m"` | PromQL lookback window used to smooth queue depth signals for pass-through queue scaling (for example, max_over_time(query[1m])). Increase to dampen metric jitter; decrease for faster reaction. |
 | `worker_queue_requeued_target` | `number` | `20` | Queued requeued jobs per worker allocation used to compute desired workers for pass-through queue scaling: ceil(requeued_depth / worker_queue_requeued_target). Higher values slow scale-up and reduce storage shock risk. |
-| `worker_queue_simulations_query` | `string` | `"redis_key_size{key=\"resque:queue:simulations\"}"` | Prometheus instant-vector selector for the simulations queue depth. Must be a bare vector selector (metric name + labels only) — do not include range brackets, sum(), or or vector(0). The template wraps this in max_over_time(...[window]) and appends 'or vector(0)' so the series always resolves to 0 (not empty/error) when the queue key doesn't exist yet in Redis, enabling scale-to-zero. Worker count math is applied via a pass-through strategy. |
+| `worker_queue_simulations_query` | `string` | `"redis_key_size{key=\"resque:queue:simulations\"}"` | Prometheus instant-vector selector for the simulations queue depth. Must be a bare vector selector (metric name + labels only) — do not include range brackets, sum(), or or vector(0). The template wraps this in sum(max_over_time(...[window])) to collapse multiple scrape-target label streams into a single result, then appends 'or vector(0)' so the series always resolves to 0 (not empty/error) when the queue key doesn't exist yet in Redis, enabling scale-to-zero. Worker count math is applied via a pass-through strategy. |
 | `worker_queue_simulations_target` | `number` | `20` | Queued simulation jobs per worker allocation used to compute desired workers for pass-through queue scaling: ceil(simulations_depth / worker_queue_simulations_target). Higher values slow scale-up and reduce storage shock risk. |
 | `worker_local_scratch_enabled` | `bool` | `false` | Enable node-local ephemeral disk as scratch space for worker simulation I/O. When true, Nomad provisions an ephemeral_disk on the node running the allocation. Simulations stage inputs to this local disk, run there, then publish final artifacts to shared NFS — reducing write amplification on the shared filesystem. Requires the application to honour WORKER_SCRATCH_PATH and copy outputs before task completion. Defaults to false for backward compatibility. |
 | `worker_local_scratch_size` | `number` | `10240` | Size in MB of the ephemeral disk allocated for worker local scratch. Only used when worker_local_scratch_enabled = true. Default is 10240 (10 GiB), sufficient for a typical OpenStudio simulation workspace. Increase for large parametric runs that produce many intermediate files. |
@@ -173,6 +188,7 @@
 | `log_max_files` | `number` | `3` | The maximum number of log files to keep. |
 | `enable_vector_collection` | `bool` | `true` | Enable Vector sidecar for log collection. |
 | `vector_image` | `string` | `"timberio/vector:0.30.0-alpine"` | The Vector image name and tag. |
+| `vector_memory_mb` | `number` | `256` | Memory allocation in MB for the Vector sidecar. |
 | `db_constraints` | `any` | `[]` | Placement constraints for the db group. |
 | `web_constraints` | `any` | `[]` | Placement constraints for the web group. Use to pin the web task to nodes with sufficient disk (e.g. 179d nodes) for large Docker image pulls. |
 | `db_affinities` | `any` | `[]` | Placement affinities for the db group. |
@@ -228,6 +244,8 @@
 | `queue_sweeper_memory` | `number` | `64` | Memory (MiB) reserved for the queue-sweeper task. |
 | `queue_sweeper_replay_dirty_exit` | `bool` | `true` | When true, the queue-sweeper automatically replays Resque failed-queue entries whose exception is PruneDeadWorkerDirtyExit or TermException for ResqueJobs::RunSimulateDataPoint. These failures are 100% infra-recoverable (worker killed mid-job during scale-down or node drain) and should never require manual intervention. Replayed jobs are re-enqueued using the correct single-arg format (args: [dp_id]). Requires enable_queue_sweeper = true. |
 | `queue_sweeper_replay_delay_seconds` | `number` | `10` | Seconds to wait between individual re-enqueues when replaying PruneDeadWorkerDirtyExit failures. Use staggered enqueue (≥5s) to avoid overwhelming the queue and causing bulk-push silent drops. Only used when queue_sweeper_replay_dirty_exit = true. |
+| `queue_sweeper_consul_retry_attempts` | `number` | `3` | Maximum fallback Consul health-API retries when queue-sweeper cannot reach Redis via `openstudio-redis.service.consul` DNS. Transient 429/5xx responses are treated as non-fatal skip-cycle after this bounded retry budget. |
+| `queue_sweeper_consul_retry_backoff_seconds` | `number` | `1` | Initial backoff (seconds) for queue-sweeper fallback Consul health-API retries. Delay doubles each retry and is capped in-template. |
 | `enable_stall_watchdog` | `bool` | `false` | Enable a periodic batch job that detects data points frozen in 'started' status with no updated_at progress. Complements the queue-sweeper (which handles Redis queuing locks) for the distinct failure mode where EnergyPlus hangs silently inside a worker without crashing Resque. When stalled DPs are found and stall_watchdog_restart_allocs = true, the job stops all running worker allocations so Nomad reschedules fresh workers and the analysis coordinators can re-queue the stalled data points. |
 | `stall_watchdog_cron` | `string` | `"*/15 * * * *"` | Cron schedule for the stall-watchdog periodic job (UTC). Default: every 15 minutes. |
 | `stall_watchdog_max_stall_seconds` | `number` | `3600` | Seconds a data point may remain in 'started' status with no updated_at change before it is considered stalled. Must be greater than your longest legitimate simulation run time. Default 3600 (60 min), which is conservative above the typical 45-75 min EnergyPlus monthly run. |
@@ -237,6 +255,8 @@
 | `stall_watchdog_image` | `string` | `"python:3.12-alpine"` | Docker image for the stall-watchdog task. Must include Python 3 (for urllib/json/datetime). python:3.12-alpine satisfies this requirement. |
 | `stall_watchdog_cpu` | `number` | `100` | CPU MHz reserved for the stall-watchdog task. |
 | `stall_watchdog_memory` | `number` | `128` | Memory (MiB) reserved for the stall-watchdog task. |
+| `stall_watchdog_consul_retry_attempts` | `number` | `3` | Maximum Consul health-API retries used by stall-watchdog when DNS-first web resolution falls back to Consul HTTP. Transient 429/5xx exhaustion causes skip-cycle (exit 0), not task failure. |
+| `stall_watchdog_consul_retry_backoff_seconds` | `number` | `1` | Initial backoff in seconds for stall-watchdog Consul fallback retries. Delay doubles each retry and is capped in-template. |
 | `vault_policy` | `string` | `"openstudio-server"` | Fallback Vault policy attached to task tokens when vault_integration_enabled is true and vault_enabled is false. |
 | `vault_kv_mongodb_path` | `string` | `"secret/data/openstudio/mongodb"` | Vault KV v2 path for MongoDB credentials (must contain a 'password' key). |
 | `vault_kv_redis_path` | `string` | `"secret/data/openstudio/redis"` | Vault KV v2 path for Redis credentials (must contain a 'password' key). |
@@ -256,6 +276,7 @@
 | `vault_change_signal` | `string` | `"SIGHUP"` | Signal sent to tasks when vault_change_mode is set to signal. |
 | `vault_env` | `bool` | `true` | Expose Vault token to tasks as environment variables. |
 | `enable_openstudio_test` | `bool` | `true` | When true, renders the parameterized openstudio-test batch job used for post-deploy health checks. Set to false to omit the job from lightweight or production deployments that do not require the test harness. |
+| `enable_runtime_discovery_canary_test` | `bool` | `false` | When true, adds a runtime-discovery canary task to the openstudio-test job that validates bounded DNS alias resolution for db/queue/rserve/web before full rollout. |
 | `test_web_port` | `number` | `80` | Port for the HTTP health check against openstudio-web.service.consul. |
 | `test_redis_port` | `number` | `6379` | Port for the TCP check against openstudio-redis.service.consul. |
 | `test_mongo_port` | `number` | `27017` | Port for the TCP check against openstudio-db.service.consul (MongoDB). |

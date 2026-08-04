@@ -126,7 +126,7 @@ EOH
 
   resources {
     cpu    = 100
-    memory = 64
+    memory = [[ var "vector_memory_mb" . ]]
   }
 }
 [[ end -]]
@@ -152,6 +152,83 @@ rm -rf "[[ . ]]"
 [[ end -]]
 EOT
     ]
+  }
+}
+[[- end -]]
+
+[[- define "openstudio_server.wait_for_deps_task" -]]
+task "wait-for-deps" {
+  lifecycle {
+    hook    = "prestart"
+    sidecar = false
+  }
+
+  driver = "docker"
+
+  config {
+    image        = "[[ var "verification_image" .root ]]"
+    network_mode = "host"
+    command      = "sh"
+    args = [
+      "-ec",
+      <<-EOT
+set -eu
+
+MAX_ATTEMPTS=[[ var "wait_for_deps_max_attempts" .root ]]
+SLEEP_SECONDS=[[ var "wait_for_deps_sleep_seconds" .root ]]
+CONNECT_TIMEOUT=[[ var "wait_for_deps_connect_timeout_seconds" .root ]]
+CONSUL_ADDR="[[ var "consul_address" .root ]]"
+PROCEED_ON_TIMEOUT="[[ if .proceed_on_timeout ]]true[[ else ]]false[[ end ]]"
+
+if [ "$MAX_ATTEMPTS" -lt 1 ]; then
+  echo "wait_for_deps_invalid_max_attempts value=$MAX_ATTEMPTS" >&2
+  exit 1
+fi
+
+if [ "$SLEEP_SECONDS" -lt 1 ]; then
+  echo "wait_for_deps_invalid_sleep value=$SLEEP_SECONDS" >&2
+  exit 1
+fi
+
+if [ "$CONNECT_TIMEOUT" -lt 1 ]; then
+  echo "wait_for_deps_invalid_connect_timeout value=$CONNECT_TIMEOUT" >&2
+  exit 1
+fi
+
+check_service() {
+  service="$1"
+  attempt=1
+  while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
+    if wget -qO- -T "$CONNECT_TIMEOUT" \
+        "http://$CONSUL_ADDR/v1/health/service/$service?passing=true" \
+        2>/dev/null | tr -d '[:space:]' | grep -q "\"Service\":\"$service\""; then
+      echo "wait_for_deps_ready service=$service attempt=$attempt"
+      return 0
+    fi
+    echo "wait_for_deps_retry service=$service attempt=$attempt" >&2
+    sleep "$SLEEP_SECONDS"
+    attempt=$((attempt + 1))
+  done
+
+  echo "wait_for_deps_timeout service=$service attempts=$MAX_ATTEMPTS proceeding=$PROCEED_ON_TIMEOUT" >&2
+  if [ "$PROCEED_ON_TIMEOUT" = "true" ]; then
+    return 0
+  fi
+  return 1
+}
+
+check_service "openstudio-db"
+check_service "openstudio-redis"
+[[ if .include_rserve -]]
+check_service "openstudio-rserve"
+[[ end -]]
+EOT
+    ]
+  }
+
+  resources {
+    cpu    = 50
+    memory = 32
   }
 }
 [[- end -]]
@@ -211,7 +288,20 @@ restart {
 
 [[- define "openstudio_server.update_block" -]]
 update {
-  max_parallel      = [[ .max_parallel ]]
+  max_parallel = [[ .max_parallel ]]
+  [[ with .canary ]]
+  [[ if gt . 0 ]]
+  canary = [[ . ]]
+  [[ with $.auto_promote ]]
+  auto_promote = [[ . ]]
+  [[ end ]]
+  [[ end ]]
+  [[ end ]]
+  [[ with .stagger ]]
+  [[ if ne . "" ]]
+  stagger = "[[ . ]]"
+  [[ end ]]
+  [[ end ]]
   health_check      = "[[ .health_check ]]"
   min_healthy_time  = "[[ .min_healthy_time ]]"
   healthy_deadline  = "[[ .healthy_deadline ]]"

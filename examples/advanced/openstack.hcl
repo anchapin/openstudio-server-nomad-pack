@@ -48,6 +48,9 @@ poststop_cleanup_image = "pulp-dev.hpc.nlr.gov/pulp-container-aurora-179d/regist
 # Point wait-for-deps health checks directly at the central Consul server
 # (all clients register services there via the consul stanza in nomad client config).
 consul_address = "192.168.100.87:8500"
+# Keep template-based aliasing in production-style OpenStack profiles; do not
+# enable runtime resolver path without canary validation.
+web_worker_runtime_service_resolution_enabled = true
 
 # ── Storage ───────────────────────────────────────────────────────────────────
 # Persistent state: use CSI volumes for MongoDB and Redis so they survive node
@@ -387,9 +390,8 @@ worker_autoscaling_evaluation_interval = "30s"
 # We use:
 #   1. Static host ports (27017 / 6379 / 6311) so wait-for-it and Rserve clients
 #      can find services on fixed ports at the resolved host IP.
-#      resolved host IP.
-#   2. A Consul template stanza (in web.nomad.tpl) that generates
-#      /local/patch-hosts.sh containing the current service IPs.
+#   2. A startup script (in web/worker templates) that resolves Consul DNS names
+#      and patches /etc/hosts with legacy aliases.
 #   3. The command overrides below run patch-hosts.sh before start-server so
 #      that 'db', 'queue', and 'rserve' resolve correctly inside the container.
 db_static_port    = 27017

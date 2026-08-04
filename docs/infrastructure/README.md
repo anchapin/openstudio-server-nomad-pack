@@ -37,6 +37,7 @@ on Nomad.
 |---|---|
 | [openstack-staged-rollout-runbook.md](openstack-staged-rollout-runbook.md) | 4-stage canary → full ramp procedure with gate criteria and rollback |
 | [openstack-stabilization-runbook.md](openstack-stabilization-runbook.md) | Remediation steps for OpenStack-specific allocation failures |
+| [queue-sweeper-watchdog-rollout.md](queue-sweeper-watchdog-rollout.md) | Rollout/forensics/alert checklist for consolidated periodic queue-sweeper + watchdog job |
 | [openstack-remaining-issues-plan.md](openstack-remaining-issues-plan.md) | Current OpenStack stabilization state and recovery plan |
 | [scale-program-summary.md](scale-program-summary.md) | Summary of the scale-to-max program (Epic #352) |
 

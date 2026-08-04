@@ -23,7 +23,8 @@
 #
 # Prerequisites:
 #   - Vault cluster integrated with Nomad (vault_enabled = true below)
-#   - MongoDB and Redis host volumes provisioned on Nomad clients (UID/GID 999:999)
+#   - Dedicated stateful nodes with node metadata: meta.node_role="stateful"
+#   - MongoDB and Redis host volumes provisioned on stateful Nomad clients (UID/GID 999:999)
 #   - NFS-backed host volume "openstudio-nfs" mounted on all compute nodes
 #   - Nomad Autoscaler daemon: enabled via nomad_autoscaler_enabled = true (set below)
 #   - Prometheus + redis_exporter: enabled via prometheus_enabled = true (set below)
@@ -94,12 +95,12 @@ web_constraints = [
   }
 ]
 
-# Keep stateful/service jobs on web-role nodes and worker jobs on worker-role nodes.
+# Keep stateful services on dedicated stateful nodes and workers on worker-role nodes.
 db_constraints = [
   {
     attribute = "$${meta.node_role}"
     operator  = "="
-    value     = "web"
+    value     = "stateful"
   },
   {
     attribute = "$${attr.driver.docker}"
@@ -117,7 +118,7 @@ redis_constraints = [
   {
     attribute = "$${meta.node_role}"
     operator  = "="
-    value     = "web"
+    value     = "stateful"
   },
   {
     attribute = "$${attr.driver.docker}"
@@ -135,7 +136,7 @@ rserve_constraints = [
   {
     attribute = "$${meta.node_role}"
     operator  = "="
-    value     = "web"
+    value     = "stateful"
   },
   {
     attribute = "$${attr.driver.docker}"
@@ -150,6 +151,8 @@ rserve_constraints = [
 ]
 
 # Traefik Host rule — must match the DNS name or IP/hostname used to reach the cluster.
+# Deploy in-pack Traefik for OpenStack fresh redeploys unless explicitly overridden.
+deploy_traefik = true
 # SITE-SPECIFIC: set this in openstack-site-local.hcl.
 # ingress_domain = "openstudio.yourdomain.com"
 
@@ -166,6 +169,9 @@ web_background_queues              = "analyses,background"
 # patch-hosts.sh injects openstudio-db/redis/rserve Consul service IPs as
 # 'db', 'queue', 'rserve' into /etc/hosts before the app starts.
 # Without this the app startup script can't resolve those hostnames.
+# Runtime DNS alias resolution is the only supported path; legacy Consul-template
+# service watch aliasing was removed to prevent control-plane watch pressure.
+web_worker_runtime_service_resolution_enabled = true
 web_command = "/bin/sh"
 web_args    = ["-c", "sh /local/patch-hosts.sh && exec /usr/local/bin/start-server"]
 web_background_command = "/bin/sh"
@@ -303,10 +309,14 @@ worker_queue_requeued_target    = 1
 worker_autoscaling_scale_up_cooldown   = "2m"
 worker_autoscaling_scale_down_cooldown = "10m"
 
-# Rolling update — prevents simultaneous eviction of running simulations.
-# auto_revert=false: CRITICAL — prevents rollback to low-count version on partial placement failures.
-# progress_deadline="0": CRITICAL — disables 20m timeout; large deployments stall at cluster capacity.
-worker_update_max_parallel      = 1
+# Rolling update — canary-first high-scale strategy to retire bad versions faster
+# than max_parallel=1 while preserving guardrails.
+# auto_revert=false: keeps worker target count stable during temporary placement pressure.
+# progress_deadline="0": disables rollout timeout at large cluster capacity.
+worker_update_canary            = 25
+worker_update_auto_promote      = false
+worker_update_max_parallel      = 100
+worker_update_stagger           = "15s"
 worker_update_min_healthy_time  = "1m"
 worker_update_healthy_deadline  = "10m"
 worker_update_progress_deadline = "0"
@@ -397,7 +407,10 @@ queue_sweeper_max_lock_age_seconds   = 120
 # Nomad reschedules fresh workers and coordinators re-queue stalled DPs.
 # Complements queue-sweeper — both failure modes must be covered.
 enable_stall_watchdog            = true
-stall_watchdog_cron              = "*/15 * * * *"
+# Consolidated scheduler invariant: when both queue-sweeper and stall-watchdog
+# are enabled, cron values must match because both task groups run under the
+# same periodic parent job.
+stall_watchdog_cron              = "*/2 * * * *"
 stall_watchdog_max_stall_seconds = 3600   # 60 min — above longest normal sim
 stall_watchdog_restart_allocs    = true
 # stall_watchdog_nomad_address: uses http://localhost:4646 by default (via network_mode=host).

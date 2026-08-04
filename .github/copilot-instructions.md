@@ -73,7 +73,7 @@ diff docs/variables.md docs/variables.generated.md
 
 - `nomad-pack render` emits multiple Nomad jobs from `packs/openstudio-server/templates/*.nomad.tpl`.
 - The runtime stack is split into jobs: `<job_name>-web`, `<job_name>-db`, `<job_name>-redis`, `<job_name>-rserve`.
-- `worker` is consolidated into `web.nomad.tpl` as a task group; `worker.nomad.tpl` is an architecture marker file.
+- `worker` is a separate Nomad job rendered from `worker.nomad.tpl` with `priority = worker_priority` (default 40), lower than `web_priority` (default 80), so the scheduler evicts workers before the web UI during resource contention.
 - Service discovery and cross-job connectivity are done through **Consul** (`*.service.consul`).
 
 ### Template layout and conditional jobs
@@ -91,8 +91,8 @@ Conditional templates:
 - `queue-sweeper.nomad.tpl` (`enable_queue_sweeper` or `enable_stall_watchdog`)
 - `stall-watchdog.nomad.tpl` (marker; consolidated into queue-sweeper template)
 - `nomad-batch-worker.nomad.tpl` (`batch_engine == "nomad_batch"`)
-- `state-backup.nomad.tpl` (`backup_enabled`)
-- `state-restore.nomad.tpl` (`restore_enabled`)
+- `state-backup.nomad.tpl` (`backup_enabled = false` by default)
+- `state-restore.nomad.tpl` (`restore_enabled = false` by default)
 - `infra-setup.nomad.tpl` (`enable_infra_setup`)
 
 ### Reusable template helpers

@@ -1,4 +1,7 @@
 [[ if or (var "enable_queue_sweeper" .) (var "enable_stall_watchdog" .) ]]
+[[ if and (var "enable_queue_sweeper" .) (var "enable_stall_watchdog" .) (ne (var "queue_sweeper_cron" .) (var "stall_watchdog_cron" .)) ]]
+[[ fail (print "INVARIANT VIOLATION: enable_queue_sweeper=true and enable_stall_watchdog=true require queue_sweeper_cron == stall_watchdog_cron in the consolidated scheduler job. Got queue_sweeper_cron='" (var "queue_sweeper_cron" .) "' and stall_watchdog_cron='" (var "stall_watchdog_cron" .) "'.") ]]
+[[ end ]]
 # queue-sweeper — periodic batch job for Redis queue sweeping and stall watchdog monitoring.
 # Consolidates queue-sweeper and stall-watchdog task groups (fix #405).
 job "[[ var "job_name" . ]]-queue-sweeper" {
@@ -10,7 +13,7 @@ job "[[ var "job_name" . ]]-queue-sweeper" {
   priority = [[ var "web_priority" . ]]
 
   periodic {
-    cron             = "[[ var "queue_sweeper_cron" . ]]"
+    cron             = "[[ if var "enable_queue_sweeper" . ]][[ var "queue_sweeper_cron" . ]][[ else ]][[ var "stall_watchdog_cron" . ]][[ end ]]"
     prohibit_overlap = true
     time_zone        = "UTC"
   }
@@ -39,18 +42,68 @@ job "[[ var "job_name" . ]]-queue-sweeper" {
 #!/bin/sh
 set -eu
 
-REDIS_HOST="{{ with service "openstudio-redis" }}{{ with index . 0 }}{{ .Address }}{{ end }}{{ end }}"
-REDIS_PORT="{{ with service "openstudio-redis" }}{{ with index . 0 }}{{ .Port }}{{ end }}{{ end }}"
+REDIS_HOST="openstudio-redis.service.consul"
+REDIS_PORT="6379"
 MAX_AGE=[[ var "queue_sweeper_max_lock_age_seconds" . ]]
+CONSUL_ADDR="[[ var "consul_address" . ]]"
+CONSUL_RETRY_ATTEMPTS=[[ var "queue_sweeper_consul_retry_attempts" . ]]
+CONSUL_RETRY_BACKOFF=[[ var "queue_sweeper_consul_retry_backoff_seconds" . ]]
 
-if [ -z "$REDIS_HOST" ] || [ -z "$REDIS_PORT" ]; then
-  echo "ERROR: could not resolve openstudio-redis via Consul" >&2
-  exit 1
-fi
+resolve_service_ip_via_consul() {
+  service="$1"
+  attempt=1
+  delay="$CONSUL_RETRY_BACKOFF"
+  while [ "$attempt" -le "$CONSUL_RETRY_ATTEMPTS" ]; do
+    http_meta="$(mktemp)"
+    json="$(wget -qO- -T 2 -S "http://${CONSUL_ADDR}/v1/health/service/${service}?passing=true" 2>"$http_meta" || true)"
+    status_code="$(sed -n 's/.*HTTP\/[0-9.]* \([0-9][0-9][0-9]\).*/\1/p' "$http_meta" | tail -n 1)"
+    rm -f "$http_meta"
+    ip=""
+    if [ -n "$json" ] && command -v python3 >/dev/null 2>&1; then
+      ip="$(printf '%s' "$json" | python3 -c 'import json,sys
+data=json.load(sys.stdin)
+for entry in data:
+    svc=(entry or {}).get("Service") or {}
+    node=(entry or {}).get("Node") or {}
+    addr=svc.get("Address") or node.get("Address") or ""
+    if addr:
+        print(addr)
+        break
+')"
+    fi
+    if [ -z "$ip" ] && [ -n "$json" ]; then
+      ip="$(printf '%s' "$json" | sed -n 's/.*"ServiceAddress":"\([^"]*\)".*/\1/p' | head -n 1)"
+      if [ -z "$ip" ]; then
+        ip="$(printf '%s' "$json" | sed -n 's/.*"Address":"\([^"]*\)".*/\1/p' | head -n 1)"
+      fi
+    fi
+    if [ -n "$ip" ]; then
+      printf '%s\n' "$ip"
+      return 0
+    fi
+    if [ "$status_code" = "429" ] || { [ -n "$status_code" ] && [ "$status_code" -ge 500 ] && [ "$status_code" -lt 600 ]; }; then
+      echo "queue_sweeper_warn msg=consul_transient status=${status_code} attempt=${attempt}/${CONSUL_RETRY_ATTEMPTS}" >&2
+    fi
+    sleep "$delay"
+    delay=$((delay * 2))
+    [ "$delay" -gt 8 ] && delay=8
+    attempt=$((attempt + 1))
+  done
+  return 1
+}
 
 redis_cmd() {
   redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" "$@"
 }
+
+if ! redis_cmd PING >/dev/null 2>&1; then
+  REDIS_HOST="$(resolve_service_ip_via_consul "openstudio-redis" || true)"
+fi
+
+if [ -z "$REDIS_HOST" ] || ! redis_cmd PING >/dev/null 2>&1; then
+  echo "queue_sweeper_warn msg=redis_unreachable action=skip_cycle" >&2
+  exit 0
+fi
 
 echo "queue_sweeper_start redis=${REDIS_HOST}:${REDIS_PORT} max_age=${MAX_AGE}s"
 
@@ -111,6 +164,7 @@ if echo "$failed_len" | grep -qE '^[0-9]+$' && [ "$failed_len" -gt 0 ]; then
 
     is_infra_recoverable=false
     if echo "$entry" | grep -q '"exception":"PruneDeadWorkerDirtyExit"' || \
+       echo "$entry" | grep -q '"exception":"Resque::PruneDeadWorkerDirtyExit"' || \
        echo "$entry" | grep -q '"exception":"TermException"'; then
       if echo "$entry" | grep -q '"class":"ResqueJobs::RunSimulateDataPoint"'; then
         is_infra_recoverable=true
@@ -198,21 +252,29 @@ stops running worker allocations so Nomad reschedules fresh workers.
 Exit codes:
   0  No stalled DPs (or started == 0)
   1  Error
-  2  Stalled DPs found (restart_allocs=false) or restarted (restart_allocs=true)
+  2  Stalled DPs found while restart_allocs=false (alert-only mode)
 """
 import json
 import sys
 import re
+import time
 from datetime import datetime, timezone, timedelta
 from urllib.request import urlopen, Request
-from urllib.error import URLError
+from urllib.error import URLError, HTTPError
 
-WEB_URL       = "{{ with service "openstudio-web" }}http://{{ (index . 0).Address }}:{{ (index . 0).Port }}{{ else }}http://localhost:[[ var "web_port" . ]]{{ end }}"
+CONSUL_ADDR   = "[[ var "consul_address" . ]]"
+WEB_URL       = ""
+WEB_FALLBACK_URL = "http://openstudio-web.service.consul:[[ var "web_port" . ]]"
 NOMAD_ADDR    = "[[ if ne (var "stall_watchdog_nomad_address" .) "" ]][[ var "stall_watchdog_nomad_address" . ]][[ else ]]http://localhost:4646[[ end ]]"
-WORKER_JOB    = "[[ if ne (var "stall_watchdog_worker_job" .) "" ]][[ var "stall_watchdog_worker_job" . ]][[ else ]][[ var "job_name" . ]]-web[[ end ]]"
+WORKER_JOB    = "[[ if ne (var "stall_watchdog_worker_job" .) "" ]][[ var "stall_watchdog_worker_job" . ]][[ else ]][[ var "job_name" . ]]-worker[[ end ]]"
 NAMESPACE     = "[[ var "nomad_namespace" . ]]"
 MAX_STALL     = [[ var "stall_watchdog_max_stall_seconds" . ]]
 RESTART_ALLOCS = [[ if var "stall_watchdog_restart_allocs" . ]]True[[ else ]]False[[ end ]]
+CONSUL_RETRY_ATTEMPTS = [[ var "stall_watchdog_consul_retry_attempts" . ]]
+CONSUL_RETRY_BACKOFF_SECONDS = [[ var "stall_watchdog_consul_retry_backoff_seconds" . ]]
+
+class TransientControlPlaneError(Exception):
+    pass
 
 def fetch_json(url, timeout=10):
     req = Request(url, headers={"Accept": "application/json"})
@@ -223,10 +285,64 @@ def fetch_text(url, timeout=15):
     with urlopen(url, timeout=timeout) as r:
         return r.read().decode("utf-8", errors="replace")
 
+def fetch_json_with_retry(url, timeout=10, attempts=CONSUL_RETRY_ATTEMPTS):
+    delay = max(float(CONSUL_RETRY_BACKOFF_SECONDS), 0.1)
+    last_exc = None
+    for attempt in range(1, max(attempts, 1) + 1):
+        try:
+            return fetch_json(url, timeout=timeout)
+        except HTTPError as e:
+            last_exc = e
+            if e.code not in (429,) and not (500 <= e.code < 600):
+                raise
+            log(f"stall_watchdog_warn msg=consul_transient status={e.code} url={url} attempt={attempt}/{attempts}")
+            time.sleep(delay)
+            delay = min(delay * 2.0, 8.0)
+        except URLError:
+            last_exc = None
+            time.sleep(delay)
+            delay = min(delay * 2.0, 8.0)
+    raise TransientControlPlaneError(f"transient_consul_unavailable attempts={attempts} url={url} last_error={last_exc}")
+
+def resolve_web_url():
+    # Prefer Consul DNS first to avoid hammering the Consul HTTP health endpoint.
+    try:
+        fetch_json_with_retry(f"{WEB_FALLBACK_URL}/status.json", timeout=5, attempts=2)
+        return WEB_FALLBACK_URL
+    except Exception:
+        pass
+
+    data = fetch_json_with_retry(f"http://{CONSUL_ADDR}/v1/health/service/openstudio-web?passing=true", timeout=10, attempts=4)
+    if not data:
+        raise RuntimeError("no passing openstudio-web instances")
+    svc = data[0].get("Service", {})
+    node = data[0].get("Node", {})
+    host = svc.get("Address") or node.get("Address")
+    port = svc.get("Port") or [[ var "web_port" . ]]
+    if not host:
+        raise RuntimeError("openstudio-web has no resolvable address")
+    return f"http://{host}:{port}"
+
 def log(msg):
     print(msg, flush=True)
 
 def main():
+    global WEB_URL
+    try:
+        WEB_URL = resolve_web_url()
+    except TransientControlPlaneError as e:
+        log(f"stall_watchdog_warn msg=consul_transient_unavailable action=skip_cycle detail={e}")
+        sys.exit(0)
+    except HTTPError as e:
+        if e.code == 429 or (500 <= e.code < 600):
+            log("stall_watchdog_warn msg=resolve_web_control_plane_transient action=skip_cycle")
+            sys.exit(0)
+        log(f"stall_watchdog_error msg=could_not_resolve_web detail={e}")
+        sys.exit(1)
+    except Exception as e:
+        log(f"stall_watchdog_error msg=could_not_resolve_web detail={e}")
+        sys.exit(1)
+
     log(f"stall_watchdog_start web={WEB_URL} nomad={NOMAD_ADDR} max_stall={MAX_STALL}s restart_allocs={RESTART_ALLOCS}")
 
     try:
@@ -330,7 +446,9 @@ def main():
 
     log(f"stall_watchdog_summary stalled_dps={len(stalled)} allocs_stopped={restarted}")
     log("stall_watchdog_recovery msg=nomad_will_reschedule_fresh_workers")
-    sys.exit(2)
+    if restarted > 0:
+        sys.exit(0)
+    sys.exit(1)
 
 if __name__ == "__main__":
     main()

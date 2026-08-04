@@ -32,6 +32,14 @@ datacenters = ["dc1"]
 #   ingress_domain = "10.60.126.125"
 ingress_domain = "REPLACE_WITH_YOUR_INGRESS_IP_OR_HOSTNAME"
 
+# ---------- Stateful node pool ----------
+# openstack-production.hcl now places DB/Redis/Rserve on node_role=stateful by default.
+# Ensure your Nomad clients that should host stateful services have:
+#   meta { node_role = "stateful" }
+# If you intentionally use a different role label, update constraints in your site-local
+# override file and set OS_STATEFUL_CSI_NODE_ROLE when running fresh-redeploy:
+#   OS_STATEFUL_CSI_NODE_ROLE=<your-role> ./scripts/fresh-redeploy-openstack.sh ...
+
 # ---------- Autoscaler addresses ----------
 # By default, the autoscaler resolves Nomad and Prometheus via Consul DNS:
 #   autoscaler_nomad_address      = "http://nomad.service.consul:4646"
@@ -45,12 +53,19 @@ ingress_domain = "REPLACE_WITH_YOUR_INGRESS_IP_OR_HOSTNAME"
 #
 # autoscaler_nomad_address      = "http://REPLACE_WITH_NOMAD_SERVER_IP:4646"
 # autoscaler_prometheus_address = "http://REPLACE_WITH_PROMETHEUS_IP:9090"
+# traefik_consul_catalog_address = "REPLACE_WITH_CONSUL_HOST_OR_IP:8500"
 
 # ---------- Stall watchdog address ----------
 # By default: http://localhost:4646 (works when tasks use network_mode = host).
 # Override only if Nomad is not reachable at localhost from within a container.
 #
 # stall_watchdog_nomad_address = "http://REPLACE_WITH_NOMAD_SERVER_IP:4646"
+
+# ---------- Service-resolution strategy ----------
+# Production default keeps proven template-based aliasing in web/worker tasks.
+# Enable runtime DNS resolver only after canary validation.
+#
+# web_worker_runtime_service_resolution_enabled = true
 
 # ---------- Private image registry (air-gapped clusters) ----------
 # If your cluster cannot reach DockerHub, set image overrides to your
@@ -62,6 +77,7 @@ ingress_domain = "REPLACE_WITH_YOUR_INGRESS_IP_OR_HOSTNAME"
 # rserve_image         = "your-registry.example.com/mirror/nrel/openstudio-rserve:3.10.0"
 # db_image             = "your-registry.example.com/mirror/mongo:8.0"
 # redis_image          = "your-registry.example.com/mirror/redis:6.0.9-alpine"
+# traefik_image        = "your-registry.example.com/mirror/traefik:v3"
 # verification_image   = "your-registry.example.com/mirror/busybox:1.36"
 # poststop_cleanup_image = "your-registry.example.com/mirror/alpine:3.20"
 # vector_image         = "your-registry.example.com/mirror/timberio/vector:0.30.0-alpine"
