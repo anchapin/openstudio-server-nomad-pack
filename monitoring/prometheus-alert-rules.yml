@@ -362,5 +362,5 @@ groups:
                    nomad alloc logs -stderr <web-alloc-id> web
               4. Restart the web job if allocation is failed/lost:
                    nomad job stop openstudio-server-web
-                   nomad-pack run --name openstudio-server .
+                   nomad-pack run --name openstudio-server packs/openstudio-server
               5. See docs/infrastructure/operations-guide.md § Ingress Alerts.

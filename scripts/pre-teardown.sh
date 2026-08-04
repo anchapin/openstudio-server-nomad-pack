@@ -6,7 +6,7 @@
 # PURPOSE
 # -------
 # Stop and purge Nomad jobs in teardown-safe order before running
-# `nomad-pack destroy .` to ensure all allocations are fully dead before
+# `nomad-pack destroy packs/openstudio-server` to ensure all allocations are fully dead before
 # any downstream cleanup (e.g., NFS unmount, volume deletion).
 #
 # WHY NO SLEEP?
@@ -70,7 +70,7 @@
 #   ./scripts/pre-teardown.sh --namespace openstudio my-custom-job-name
 #
 # After this script completes successfully, run:
-#   nomad-pack destroy .
+#   nomad-pack destroy packs/openstudio-server
 
 set -euo pipefail
 
@@ -216,5 +216,5 @@ echo "==> All target jobs stopped successfully."
 echo ""
 echo "Next step — destroy the full pack (removes remaining jobs and Nomad state):"
 echo ""
-echo "    nomad-pack destroy ."
+echo "    nomad-pack destroy packs/openstudio-server"
 echo ""

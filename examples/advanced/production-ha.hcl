@@ -1,7 +1,7 @@
 # Production HA override — multi-datacenter, HA resources, Vault enabled.
 #
 # Usage:
-#   nomad-pack run -var-file examples/advanced/production-ha.hcl .
+#   nomad-pack run -var-file examples/advanced/production-ha.hcl packs/openstudio-server
 #
 # Prerequisites:
 #   - Vault cluster integrated with Nomad (vault_enabled = true)

@@ -66,7 +66,7 @@ db_image = "mongo:4.4"
 ```
 
 ```bash
-nomad-pack run --name <job_name> -var-file upgrade-override.hcl .
+nomad-pack run --name <job_name> -var-file upgrade-override.hcl packs/openstudio-server
 ```
 
 Wait until MongoDB is healthy before moving to the next step:

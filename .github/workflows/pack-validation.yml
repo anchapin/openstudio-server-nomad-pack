@@ -29,17 +29,17 @@ jobs:
         run: nomad-pack version
 
       - name: Check pack formatting
-        # Scoped to templates/ (nomad-pack v0.4.2 recursive discovery from the
+        # Scoped to packs/openstudio-server/templates/ (nomad-pack v0.4.2 recursive discovery from the
         # pack root does not descend into templates/, making `-recursive .` a
         # silent no-op that always exits 0).
-        run: nomad-pack fmt --check templates/
+        run: nomad-pack fmt --check packs/openstudio-server/templates/
 
       - name: Validate pack rendering (render-after-fmt guard)
         # Renders immediately after the fmt gate to catch lexer regressions in
         # the formatter (v0.4.2 `fmt -write` once rewrote `[[- /*` comment
         # markers into a state the renderer rejects with "illegal number
         # syntax"). Render is fast; keep it cheap.
-        run: nomad-pack render .
+        run: nomad-pack render packs/openstudio-server
 
   render-matrix:
     name: Render Matrix (${{ matrix.scenario.name }})
@@ -49,27 +49,27 @@ jobs:
       matrix:
         scenario:
           - name: default
-            args: "."
+            args: "packs/openstudio-server"
           - name: minimal-dev
-            args: "-var-file examples/quickstart/minimal-dev.hcl ."
+            args: "-var-file examples/quickstart/minimal-dev.hcl packs/openstudio-server"
           - name: simple
-            args: "-var-file examples/quickstart/simple.hcl ."
+            args: "-var-file examples/quickstart/simple.hcl packs/openstudio-server"
           - name: production-ha
-            args: "-var-file examples/advanced/production-ha.hcl ."
+            args: "-var-file examples/advanced/production-ha.hcl packs/openstudio-server"
           - name: airgapped
-            args: "-var-file examples/advanced/airgapped.hcl ."
+            args: "-var-file examples/advanced/airgapped.hcl packs/openstudio-server"
           - name: openstack-production
-            args: "-var-file examples/advanced/openstack-production.hcl ."
+            args: "-var-file examples/advanced/openstack-production.hcl packs/openstudio-server"
           - name: e2e-test
-            args: "-var-file examples/advanced/e2e-test.hcl ."
+            args: "-var-file examples/advanced/e2e-test.hcl packs/openstudio-server"
           - name: batch-verification
-            args: "-var enable_batch_verification=true ."
+            args: "-var enable_batch_verification=true packs/openstudio-server"
           - name: nomad-batch-engine
-            args: "-var batch_engine=nomad_batch -var nomad_batch_datacenter=dc1 -var nomad_batch_namespace=default -var nomad_batch_job_name=openstudio-simulation ."
+            args: "-var batch_engine=nomad_batch -var nomad_batch_datacenter=dc1 -var nomad_batch_namespace=default -var nomad_batch_job_name=openstudio-simulation packs/openstudio-server"
           - name: aws-batch-engine
-            args: "-var batch_engine=aws_batch -var aws_region=us-east-1 -var aws_batch_job_queue=openstudio-queue -var aws_batch_job_definition=openstudio-worker ."
+            args: "-var batch_engine=aws_batch -var aws_region=us-east-1 -var aws_batch_job_queue=openstudio-queue -var aws_batch_job_definition=openstudio-worker packs/openstudio-server"
           - name: vector-disabled
-            args: "-var enable_vector_collection=false ."
+            args: "-var enable_vector_collection=false packs/openstudio-server"
     steps:
       - name: Checkout code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
@@ -86,7 +86,7 @@ jobs:
         run: nomad-pack render ${{ matrix.scenario.args }}
 
       - name: Validate batch verification rendering
-        run: nomad-pack render --var "enable_batch_verification=true" .
+        run: nomad-pack render --var "enable_batch_verification=true" packs/openstudio-server
 
       - name: Validate Vagrantfile Syntax
         run: ruby -c Vagrantfile
@@ -144,9 +144,9 @@ jobs:
 
       - name: Check compatibility.md is up-to-date
         run: |
-          PACK_VERSION=$(grep -E '^\s*version\s*=' metadata.hcl | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+          PACK_VERSION=$(grep -E '^\s*version\s*=' packs/openstudio-server/metadata.hcl | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
           if [ -z "${PACK_VERSION}" ]; then
-            echo "ERROR: Could not extract pack version from metadata.hcl"
+            echo "ERROR: Could not extract pack version from packs/openstudio-server/metadata.hcl"
             exit 1
           fi
 
@@ -172,7 +172,7 @@ jobs:
           # Lifecycle tasks (wait-for-deps, vector, cleanup-poststop) are intentionally excluded.
           # worker.nomad.tpl is an architecture marker file (worker consolidated into web.nomad.tpl,
           # fix #405); the worker task group is covered by the web.nomad.tpl entry below.
-          for tpl in templates/web.nomad.tpl templates/db.nomad.tpl templates/redis.nomad.tpl templates/rserve.nomad.tpl; do
+          for tpl in packs/openstudio-server/templates/web.nomad.tpl packs/openstudio-server/templates/db.nomad.tpl packs/openstudio-server/templates/redis.nomad.tpl packs/openstudio-server/templates/rserve.nomad.tpl; do
             if ! grep -qE 'var "(db_|redis_)?docker_user"' "${tpl}"; then
               echo "ERROR: ${tpl} is missing docker_user non-root hardening"
               FAIL=1
@@ -205,7 +205,7 @@ jobs:
           NOMAD_ADDR: http://127.0.0.1:4646
         run: |
           set +e
-          nomad-pack plan --name openstudio-server .
+          nomad-pack plan --name openstudio-server packs/openstudio-server
           code=$?
           set -e
           [ "$code" -le 1 ] || exit "$code"
@@ -215,7 +215,7 @@ jobs:
           NOMAD_ADDR: http://127.0.0.1:4646
         run: |
           set +e
-          nomad-pack plan --var-file examples/quickstart/minimal-dev.hcl --name openstudio-server-minimal-dev .
+          nomad-pack plan --var-file examples/quickstart/minimal-dev.hcl --name openstudio-server-minimal-dev packs/openstudio-server
           code=$?
           set -e
           [ "$code" -le 1 ] || exit "$code"
@@ -233,7 +233,7 @@ jobs:
             --var "enable_consul_connect=false" \
             --var "worker_update_progress_deadline=2h" \
             --name openstudio-server-production-ha \
-            .
+            packs/openstudio-server
           code=$?
           set -e
           [ "$code" -le 1 ] || exit "$code"
@@ -243,7 +243,7 @@ jobs:
           NOMAD_ADDR: http://127.0.0.1:4646
         run: |
           set +e
-          nomad-pack plan --var-file examples/advanced/airgapped.hcl --name openstudio-server-airgapped .
+          nomad-pack plan --var-file examples/advanced/airgapped.hcl --name openstudio-server-airgapped packs/openstudio-server
           code=$?
           set -e
           [ "$code" -le 1 ] || exit "$code"
@@ -253,7 +253,7 @@ jobs:
           NOMAD_ADDR: http://127.0.0.1:4646
         run: |
           set +e
-          nomad-pack plan --var "enable_batch_verification=true" --name openstudio-server-batch-verification .
+          nomad-pack plan --var "enable_batch_verification=true" --name openstudio-server-batch-verification packs/openstudio-server
           code=$?
           set -e
           [ "$code" -le 1 ] || exit "$code"
@@ -262,65 +262,6 @@ jobs:
         env:
           NOMAD_ADDR: http://127.0.0.1:4646
         run: nomad job validate examples/advanced/test-batch.nomad
-
-      - name: Check packs/ registry scaffold is in sync with root
-        run: |
-          FAIL=0
-
-          # 1. Pack version must match
-          ROOT_VER=$(grep -E '^\s*version\s*=' metadata.hcl | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
-          PACK_VER=$(grep -E '^\s*version\s*=' packs/openstudio-server/metadata.hcl | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
-          if [ "${ROOT_VER}" != "${PACK_VER}" ]; then
-            echo "ERROR: metadata version mismatch: root=${ROOT_VER} packs/=${PACK_VER}"
-            FAIL=1
-          else
-            echo "OK: metadata version matches (${ROOT_VER})"
-          fi
-
-          # 2. variables.hcl must be byte-for-byte identical
-          if ! diff -q variables.hcl packs/openstudio-server/variables.hcl > /dev/null 2>&1; then
-            echo "ERROR: variables.hcl differs between root and packs/openstudio-server/"
-            diff -u variables.hcl packs/openstudio-server/variables.hcl || true
-            FAIL=1
-          else
-            echo "OK: variables.hcl matches exactly"
-          fi
-
-          # 3. outputs.tpl must be byte-for-byte identical
-          if ! diff -q outputs.tpl packs/openstudio-server/outputs.tpl > /dev/null 2>&1; then
-            echo "ERROR: outputs.tpl differs between root and packs/openstudio-server/"
-            diff -u outputs.tpl packs/openstudio-server/outputs.tpl || true
-            FAIL=1
-          else
-            echo "OK: outputs.tpl matches exactly"
-          fi
-
-          # 4. Template files must be identical
-          for tpl in templates/*.tpl; do
-            [ -f "${tpl}" ] || continue
-            fname=$(basename "${tpl}")
-            pack_tpl="packs/openstudio-server/templates/${fname}"
-            if [ ! -f "${pack_tpl}" ]; then
-              echo "ERROR: ${pack_tpl} is missing (present in root templates/)"
-              FAIL=1
-            elif ! diff -q "${tpl}" "${pack_tpl}" > /dev/null 2>&1; then
-              echo "ERROR: ${tpl} and ${pack_tpl} differ"
-              FAIL=1
-            else
-              echo "OK: ${fname} matches"
-            fi
-          done
-
-          if [ "${FAIL}" -ne 0 ]; then
-            echo ""
-            echo "packs/openstudio-server/ is out of sync with root."
-            echo "Run: cp variables.hcl packs/openstudio-server/variables.hcl"
-            echo "     cp metadata.hcl packs/openstudio-server/metadata.hcl"
-            echo "     cp outputs.tpl packs/openstudio-server/outputs.tpl"
-            echo "     cp templates/*.tpl templates/*.nomad.tpl packs/openstudio-server/templates/"
-            exit 1
-          fi
-          echo "All packs/ drift checks passed."
 
       - name: Run integration validation
         env:

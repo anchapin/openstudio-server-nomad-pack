@@ -4,7 +4,7 @@ This document covers the Vault policies required by the OpenStudio Server Nomad 
 
 ## KV v2 Secret Path Conventions
 
-The pack reads secrets from the following default paths (set by `variables.hcl`). All paths are under the KV v2 `secret/` mount.
+The pack reads secrets from the following default paths (set by `packs/openstudio-server/variables.hcl`). All paths are under the KV v2 `secret/` mount.
 
 | Variable | Default path | Contents |
 |----------|-------------|---------|

@@ -19,7 +19,7 @@
 # committed to source control.
 #
 # Usage (without site-local):
-#   nomad-pack run -var-file examples/advanced/openstack-production.hcl .
+#   nomad-pack run -var-file examples/advanced/openstack-production.hcl packs/openstudio-server
 #
 # Prerequisites:
 #   - Vault cluster integrated with Nomad (vault_enabled = true below)
@@ -48,7 +48,7 @@ web_image            = "nrel/openstudio-server:3.10.0"
 web_background_image = "nrel/openstudio-server:3.10.0"
 worker_image         = "nrel/openstudio-server:3.10.0"
 # worker_runtime_image: leave empty to pull worker_image directly.
-# Set only when using a registry-prefetch alias to avoid TLS timeouts (see variables.hcl).
+# Set only when using a registry-prefetch alias to avoid TLS timeouts (see packs/openstudio-server/variables.hcl).
 worker_runtime_image = ""
 rserve_image         = "nrel/openstudio-rserve:3.10.0"
 db_image             = "mongo:8.0"
@@ -358,7 +358,7 @@ log_max_files = 5
 
 # ---------- Docker hardening ----------
 # These defaults (non-root, read-only rootfs, drop ALL caps) are inherited from
-# variables.hcl; listed here explicitly for visibility.
+# packs/openstudio-server/variables.hcl; listed here explicitly for visibility.
 docker_user            = ""
 docker_readonly_rootfs = false
 docker_cap_drop        = []

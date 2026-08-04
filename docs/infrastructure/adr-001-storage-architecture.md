@@ -42,7 +42,7 @@ Related preparatory work:
 | Ops complexity             | Medium | Day-2 burden: provisioning, monitoring, failure recovery                           |
 | OpenStack integration      | Medium | Native fit with OpenStack APIs; avoids third-party dependencies                    |
 | Cost                       | Low    | Relative GB-storage and IOPS cost on a typical OpenStack private cloud              |
-| Nomad pack changes required | Low   | Engineering effort to implement; scope of variables.hcl and template changes       |
+| Nomad pack changes required | Low   | Engineering effort to implement; scope of `packs/openstudio-server/variables.hcl` and template changes       |
 
 ---
 
@@ -210,7 +210,7 @@ as an interim measure.
 
 1. Run `scripts/openstack-storage-provisioning.sh` to provision the NFS VM and Cinder volumes.
 2. Mount the new NFS export on all Nomad clients (`/etc/fstab` + `host_volume` registration).
-3. Stop the pack (`nomad-pack destroy .`).
+3. Stop the pack (`nomad-pack destroy packs/openstudio-server`).
 4. `rsync` existing Manila artifacts to the new Cinder-backed NFS share.
 5. Update `nfs_volume_source` to point to the new host volume, redeploy.
 6. Validate, then release the old Manila share.
@@ -221,11 +221,11 @@ as an interim measure.
 
 To revert to Option A (Manila NFS) from either Option B or Option C:
 
-1. Stop the pack (`nomad-pack destroy .`).
+1. Stop the pack (`nomad-pack destroy packs/openstudio-server`).
 2. Remove `swift_artifact_backend_enabled = true` (or the Cinder NFS host volume reference) from
    your override var-file.
 3. Ensure the original Manila `host_volume` is still registered on Nomad clients.
-4. Redeploy: `nomad-pack run -var-file <your-override>.hcl .`.
+4. Redeploy: `nomad-pack run -var-file <your-override>.hcl packs/openstudio-server`.
 5. If data was migrated to Swift or Cinder NFS, `rsync` it back to the Manila share before
    restarting workers.
 

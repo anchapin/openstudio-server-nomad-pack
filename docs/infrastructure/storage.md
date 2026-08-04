@@ -678,7 +678,7 @@ DB_CSI_PLUGIN_ID=hostpath-web-plugin0 \
 ### 8.1 Stop the Pack and Purge Jobs
 
 ```bash
-nomad-pack destroy .
+nomad-pack destroy packs/openstudio-server
 # or:
 nomad job stop -purge openstudio-server
 ```

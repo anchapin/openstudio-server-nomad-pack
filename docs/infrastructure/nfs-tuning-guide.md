@@ -430,7 +430,7 @@ sudo systemctl reload nomad
 nomad node status -verbose <node-id> | grep openstudio-nfs
 ```
 
-### 7.4 Pack Variables (variables.hcl)
+### 7.4 Pack Variables (packs/openstudio-server/variables.hcl)
 
 With the host volume registered on all client nodes, enable shared NFS in your var-file
 (e.g. `examples/advanced/openstack.hcl`):

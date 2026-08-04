@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-VARIABLES_FILE="${REPO_ROOT}/variables.hcl"
+VARIABLES_FILE="${REPO_ROOT}/packs/openstudio-server/variables.hcl"
 
 backup_default="$(
   awk '
@@ -19,7 +19,7 @@ restore_default="$(
 )"
 
 if [[ -z "${backup_default}" || -z "${restore_default}" ]]; then
-  echo "ERROR: could not parse backup/restore defaults from variables.hcl"
+  echo "ERROR: could not parse backup/restore defaults from packs/openstudio-server/variables.hcl"
   exit 1
 fi
 

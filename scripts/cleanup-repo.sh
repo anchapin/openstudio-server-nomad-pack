@@ -3,7 +3,7 @@
 # cleanup-repo.sh — repository hygiene helper
 #
 # Removes transient files and consolidates generated variable documentation
-# from variables.hcl.
+# from packs/openstudio-server/variables.hcl.
 #
 # Usage:
 #   ./scripts/cleanup-repo.sh            # dry-run (default)
@@ -81,7 +81,7 @@ else
 fi
 
 if $REFRESH_DOCS; then
-  log "Refreshing variable docs from variables.hcl..."
+  log "Refreshing variable docs from packs/openstudio-server/variables.hcl..."
   if $DRY_RUN; then
     echo "DRY-RUN: ./scripts/generate-vars-doc.sh docs/variables.md"
     echo "DRY-RUN: ./scripts/generate-vars-doc.sh docs/variables.generated.md"

@@ -184,7 +184,7 @@ before starting a simulation run. Nomad marks a version stable only after
 ./scripts/run-batch-verification.sh
 
 # Or with a custom job name:
-nomad-pack render -var "enable_batch_verification=true" . | nomad job run -
+nomad-pack render -var "enable_batch_verification=true" packs/openstudio-server | nomad job run -
 nomad job status openstudio-server-batch-verify
 ```
 

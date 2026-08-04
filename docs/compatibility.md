@@ -39,7 +39,7 @@ This matrix documents known-good version combinations for this Nomad pack.
 Update this table whenever a new pack version is released or when supported OpenStudio Server, Nomad, or Consul versions change.
 
 A CI step in `pack-validation.yml` (`Check compatibility.md is up-to-date`) enforces:
-- for most runs: a row must exist for the current `pack.version` in `metadata.hcl`
+- for most runs: a row must exist for the current `pack.version` in `packs/openstudio-server/metadata.hcl`
 - for pull requests targeting `main`: a row must exist for the upcoming release version (`pack.version` + patch)
 
 This avoids release-process drift caused by the automated `main` version bump.

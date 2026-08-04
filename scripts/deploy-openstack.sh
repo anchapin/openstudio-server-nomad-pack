@@ -40,6 +40,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+PACK_PATH="${REPO_ROOT}/packs/openstudio-server"
 
 # ── Config ────────────────────────────────────────────────────────────────────
 JUMP_HOST="ubuntu@10.60.105.39"
@@ -57,7 +58,7 @@ CONSUL_API="http://127.0.0.1:${CONSUL_LOCAL_PORT}"
 
 VAR_FILE="${OS_VAR_FILE:-${REPO_ROOT}/examples/advanced/openstack.hcl}"
 JOB_NAME="${OS_JOB_NAME:-openstudio-server}"
-INFRA_JOB_TPL="${REPO_ROOT}/templates/infra-setup.nomad.tpl"
+INFRA_JOB_TPL="${PACK_PATH}/templates/infra-setup.nomad.tpl"
 PREFLIGHT_SCRIPT="${REPO_ROOT}/scripts/preflight-storage.sh"
 INGRESS_CHECK_SCRIPT="${REPO_ROOT}/scripts/check-openstack-ingress.sh"
 TRAEFIK_RECONCILE_SCRIPT="${REPO_ROOT}/scripts/reconcile-jumphost-traefik.sh"
@@ -336,7 +337,7 @@ except Exception:
   info "Deploying infra-setup system job to all Nomad clients..."
   local spec
   spec="$(mktemp)"
-  nomad-pack render --var-file "${VAR_FILE}" --var "enable_infra_setup=true" --var "job_name=${JOB_NAME}" "${REPO_ROOT}" > "${spec}"
+  nomad-pack render --var-file "${VAR_FILE}" --var "enable_infra_setup=true" --var "job_name=${JOB_NAME}" "${PACK_PATH}" > "${spec}"
   NOMAD_ADDR="${NOMAD_API}" nomad job run "${spec}"
   rm -f "${spec}"
   ok "infra-setup submitted"
@@ -479,7 +480,7 @@ run_pack_with_guard() {
   local run_log
   local -a run_args=("$@")
   run_log="$(mktemp)"
-  if ! NOMAD_ADDR="${NOMAD_API}" nomad-pack run "${run_args[@]}" "${REPO_ROOT}" 2>&1 | tee "${run_log}"; then
+  if ! NOMAD_ADDR="${NOMAD_API}" nomad-pack run "${run_args[@]}" "${PACK_PATH}" 2>&1 | tee "${run_log}"; then
     if grep -q 'Failed To Query For Previously Deployed Jobs' "${run_log}"; then
       core_jobs_ready=false
       for _ in $(seq 1 30); do
@@ -515,7 +516,7 @@ run_system_hooks_phase() {
   worker_instance_type="$(extract_simple_var worker_instance_type "")"
   rendered="$(mktemp)"
   spec="$(mktemp)"
-  nomad-pack render --var-file "${VAR_FILE}" --var "job_name=${JOB_NAME}" "${REPO_ROOT}" > "${rendered}"
+  nomad-pack render --var-file "${VAR_FILE}" --var "job_name=${JOB_NAME}" "${PACK_PATH}" > "${rendered}"
   awk '
     /^openstudio-server\/system-hooks\.nomad:$/ { in_section=1; next }
     /^openstudio-server\/.*\.nomad:$/ { if (in_section) exit }
@@ -908,7 +909,7 @@ stop_pack() {
   NOMAD_ADDR="${NOMAD_API}" nomad-pack destroy \
     --var-file "${VAR_FILE}" \
     --name "${JOB_NAME}" \
-    "${REPO_ROOT}" || true
+    "${PACK_PATH}" || true
   ok "Pack jobs stopped"
 }
 

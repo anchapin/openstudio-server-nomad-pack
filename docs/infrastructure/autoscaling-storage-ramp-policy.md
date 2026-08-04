@@ -163,7 +163,7 @@ Use this procedure when iowait exceeds 60% or simulations are failing due to NFS
 nomad job status <job_name>-worker | grep -i "running\|desired"
 
 # Set max = current running count to prevent further scale-up:
-nomad-pack run . \
+nomad-pack run packs/openstudio-server \
   -var "worker_max_replicas=<current_running_count>" \
   --name <job_name>
 ```
@@ -180,7 +180,7 @@ watch -n 5 'iostat -c 1 1 | tail -2'
 ```bash
 # Scale workers down one at a time with a 5-minute gap:
 for count in $(seq <current-1> -1 <target_floor>); do
-  nomad-pack run . \
+  nomad-pack run packs/openstudio-server \
     -var "worker_min_replicas=${count}" \
     -var "worker_max_replicas=${count}" \
     --name <job_name>
@@ -191,7 +191,7 @@ done
 ### Step 4 — Re-enable Autoscaling with Conservative Settings
 
 ```bash
-nomad-pack run . \
+nomad-pack run packs/openstudio-server \
   -var "worker_autoscaling_enabled=true" \
   -var "worker_count=2" \
   -var "worker_min_replicas=2" \
@@ -212,7 +212,7 @@ Stop all autoscaling and run a fixed worker count if any of the following occur:
 
 ```bash
 # Disable autoscaling entirely and fix worker count:
-nomad-pack run . \
+nomad-pack run packs/openstudio-server \
   -var "worker_autoscaling_enabled=false" \
   -var "worker_count=<safe_count>" \
   --name <job_name>

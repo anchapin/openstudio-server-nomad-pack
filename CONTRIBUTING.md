@@ -29,23 +29,23 @@ Please read this guide before opening a PR.
 
 ### Pack validation
 
-> ⚠️ **WARNING — `nomad-pack fmt` corruption risk:** Running `nomad-pack fmt -write templates/` (or `fmt --write`) on v0.4.2 has a known lexer bug that **silently corrupts template files** by mangling `[[- /* ... */]]` comment markers. Always use `--check` (read-only) and never `--write` or `-write` against this repository's templates.
+> ⚠️ **WARNING — `nomad-pack fmt` corruption risk:** Running `nomad-pack fmt -write packs/openstudio-server/templates/` (or `fmt --write`) on v0.4.2 has a known lexer bug that **silently corrupts template files** by mangling `[[- /* ... */]]` comment markers. Always use `--check` (read-only) and never `--write` or `-write` against this repository's templates.
 
 ```bash
 # Format-check pack templates (non-destructive)
-# NOTE: On nomad-pack v0.4.2, `fmt -write templates/` can corrupt templates
+# NOTE: On nomad-pack v0.4.2, `fmt -write packs/openstudio-server/templates/` can corrupt templates
 # and `fmt --check -recursive .` is a silent no-op from the pack root.
-nomad-pack fmt --check templates/
+nomad-pack fmt --check packs/openstudio-server/templates/
 
 # Render templates to stdout and inspect output
-nomad-pack render .
+nomad-pack render packs/openstudio-server
 
 # Render with an example var-file override
-nomad-pack render -var-file examples/quickstart/minimal-dev.hcl .
+nomad-pack render -var-file examples/quickstart/minimal-dev.hcl packs/openstudio-server
 
 # Plan against a running Nomad dev agent (replaces `nomad-pack validate` — not a valid command in v0.4.2)
 nomad agent -dev -bind=127.0.0.1 -log-level=ERROR &
-nomad-pack plan --name openstudio-server .
+nomad-pack plan --name openstudio-server packs/openstudio-server
 ```
 
 ### Running CI locally with `act`
@@ -81,11 +81,11 @@ bash scripts/test_nomad_pack_integration.sh
    - `chore:` maintenance, dependency bumps
    - `ci:` CI/CD changes
 4. Update `CHANGELOG.md` under the `[Unreleased]` section (see below).
-5. If you changed any variable in `variables.hcl`, regenerate the variable docs (see below).
+5. If you changed any variable in `packs/openstudio-server/variables.hcl`, regenerate the variable docs (see below).
 6. All required CI checks must pass before merge:
    - `pack-validation.yml` — format, render, plan (dry-run for multiple example var-files)
    - `acl-policy-validation.yml` — ACL policy lint
-   - `integration-test.yml` — end-to-end stack test (triggered on PRs to `develop` that touch `templates/**`, `variables.hcl`, `packs/**`, `scripts/**`, `examples/**`, `metadata.hcl`, or the workflow file itself)
+   - `integration-test.yml` — end-to-end stack test (triggered on PRs to `develop` that touch `packs/openstudio-server/templates/**`, `packs/openstudio-server/variables.hcl`, `packs/openstudio-server/metadata.hcl`, `scripts/**`, `examples/**`, or the workflow file itself)
 
 ---
 
@@ -120,44 +120,44 @@ Entries are consolidated into a versioned section by the release process.
 
 Releases are automated via a **two-step pipeline** triggered by a push to `main`:
 
-1. **`release-version-bump.yml`** (Step 1): bumps the patch version in `metadata.hcl`, syncs `packs/openstudio-server/metadata.hcl`, commits both files, and pushes a `v<version>` git tag.
-2. **`release.yml`** (Step 2): triggered by the `v*` tag created in Step 1 — reads the version from `metadata.hcl` and publishes the GitHub Release with auto-generated release notes.
+1. **`release-version-bump.yml`** (Step 1): bumps the patch version in `packs/openstudio-server/metadata.hcl`, commits, and pushes a `v<version>` git tag.
+2. **`release.yml`** (Step 2): triggered by the `v*` tag created in Step 1 and publishes the GitHub Release with auto-generated release notes.
 
 To prepare a release:
 
 1. Ensure all intended changes are merged into `develop` and CI is green.
 2. Move all `[Unreleased]` entries in `CHANGELOG.md` to a new versioned section (e.g. `[0.3.0] - 2026-07-28`).
-3. Update `docs/compatibility.md` with the **upcoming release version** (current `metadata.hcl` patch + 1) and its compatibility data.
+3. Update `docs/compatibility.md` with the **upcoming release version** (current `packs/openstudio-server/metadata.hcl` patch + 1) and its compatibility data.
 4. Open a PR from `develop` → `main`, merge when CI passes.
 5. After merging, the two-step release pipeline runs automatically:
-   - **`release-version-bump.yml`** bumps the patch version in `metadata.hcl`, syncs `packs/openstudio-server/metadata.hcl`, commits both files, and pushes a `v<version>` git tag.
+   - **`release-version-bump.yml`** bumps the patch version in `packs/openstudio-server/metadata.hcl`, commits, and pushes a `v<version>` git tag.
    - **`release.yml`** picks up the new tag and publishes the GitHub Release.
    - _Triage:_ If Step 1 fails, check write permissions to `main` and that `scripts/bump_metadata_version.sh` runs cleanly. If Step 2 is missing, confirm the `v*` tag exists in the repo and that the workflow has `contents: write` permission.
 
 > **Note:** For a non-patch increment (minor/major), manually run `scripts/bump_metadata_version.sh` with the appropriate bump type or explicit version before opening the `develop → main` PR:
 > ```bash
 > # Increment minor version (e.g. 0.2.0 → 0.3.0)
-> scripts/bump_metadata_version.sh metadata.hcl minor
+> scripts/bump_metadata_version.sh packs/openstudio-server/metadata.hcl minor
 >
 > # Set an explicit target version
-> scripts/bump_metadata_version.sh metadata.hcl 0.3.0
+> scripts/bump_metadata_version.sh packs/openstudio-server/metadata.hcl 0.3.0
 > ```
 
 ---
 
 ## Regenerating `docs/variables.md`
 
-`docs/variables.md` is auto-generated from `variables.hcl` — **do not edit it manually**.
-`variables.hcl` is the **sole source of truth** for all pack variable definitions.
+`docs/variables.md` is auto-generated from `packs/openstudio-server/variables.hcl` — **do not edit it manually**.
+`packs/openstudio-server/variables.hcl` is the **sole source of truth** for all pack variable definitions.
 
 After changing any variable definition (adding, removing, or modifying any `variable "..."` block
-in `variables.hcl`), regenerate the reference doc:
+in `packs/openstudio-server/variables.hcl`), regenerate the reference doc:
 
 ```bash
 ./scripts/generate-vars-doc.sh
 ```
 
-Then commit both updated files (`variables.hcl` and `docs/variables.md`).
+Then commit both updated files (`packs/openstudio-server/variables.hcl` and `docs/variables.md`).
 
 CI validates this with the `Check variables.md is up-to-date` workflow step,
 which diffs the committed file against a freshly generated copy and fails on any divergence.
@@ -170,7 +170,7 @@ variable reference in the README.  A CI step (`Check README references docs/vari
 enforces this: it fails if the link is absent or if `docs/variables.md` is missing.
 
 > **Never** paste a variable table into README.md — it will drift and CI will not catch the
-> individual cell values.  Update `variables.hcl`, regenerate `docs/variables.md`, and let the
+> individual cell values.  Update `packs/openstudio-server/variables.hcl`, regenerate `docs/variables.md`, and let the
 > auto-generated doc speak for itself.
 
 ## Updating compatibility matrix on release
@@ -185,7 +185,7 @@ When preparing a release, update `docs/compatibility.md` with:
 This keeps operators aligned on known-good version combinations.
 
 CI validates this with the `Check compatibility.md is up-to-date` workflow step in `pack-validation.yml`:
-- for most runs, it requires the current `pack.version` from `metadata.hcl` to exist in `docs/compatibility.md`
+- for most runs, it requires the current `pack.version` from `packs/openstudio-server/metadata.hcl` to exist in `docs/compatibility.md`
 - for pull requests targeting `main`, it requires the upcoming release version (`pack.version` + patch) to exist
 
 **Release checklist item:** Before opening a `develop` → `main` PR, add a compatibility row for the upcoming auto-bumped release version.

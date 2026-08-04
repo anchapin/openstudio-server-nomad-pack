@@ -134,7 +134,7 @@ swift_auth_url                 = "https://keystone.example.com:5000/v3"
 ```
 
 ```bash
-nomad-pack run --name <job_name> -var-file <your-var-file>.hcl .
+nomad-pack run --name <job_name> -var-file <your-var-file>.hcl packs/openstudio-server
 ```
 
 ### Step 5 — Validate
@@ -167,7 +167,7 @@ To revert to NFS mode:
 2. Ensure `nfs_shared_volume_enabled = true` and the NFS volume is mounted.
 3. Redeploy:
    ```bash
-   nomad-pack run --name <job_name> -var-file <your-var-file>.hcl .
+   nomad-pack run --name <job_name> -var-file <your-var-file>.hcl packs/openstudio-server
    ```
 4. Artifacts written during Swift mode will not be accessible via NFS unless manually copied back:
    ```bash

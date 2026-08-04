@@ -213,7 +213,7 @@ ceilometer statistics -m manila.share.capacity.used
 
 Once saturation thresholds are quantified:
 
-1. Set `worker_autoscaling_max` in `variables.hcl` to the **tier below the first saturated tier**.
+1. Set `worker_autoscaling_max` in `packs/openstudio-server/variables.hcl` to the **tier below the first saturated tier**.
    For the example above, set `worker_autoscaling_max = 500` (one tier below 1000).
 
 2. Configure the autoscaler ramp rate so that the cluster never exceeds the safe tier in a single

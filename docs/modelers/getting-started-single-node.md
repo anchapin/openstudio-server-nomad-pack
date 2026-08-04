@@ -401,7 +401,7 @@ cp examples/quickstart/minimal-dev.hcl my-override.hcl
 ## Step 5 — Deploy with nomad-pack
 
 ```bash
-nomad-pack run -var-file my-override.hcl .
+nomad-pack run -var-file my-override.hcl packs/openstudio-server
 ```
 
 Expected output:
@@ -610,9 +610,9 @@ The pack can optionally deploy a [Traefik](https://traefik.io/) ingress controll
 To enable it, set `deploy_traefik = true`:
 
 ```bash
-nomad-pack run -var "deploy_traefik=true" .
+nomad-pack run -var "deploy_traefik=true" packs/openstudio-server
 # or with a var-file:
-nomad-pack run -var-file examples/quickstart/minimal-dev.hcl -var "deploy_traefik=true" .
+nomad-pack run -var-file examples/quickstart/minimal-dev.hcl -var "deploy_traefik=true" packs/openstudio-server
 ```
 
 This renders and deploys an additional `<job_name>-traefik` job with:

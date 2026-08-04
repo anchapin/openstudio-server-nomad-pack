@@ -83,7 +83,7 @@ Run the infra convergence job to ensure:
 Use:
 
 ```bash
-nomad-pack render -var "enable_infra_setup=true" . | nomad job run -
+nomad-pack render -var "enable_infra_setup=true" packs/openstudio-server | nomad job run -
 ```
 
 ### 4. Confirm storage prerequisites
@@ -201,7 +201,7 @@ bash scripts/deploy-openstack.sh --deploy
 unavailable):
 
 ```bash
-nomad-pack run -var-file examples/advanced/openstack.hcl .
+nomad-pack run -var-file examples/advanced/openstack.hcl packs/openstudio-server
 ```
 
 > ⚠ When deploying manually, run `preflight-storage.sh --rebind-stale --emit-topology-vars`

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PACK_PATH="${REPO_ROOT}"
+PACK_PATH="${REPO_ROOT}/packs/openstudio-server"
 PROD_VARS="${REPO_ROOT}/examples/advanced/openstack-production.hcl"
 LEGACY_VARS="${REPO_ROOT}/examples/advanced/openstack.hcl"
 

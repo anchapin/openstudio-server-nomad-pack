@@ -28,7 +28,7 @@ routing rules from Consul service tags. The existing `examples/advanced/openstac
 `ingress_domain = "10.60.126.125"` (jump-host IP) but does not currently set
 `deploy_traefik`.
 
-### Current in-pack Traefik capabilities (`templates/traefik.nomad.tpl`)
+### Current in-pack Traefik capabilities (`packs/openstudio-server/templates/traefik.nomad.tpl`)
 
 - Traefik v3, single task group, count = 1
 - Binds static HTTP/HTTPS/dashboard ports from variables
@@ -252,7 +252,7 @@ Then access the Traefik dashboard at `http://localhost:8081/dashboard/`.
 ## References
 
 - [OpenStack Octavia documentation](https://docs.openstack.org/octavia/latest/)
-- [Traefik Nomad Pack template](../templates/traefik.nomad.tpl)
+- [Traefik Nomad Pack template](../../packs/openstudio-server/templates/traefik.nomad.tpl)
 - [Pack variables reference](variables.md)
 - [Operations guide](operations-guide.md)
 - [Getting started — single node](getting-started-single-node.md)
