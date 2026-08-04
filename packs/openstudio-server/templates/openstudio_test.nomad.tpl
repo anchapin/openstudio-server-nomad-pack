@@ -1,3 +1,4 @@
+[[ if var "enable_openstudio_test" . ]]
 job "[[ var "job_name" . ]]-test" {
   region      = "[[ var "region" . ]]"
   datacenters = [[ var "datacenters" . | toJson ]]
@@ -90,3 +91,5 @@ job "[[ var "job_name" . ]]-test" {
     }
   }
 }
+
+[[ end ]]

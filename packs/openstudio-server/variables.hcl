@@ -1556,6 +1556,12 @@ variable "vault_env" {
 }
 
 # Test job variables (openstudio_test.nomad.tpl)
+variable "enable_openstudio_test" {
+  type        = bool
+  description = "When true, renders the parameterized openstudio-test batch job used for post-deploy health checks. Set to false to omit the job from lightweight or production deployments that do not require the test harness."
+  default     = true
+}
+
 variable "test_web_port" {
   type        = number
   description = "Port for the HTTP health check against openstudio-web.service.consul."

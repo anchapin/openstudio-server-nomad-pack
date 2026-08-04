@@ -255,6 +255,7 @@
 | `vault_change_mode` | `string` | `"restart"` | How tasks react to Vault token or secret changes. |
 | `vault_change_signal` | `string` | `"SIGHUP"` | Signal sent to tasks when vault_change_mode is set to signal. |
 | `vault_env` | `bool` | `true` | Expose Vault token to tasks as environment variables. |
+| `enable_openstudio_test` | `bool` | `true` | When true, renders the parameterized openstudio-test batch job used for post-deploy health checks. Set to false to omit the job from lightweight or production deployments that do not require the test harness. |
 | `test_web_port` | `number` | `80` | Port for the HTTP health check against openstudio-web.service.consul. |
 | `test_redis_port` | `number` | `6379` | Port for the TCP check against openstudio-redis.service.consul. |
 | `test_mongo_port` | `number` | `27017` | Port for the TCP check against openstudio-db.service.consul (MongoDB). |
