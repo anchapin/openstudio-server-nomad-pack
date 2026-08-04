@@ -228,9 +228,9 @@ set -eu
 # Authoritative worker dependency resolution:
 # - Nomad renders these aliases directly from the Consul service catalog.
 # - patch-hosts.sh only copies the rendered aliases into /etc/hosts.
-# - Never replace this with `getent hosts` for openstudio-db, openstudio-redis,
-#   or openstudio-rserve: those names exist only in Consul unless the client
-#   node is separately configured with Consul DNS forwarding.
+# - Never replace this with node-local resolver probes for openstudio-db,
+#   openstudio-redis, or openstudio-rserve: those names exist only in Consul
+#   unless the client node is separately configured with Consul DNS forwarding.
 cat <<'EOF_HOSTS' >> /etc/hosts
 {{ range $svc := service "openstudio-db" }}{{ $svc.Address }} db
 {{ end }}{{ range $svc := service "openstudio-redis" }}{{ $svc.Address }} queue
