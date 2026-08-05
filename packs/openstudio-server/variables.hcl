@@ -321,8 +321,8 @@ variable "web_update_healthy_deadline" {
 
 variable "web_update_progress_deadline" {
   type        = string
-  description = "Maximum time for the web rolling update to make progress."
-  default     = "10m"
+  description = "Maximum time for the web rolling update to make progress. On fresh CSI volumes (MongoDB init + Rails startup), allow at least 15m."
+  default     = "15m"
 }
 
 variable "web_update_auto_revert" {

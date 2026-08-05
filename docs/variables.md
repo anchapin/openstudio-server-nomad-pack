@@ -58,7 +58,7 @@
 | `web_update_health_check` | `string` | `"checks"` | Health check mode for web rolling updates. |
 | `web_update_min_healthy_time` | `string` | `"30s"` | How long a web allocation must remain healthy before promotion. |
 | `web_update_healthy_deadline` | `string` | `"5m"` | Maximum time for a web allocation to become healthy. |
-| `web_update_progress_deadline` | `string` | `"10m"` | Maximum time for the web rolling update to make progress. |
+| `web_update_progress_deadline` | `string` | `"15m"` | Maximum time for the web rolling update to make progress. On fresh CSI volumes (MongoDB init + Rails startup), allow at least 15m. |
 | `web_update_auto_revert` | `bool` | `true` | Automatically revert a web deployment if the update fails. |
 | `web_background_cpu` | `number` | `2000` | CPU shares allocated to the OpenStudio web-background task. Scale proportionally with web_background_worker_count: each Resque child needs roughly 250 MHz. |
 | `web_background_memory` | `number` | `2048` | Memory soft limit (MB) for the OpenStudio web-background task. Scale proportionally with web_background_worker_count: each Resque child needs roughly 256 MB. |
