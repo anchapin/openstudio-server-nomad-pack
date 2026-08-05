@@ -157,7 +157,7 @@ client {
   }
 
   host_volume "openstudio-nfs" {
-    path      = "/nfs/opensstudio/batch/openstudio"
+    path      = "/nfs/openstudio/batch/openstudio"
     read_only = false
   }
 }

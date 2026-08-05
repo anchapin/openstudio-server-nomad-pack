@@ -51,10 +51,10 @@ assert_contains "${worker_spec}" 'check_service "openstudio-rserve" "6311"' "wor
 assert_contains "${worker_spec}" 'preflight_check service=$service status=pass reason=dns_and_tcp_ok' "worker preflight emits structured pass logs"
 assert_contains "${worker_spec}" 'preflight_check service=$service status=fail reason=$last_reason' "worker preflight emits structured failure logs"
 
-assert_contains "${worker_spec}" '{{ range $svc := service "openstudio-db" }}{{ $svc.Address }} db' "worker runtime aliasing renders openstudio-db from Consul"
-assert_contains "${worker_spec}" '{{ range $svc := service "openstudio-redis" }}{{ $svc.Address }} queue' "worker runtime aliasing renders openstudio-redis from Consul"
-assert_contains "${worker_spec}" '{{ range $svc := service "openstudio-rserve" }}{{ $svc.Address }} rserve' "worker runtime aliasing renders openstudio-rserve from Consul"
-assert_contains "${worker_spec}" 'worker_runtime_service_hosts_applied source=consul_template' "worker runtime aliasing applies rendered Consul aliases"
+assert_contains "${worker_spec}" '{{ with service "openstudio-db" }}{{ (index . 0).Address }}{{ end }}' "worker runtime aliasing renders openstudio-db from Consul"
+assert_contains "${worker_spec}" '{{ with service "openstudio-redis" }}{{ (index . 0).Address }}{{ end }}' "worker runtime aliasing renders openstudio-redis from Consul"
+assert_contains "${worker_spec}" '{{ with service "openstudio-rserve" }}{{ (index . 0).Address }}{{ end }}' "worker runtime aliasing renders openstudio-rserve from Consul"
+assert_contains "${worker_spec}" 'worker_runtime_resolve_ok alias=${alias} ip=${new_ip} source=consul_template' "worker runtime aliasing applies rendered Consul aliases"
 
 assert_not_contains "${worker_spec}" "command -v getent" "worker runtime aliasing does not probe the system resolver with getent"
 assert_not_contains "${worker_spec}" '$(getent hosts' "worker runtime aliasing does not shell out to getent hosts"
