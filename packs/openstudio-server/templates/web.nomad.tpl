@@ -175,7 +175,7 @@ EOT
         change_mode = "script"
         change_script {
           command       = "/bin/sh"
-          args          = ["-c", "grep -vE ' (db|queue|rserve)$' /etc/hosts > /alloc/hosts.tmp 2>/dev/null; cat /alloc/hosts.tmp > /etc/hosts; sh /local/patch-hosts.sh"]
+          args          = ["-c", "sh /local/patch-hosts.sh"]
           timeout       = "30s"
           fail_on_error = false
         }
@@ -213,7 +213,9 @@ resolve_alias() {
     ip=$(echo "$response" | grep -o '"ServiceAddress":"[^"]*"' | head -1 | cut -d'"' -f4)
     [ -z "$ip" ] && ip=$(echo "$response" | grep -o '"Address":"[^"]*"' | head -1 | cut -d'"' -f4)
     if [ -n "$ip" ]; then
-      echo "${ip} ${alias}" >> /etc/hosts
+      grep -vE "(^|[ \t])${alias}$" /etc/hosts > /alloc/hosts.tmp 2>/dev/null || true
+      printf '%s %s\n' "$ip" "$alias" >> /alloc/hosts.tmp
+      cat /alloc/hosts.tmp > /etc/hosts
       echo "web_runtime_resolve_ok service=${service} alias=${alias} ip=${ip} attempt=${attempt}"
       return 0
     fi
@@ -222,7 +224,13 @@ resolve_alias() {
     delay=$((delay * 2))
     [ "$delay" -gt 8 ] && delay=8
   done
-  echo "web_runtime_resolve_failed service=${service} alias=${alias}" >&2
+  # Preserve existing /etc/hosts entry as a stale fallback rather than leaving
+  # the alias unresolved. Avoids a crash loop if Consul is temporarily empty.
+  if grep -qE "(^|[ \t])${alias}$" /etc/hosts 2>/dev/null; then
+    echo "web_runtime_resolve_stale service=${service} alias=${alias}" >&2
+  else
+    echo "web_runtime_resolve_failed service=${service} alias=${alias}" >&2
+  fi
   return 1
 }
 
@@ -451,7 +459,7 @@ EOT
         change_mode = "script"
         change_script {
           command       = "/bin/sh"
-          args          = ["-c", "grep -vE ' (db|queue|rserve)$' /etc/hosts > /alloc/hosts.tmp 2>/dev/null; cat /alloc/hosts.tmp > /etc/hosts; sh /local/patch-hosts.sh"]
+          args          = ["-c", "sh /local/patch-hosts.sh"]
           timeout       = "30s"
           fail_on_error = false
         }
@@ -489,7 +497,9 @@ resolve_alias() {
     ip=$(echo "$response" | grep -o '"ServiceAddress":"[^"]*"' | head -1 | cut -d'"' -f4)
     [ -z "$ip" ] && ip=$(echo "$response" | grep -o '"Address":"[^"]*"' | head -1 | cut -d'"' -f4)
     if [ -n "$ip" ]; then
-      echo "${ip} ${alias}" >> /etc/hosts
+      grep -vE "(^|[ \t])${alias}$" /etc/hosts > /alloc/hosts.tmp 2>/dev/null || true
+      printf '%s %s\n' "$ip" "$alias" >> /alloc/hosts.tmp
+      cat /alloc/hosts.tmp > /etc/hosts
       echo "web_background_runtime_resolve_ok service=${service} alias=${alias} ip=${ip} attempt=${attempt}"
       return 0
     fi
@@ -498,7 +508,13 @@ resolve_alias() {
     delay=$((delay * 2))
     [ "$delay" -gt 8 ] && delay=8
   done
-  echo "web_background_runtime_resolve_failed service=${service} alias=${alias}" >&2
+  # Preserve existing /etc/hosts entry as a stale fallback rather than leaving
+  # the alias unresolved. Avoids a crash loop if Consul is temporarily empty.
+  if grep -qE "(^|[ \t])${alias}$" /etc/hosts 2>/dev/null; then
+    echo "web_background_runtime_resolve_stale service=${service} alias=${alias}" >&2
+  else
+    echo "web_background_runtime_resolve_failed service=${service} alias=${alias}" >&2
+  fi
   return 1
 }
 

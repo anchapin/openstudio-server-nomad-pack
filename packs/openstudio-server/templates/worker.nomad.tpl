@@ -217,7 +217,7 @@ EOT
         change_mode = "script"
         change_script {
           command       = "/bin/sh"
-          args          = ["-c", "grep -vE ' (db|queue|rserve|web)$' /etc/hosts > /alloc/hosts.tmp 2>/dev/null; cat /alloc/hosts.tmp > /etc/hosts; sh /local/patch-hosts.sh"]
+          args          = ["-c", "sh /local/patch-hosts.sh"]
           timeout       = "30s"
           fail_on_error = false
         }
@@ -227,26 +227,34 @@ set -eu
 
 # Authoritative worker dependency resolution:
 # - Nomad renders these aliases directly from the Consul service catalog.
-# - patch-hosts.sh only copies the rendered aliases into /etc/hosts.
+# - patch-hosts.sh updates /etc/hosts atomically, one alias at a time.
+# - If a service is temporarily absent from Consul (health check flip), the
+#   existing /etc/hosts entry is preserved as a stale fallback instead of
+#   being removed. This prevents crash-loops during brief Consul flaps.
 # - Never replace this with node-local resolver probes for openstudio-db,
 #   openstudio-redis, or openstudio-rserve: those names exist only in Consul
 #   unless the client node is separately configured with Consul DNS forwarding.
-cat <<'EOF_HOSTS' >> /etc/hosts
-{{ range $svc := service "openstudio-db" }}{{ $svc.Address }} db
-{{ end }}{{ range $svc := service "openstudio-redis" }}{{ $svc.Address }} queue
-{{ end }}{{ range $svc := service "openstudio-rserve" }}{{ $svc.Address }} rserve
-{{ end }}{{ range $svc := service "openstudio-web" }}{{ $svc.Address }} web
-{{ end }}
-EOF_HOSTS
 
-for alias in db queue rserve; do
-  if ! grep -Eq "(^|[ \t])${alias}$" /etc/hosts; then
+update_alias() {
+  alias="$1"
+  new_ip="$2"
+  if [ -n "$new_ip" ]; then
+    grep -vE "(^|[ \t])${alias}$" /etc/hosts > /alloc/hosts.tmp 2>/dev/null || true
+    printf '%s %s\n' "$new_ip" "$alias" >> /alloc/hosts.tmp
+    cat /alloc/hosts.tmp > /etc/hosts
+    echo "worker_runtime_resolve_ok alias=${alias} ip=${new_ip} source=consul_template"
+  elif grep -qE "(^|[ \t])${alias}$" /etc/hosts 2>/dev/null; then
+    echo "worker_runtime_resolve_stale alias=${alias} source=consul_template" >&2
+  else
     echo "worker_runtime_resolve_failed alias=${alias} source=consul_template" >&2
     exit 1
   fi
-done
+}
 
-echo "worker_runtime_service_hosts_applied source=consul_template"
+update_alias db    '{{ with service "openstudio-db" }}{{ (index . 0).Address }}{{ end }}'
+update_alias queue '{{ with service "openstudio-redis" }}{{ (index . 0).Address }}{{ end }}'
+update_alias rserve '{{ with service "openstudio-rserve" }}{{ (index . 0).Address }}{{ end }}'
+update_alias web   '{{ with service "openstudio-web" }}{{ (index . 0).Address }}{{ end }}'
 EOT
       }
 

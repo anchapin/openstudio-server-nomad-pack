@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Fixed `/etc/hosts` race condition in `web`, `web-background`, and `worker` task groups: `resolve_alias` (web/web-background) now does atomic per-alias updates and preserves the existing stale entry on Consul lookup failure instead of leaving the alias unresolved; `patch-hosts.sh` (worker) now uses an `update_alias` function with the same stale-entry fallback instead of a bulk heredoc append; `change_script` for all three task groups simplified to just `sh /local/patch-hosts.sh` since the script handles deduplication internally. Also fixes `[[:space:]]` POSIX character class which contained `[[` (Nomad Pack template delimiter) by replacing with `[ \t]` — same root cause as the `${}` HCL heredoc interpolation pitfall documented in #442.
+
 ### Added
 - Added a pack-managed `lock-sweeper.nomad.tpl` periodic batch job, `enable_lock_sweeper` feature flag, lock-sweeper variables, and operations guidance so orphaned `analysis_zip.lock` cleanup is version-controlled instead of maintained as an ad hoc production job (#432).
 - Added configurable worker canary rollout controls, a dependency-aware worker readiness health gate, and a canary promote/revert runbook so bad worker deployments fail back to the last stable version instead of rolling fleet-wide (#435).
