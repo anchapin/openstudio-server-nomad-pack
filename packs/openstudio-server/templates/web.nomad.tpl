@@ -348,9 +348,11 @@ EOT
           <<-EOF
 set -eu
 mkdir -p [[ var "nfs_volume_mount_path" . ]]/server/assets/analyses
+mkdir -p [[ var "nfs_volume_mount_path" . ]]/server/R
 chmod 2775 [[ var "nfs_volume_mount_path" . ]]/server
 chmod 2777 [[ var "nfs_volume_mount_path" . ]]/server/assets [[ var "nfs_volume_mount_path" . ]]/server/assets/analyses
-echo "init-shared-storage-perms: ensured writable permissions on [[ var "nfs_volume_mount_path" . ]]/server/assets/analyses"
+chmod 2777 [[ var "nfs_volume_mount_path" . ]]/server/R
+echo "init-shared-storage-perms: ensured writable permissions on [[ var "nfs_volume_mount_path" . ]]/server/assets/analyses and [[ var "nfs_volume_mount_path" . ]]/server/R"
 EOF
         ]
       }

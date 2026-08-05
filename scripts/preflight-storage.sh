@@ -540,7 +540,9 @@ fi
 
 if [ ${#required_host[@]} -gt 0 ]; then
   names_csv="$(printf "%s\n" "${required_host[@]}" | awk '!seen[$0]++' | paste -sd, -)"
-  NOMAD_ADDR="${NOMAD_ADDR}" NAMES_CSV="${names_csv}" python3 - <<'PY'
+  nfs_vol_name="${nfs_volume_source:-openstudio-nfs}"
+  NOMAD_ADDR="${NOMAD_ADDR}" NAMES_CSV="${names_csv}" NFS_VOL_NAME="${nfs_vol_name}" python3 - <<'PY'
+import collections
 import json
 import os
 import sys
@@ -548,6 +550,7 @@ import urllib.request
 
 addr = os.environ["NOMAD_ADDR"].rstrip("/")
 required = [x for x in os.environ.get("NAMES_CSV", "").split(",") if x]
+nfs_vol_name = os.environ.get("NFS_VOL_NAME", "")
 
 req = urllib.request.Request(f"{addr}/v1/nodes")
 with urllib.request.urlopen(req, timeout=10) as r:
@@ -555,23 +558,91 @@ with urllib.request.urlopen(req, timeout=10) as r:
 
 eligible = [n for n in nodes if n.get("Status") == "ready" and n.get("SchedulingEligibility") == "eligible"]
 counts = {name: 0 for name in required}
+# Track every registered path for the NFS volume to detect inconsistencies / typos.
+nfs_paths: dict[str, int] = collections.Counter()
 
 for n in eligible:
     nid = n.get("ID")
     if not nid:
-      continue
+        continue
     with urllib.request.urlopen(f"{addr}/v1/node/{nid}", timeout=10) as r:
         detail = json.load(r)
-    host_vols = set((detail.get("HostVolumes") or {}).keys())
+    host_vols = detail.get("HostVolumes") or {}
     for name in required:
         if name in host_vols:
             counts[name] += 1
+    if nfs_vol_name and nfs_vol_name in host_vols:
+        path = (host_vols[nfs_vol_name].get("Path") or "").rstrip("/")
+        if path:
+            nfs_paths[path] += 1
 
 for name in required:
     if counts[name] <= 0:
         print(f"✗ Host volume '{name}' not advertised by any ready/eligible node", file=sys.stderr)
         sys.exit(1)
     print(f"✓ Host volume '{name}' advertised by {counts[name]} ready/eligible node(s)")
+
+# Validate NFS host volume path consistency across nodes.
+if nfs_paths:
+    if len(nfs_paths) > 1:
+        print(f"✗ Host volume '{nfs_vol_name}' has INCONSISTENT paths across nodes — "
+              "all nodes must register the same path:", file=sys.stderr)
+        for p, cnt in sorted(nfs_paths.items()):
+            print(f"  {cnt:4d} node(s): {p}", file=sys.stderr)
+        sys.exit(1)
+    registered_path = next(iter(nfs_paths))
+    print(f"✓ Host volume '{nfs_vol_name}' path consistent across nodes: {registered_path}")
+    # Required subdirectories that must exist under the NFS mount for the app to function.
+    REQUIRED_NFS_SUBDIRS = [
+        "server/assets/analyses",
+        "server/R",
+    ]
+    # Check subdirectories via the Nomad filesystem API on one eligible allocation.
+    # We look for any running allocation that has the NFS volume mounted.
+    try:
+        with urllib.request.urlopen(f"{addr}/v1/jobs?namespace=*", timeout=10) as r:
+            all_jobs = json.load(r)
+        # Find a running service job that uses the NFS volume (web or rserve).
+        target_job = next(
+            (j for j in all_jobs
+             if j.get("Status") == "running"
+             and any(k in (j.get("ID") or "") for k in ["-rserve", "-web"])),
+            None,
+        )
+        if target_job:
+            job_id = target_job["ID"]
+            ns = target_job.get("Namespace", "default")
+            with urllib.request.urlopen(
+                f"{addr}/v1/job/{job_id}/allocations?namespace={ns}", timeout=10
+            ) as r:
+                allocs = json.load(r)
+            running_alloc = next(
+                (a for a in allocs if a.get("ClientStatus") == "running"), None
+            )
+            if running_alloc:
+                alloc_id = running_alloc["ID"]
+                missing = []
+                for subdir in REQUIRED_NFS_SUBDIRS:
+                    url = f"{addr}/v1/client/fs/ls/{alloc_id}?path=/mnt/openstudio/{subdir}"
+                    try:
+                        code = urllib.request.urlopen(url, timeout=5).status
+                        if code != 200:
+                            missing.append(subdir)
+                    except Exception:
+                        missing.append(subdir)
+                if missing:
+                    print(
+                        f"✗ NFS share at {registered_path} is missing required "
+                        f"subdirectories (run 'nomad-pack run' to trigger "
+                        f"init-shared-storage-perms, or create them manually):",
+                        file=sys.stderr,
+                    )
+                    for d in missing:
+                        print(f"    {registered_path}/{d}", file=sys.stderr)
+                    sys.exit(1)
+                print(f"✓ NFS share required subdirectories present ({', '.join(REQUIRED_NFS_SUBDIRS)})")
+    except Exception as exc:
+        print(f"⚠ Could not verify NFS subdirectory structure: {exc}")
 PY
 fi
 
