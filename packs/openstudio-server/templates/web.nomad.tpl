@@ -66,6 +66,26 @@ job "[[ var "job_name" . ]]-web" {
 
     [[ template "openstudio_server.wait_for_deps_task" (dict "root" . "include_rserve" true "proceed_on_timeout" (var "web_wait_for_deps_proceed_on_timeout" .)) ]]
 
+    [[ if var "web_nginx_tmpdir_in_alloc" . ]]
+    # Prestart: create nginx client_body_temp dir in the alloc's ephemeral disk so
+    # nginx temp files never fill the Docker overlay2 filesystem on the host node.
+    task "nginx-tmpdir" {
+      lifecycle {
+        hook    = "prestart"
+        sidecar = false
+      }
+      driver = "raw_exec"
+      config {
+        command = "/bin/bash"
+        args    = ["-c", "mkdir -p ${NOMAD_ALLOC_DIR}/tmp/nginx-body-temp && chown [[ var "docker_user" . ]] ${NOMAD_ALLOC_DIR}/tmp/nginx-body-temp && chmod 700 ${NOMAD_ALLOC_DIR}/tmp/nginx-body-temp && echo nginx_tmpdir_ready path=${NOMAD_ALLOC_DIR}/tmp/nginx-body-temp"]
+      }
+      resources {
+        cpu    = 50
+        memory = 32
+      }
+    }
+    [[ end ]]
+
     task "web" {
       driver = "docker"
       user   = "[[ var "docker_user" . ]]"
@@ -235,7 +255,12 @@ EOT
             type   = "volume"
             source = "[[ var "dev_shared_volume_name" . ]]"
             target = "[[ var "nfs_volume_mount_path" . ]]"
-          }
+          }[[ if var "web_nginx_tmpdir_in_alloc" . ]],
+          {
+            type   = "bind"
+            source = "${NOMAD_ALLOC_DIR}/tmp/nginx-body-temp"
+            target = "/opt/nginx/client_body_temp"
+          }[[ end ]]
         ]
         [[ else if var "dev_shared_data_path" . ]]
         mounts = [
@@ -243,6 +268,19 @@ EOT
             type   = "bind"
             source = "[[ var "dev_shared_data_path" . ]]"
             target = "[[ var "nfs_volume_mount_path" . ]]"
+          }[[ if var "web_nginx_tmpdir_in_alloc" . ]],
+          {
+            type   = "bind"
+            source = "${NOMAD_ALLOC_DIR}/tmp/nginx-body-temp"
+            target = "/opt/nginx/client_body_temp"
+          }[[ end ]]
+        ]
+        [[ else if var "web_nginx_tmpdir_in_alloc" . ]]
+        mounts = [
+          {
+            type   = "bind"
+            source = "${NOMAD_ALLOC_DIR}/tmp/nginx-body-temp"
+            target = "/opt/nginx/client_body_temp"
           }
         ]
         [[ end ]]

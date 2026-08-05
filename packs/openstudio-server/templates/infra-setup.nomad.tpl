@@ -267,6 +267,26 @@ else
   log "Nomad config already up to date; no restart needed"
 fi
 
+# ── Step 7: Set Consul http_max_conns_per_client ──────────────────────────────
+# Default of 100 is too low for large worker fleets where each worker node
+# runs ~4 concurrent Nomad template watches against the local Consul agent.
+# Without this, Consul returns HTTP 429 to the template engine, blocking
+# worker startups and causing Traefik to lose its catalog routes.
+CONSUL_HCL="/etc/consul.d/consul.hcl"
+if [ -f "$CONSUL_HCL" ]; then
+  if ! grep -q 'http_max_conns_per_client' "$CONSUL_HCL" 2>/dev/null; then
+    echo 'limits { http_max_conns_per_client = [[ var "consul_http_max_conns_per_client" . ]] }' >> "$CONSUL_HCL"
+    log "Added limits.http_max_conns_per_client=[[ var "consul_http_max_conns_per_client" . ]] to $CONSUL_HCL; restarting Consul"
+    systemctl restart consul
+    sleep 3
+    systemctl is-active consul && log "Consul restarted OK" || log "WARNING: consul restart failed on $(hostname)"
+  else
+    log "Consul limits.http_max_conns_per_client already set; skipping"
+  fi
+else
+  log "WARNING: $CONSUL_HCL not found; skipping Consul rate-limit config"
+fi
+
 log "Setup complete on $(hostname)"
 SCRIPT
       }

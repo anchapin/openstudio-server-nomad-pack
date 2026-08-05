@@ -661,6 +661,12 @@ variable "worker_autoscaling_evaluation_interval" {
   default     = "30s"
 }
 
+variable "worker_autoscaling_max_scale_delta" {
+  type        = number
+  description = "Maximum number of worker allocations to add or remove in a single autoscaler evaluation cycle. Prevents a mass scale-up event from flooding the cluster with thousands of new workers simultaneously when the Consul agent is unable to handle the sudden burst of template-engine requests (Consul 429 thundering-herd). Recommended: 200 for large fleets (5,000+ workers). Set to 0 to disable the delta limit (Nomad autoscaler default behavior). Only applies when worker_autoscaling_enabled = true."
+  default     = 200
+}
+
 variable "autoscaler_constraints" {
   type        = any
   description = "Placement constraints for the optional Nomad Autoscaler group."
@@ -2001,4 +2007,16 @@ variable "enable_infra_setup" {
   type        = bool
   description = "When true, renders the infra-setup client configuration system job. Disabled by default."
   default     = false
+}
+
+variable "consul_http_max_conns_per_client" {
+  type        = number
+  description = "Maximum concurrent HTTP connections Consul accepts per client IP on each agent (limits.http_max_conns_per_client). The Consul default of 100 is too low for large worker fleets: each worker node runs ~4 Nomad template watches against the local Consul agent simultaneously. Formula: ceil(workers_per_node × 4) × 2. For a 5,600-worker fleet across 20 nodes (280 workers/node × 4 = 1,120 connections/agent), set to 1500. Applied by the infra-setup system job; requires a Consul agent restart to take effect."
+  default     = 1500
+}
+
+variable "web_nginx_tmpdir_in_alloc" {
+  type        = bool
+  description = "When true, bind-mounts NOMAD_ALLOC_DIR/tmp/nginx-body-temp over /opt/nginx/client_body_temp inside the web container. Prevents nginx client body temp files from filling the Docker overlay2 filesystem on the host node (which causes 502 errors). A prestart raw_exec task creates and chowns the directory before the web container starts. Requires raw_exec driver and Docker volumes.enabled=true on Nomad clients (both set by infra-setup). Default true."
+  default     = true
 }

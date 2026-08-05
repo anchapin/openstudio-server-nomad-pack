@@ -42,6 +42,9 @@ job "[[ var "job_name" . ]]-worker" {
         cooldown             = "[[ var "worker_autoscaling_scale_down_cooldown" . ]]"
         cooldown_on_scale_up = "[[ var "worker_autoscaling_scale_up_cooldown" . ]]"
         evaluation_interval  = "[[ var "worker_autoscaling_evaluation_interval" . ]]"
+        [[ if gt (var "worker_autoscaling_max_scale_delta" .) 0 ]]
+        max_scale_delta = [[ var "worker_autoscaling_max_scale_delta" . ]]
+        [[ end ]]
 
         [[ if var "worker_autoscaling_cpu_enabled" . ]]
         check "cpu-utilization" {
