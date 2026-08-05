@@ -9,7 +9,7 @@ job "[[ var "job_name" . ]]-worker" {
     deployment_marker = "[[ var "deployment_marker" . ]]"
   }
 
-  [[ template "openstudio_server.update_block" (dict "max_parallel" (var "worker_update_max_parallel" .) "canary" (var "worker_canary_count" .) "auto_promote" (var "worker_auto_promote" .) "stagger" (var "worker_update_stagger" .) "health_check" "checks" "min_healthy_time" (var "worker_min_healthy_time" .) "healthy_deadline" (var "worker_update_healthy_deadline" .) "progress_deadline" (var "worker_update_progress_deadline" .) "auto_revert" true) ]]
+  [[ template "openstudio_server.update_block" (dict "max_parallel" (var "worker_update_max_parallel" .) "canary" (var "worker_canary_count" .) "auto_promote" (var "worker_auto_promote" .) "stagger" (var "worker_update_stagger" .) "health_check" (var "worker_update_health_check" .) "min_healthy_time" (var "worker_min_healthy_time" .) "healthy_deadline" (var "worker_update_healthy_deadline" .) "progress_deadline" (var "worker_update_progress_deadline" .) "auto_revert" true) ]]
 
   group "worker" {
     count = [[ var "worker_count" . ]]

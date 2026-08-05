@@ -439,6 +439,12 @@ variable "worker_auto_promote" {
   default     = false
 }
 
+variable "worker_update_health_check" {
+  type        = string
+  description = "Health check strategy for the worker canary deployment. Use 'task_states' for short-lived batch workers (healthy when running for min_healthy_time). Use 'checks' for long-running workers with Consul service health checks."
+  default     = "task_states"
+}
+
 variable "worker_update_stagger" {
   type        = string
   description = "Optional delay between worker allocation updates. Leave empty for Nomad default behavior."

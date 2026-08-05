@@ -78,6 +78,7 @@
 | `worker_update_max_parallel` | `number` | `1` | Maximum number of worker allocations updated in parallel. Increase in high-scale fleets to retire bad worker versions faster than single-file rolling updates. |
 | `worker_canary_count` | `number` | `10` | Number of canary allocations to place before promoting a worker job update. |
 | `worker_auto_promote` | `bool` | `false` | Automatically promote canary allocations if health checks pass. Set to true only with a reliable health check configured. |
+| `worker_update_health_check` | `string` | `"task_states"` | Health check strategy for the worker canary deployment. Use 'task_states' for short-lived batch workers (healthy when running for min_healthy_time). Use 'checks' for long-running workers with Consul service health checks. |
 | `worker_update_stagger` | `string` | `""` | Optional delay between worker allocation updates. Leave empty for Nomad default behavior. |
 | `worker_min_healthy_time` | `string` | `"2m"` | Minimum time a worker canary allocation must be healthy before it is eligible for promotion. |
 | `worker_update_healthy_deadline` | `string` | `"5m"` | Maximum time for a worker allocation to become healthy. |

@@ -7,8 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added `worker_update_health_check` variable (default `task_states`) to make the worker canary deployment health strategy configurable. Batch-style workers complete their job and exit before the `checks` health strategy's `min_healthy_time` window, preventing canary promotion; `task_states` only requires the task to be in the running state for `min_healthy_time`.
+
 ### Fixed
 - Raised `vector_memory_mb` from 256 MB to 512 MB in `examples/advanced/openstack-production.hcl` to prevent the Vector log sidecar from being OOM-killed during high-volume MongoDB operations (bulk `updateMany` log bursts exceeded the 256 MB limit, killing the sidecar and causing MongoDB to be torn down as a sibling task failure).
+- Raised `worker_preflight_max_attempts` to 15 and `worker_preflight_sleep_seconds` to 5 in `openstack-production.hcl`; set `worker_wait_for_deps_proceed_on_timeout = true` to prevent thundering-herd Consul 429 rate-limiting during large-scale simultaneous worker startup from cascading into allocation failures.
 - Fixed `scripts/requeue-stuck-datapoints.sh` reading the entire DP ID file as a single concatenated string: `tr -d '[:space:]'` stripped all whitespace including newlines; changed to `tr -d '\r'` to only strip Windows-style carriage returns, preserving newline delimiters between UUIDs.
 - Fixed `fresh-redeploy-openstack.sh` aborting before `nomad-pack run` when NFS data was wiped: `preflight-storage.sh` NFS subdirectory check now receives `--skip-nfs-subdir-check` after an NFS wipe so it does not fail with a false-negative (`server/assets/analyses` and `server/R` are intentionally absent and will be re-created by `init-shared-storage-perms` on the upcoming deploy).
 - Fixed `preflight-storage.sh` NFS host-volume check being silently skipped when `nfs_volume_type = "host_volume"` is explicitly set in a var-file (e.g. `openstack.hcl`): the internal fallback default was `"host"` while `variables.hcl` defines `"host_volume"` as the canonical value; both the default and the comparison now use `"host_volume"`.

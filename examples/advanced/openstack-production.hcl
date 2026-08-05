@@ -315,12 +315,19 @@ worker_autoscaling_scale_down_cooldown = "10m"
 # auto_revert is always enforced by the pack so failed canaries roll back automatically.
 # progress_deadline="0": disables rollout timeout at large cluster capacity.
 worker_canary_count             = 25
-worker_auto_promote             = false
+worker_auto_promote             = true    # safe with task_states health check; avoids manual promotion overhead
+worker_update_health_check      = "task_states"  # batch workers complete before 'checks' min_healthy_time; use task_states
 worker_update_max_parallel      = 100
 worker_update_stagger           = "15s"
-worker_min_healthy_time         = "1m"
+worker_min_healthy_time         = "10s"   # lowered from 1m — batch workers complete quickly; 10s is sufficient
 worker_update_healthy_deadline  = "10m"
 worker_update_progress_deadline = "0"
+
+# Worker preflight resilience — raise attempt count to survive Consul thundering-herd
+# rate-limiting (HTTP 429) during large-scale simultaneous worker startup.
+worker_wait_for_deps_proceed_on_timeout = true   # workers start even if Consul is momentarily rate-limiting
+worker_preflight_max_attempts           = 15     # was 5; extra attempts absorb transient 429s during scale-up
+worker_preflight_sleep_seconds          = 5      # was 2; backs off between retries to reduce Consul load
 
 # ---------- MongoDB ----------
 # 2 000 MHz / 4 096 MB covers observed query load during Stage 3 soak.
