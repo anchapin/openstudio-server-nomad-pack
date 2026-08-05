@@ -164,7 +164,7 @@ if [[ "$CLEAR_QUEUE" == "true" ]]; then
 fi
 
 # --- load DP IDs ---
-mapfile -t DP_IDS < <(grep -v '^[[:space:]]*$' "$DP_FILE" | tr -d '[:space:]')
+mapfile -t DP_IDS < <(grep -v '^[[:space:]]*$' "$DP_FILE" | tr -d '\r')
 TOTAL="${#DP_IDS[@]}"
 log "Loaded ${TOTAL} data point IDs from ${DP_FILE}"
 
