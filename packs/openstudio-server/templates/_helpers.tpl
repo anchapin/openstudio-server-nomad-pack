@@ -125,8 +125,11 @@ EOH
   }
 
   resources {
-    cpu    = 100
-    memory = [[ var "vector_memory_mb" . ]]
+    cpu        = 100
+    memory     = [[ var "vector_memory_mb" . ]]
+    [[ if gt (var "vector_memory_max_mb" .) 0 ]]
+    memory_max = [[ var "vector_memory_max_mb" . ]]
+    [[ end ]]
   }
 }
 [[ end -]]
@@ -261,6 +264,16 @@ check_service() {
   fi
   return 1
 }
+
+# Stagger preflight start across large worker fleets to avoid Consul 429 thundering-herd.
+# With N workers starting simultaneously, each makes 3+ Consul HTTP requests — without
+# jitter the request wave is synchronized and Consul returns 429, failing all preflights.
+JITTER_MAX=[[ var "worker_preflight_jitter_max_seconds" .root ]]
+if [ "$JITTER_MAX" -gt 0 ]; then
+  jitter=$(( (RANDOM % JITTER_MAX) + 1 ))
+  echo "preflight_check service=all status=jitter sleep=${jitter}s"
+  sleep "$jitter"
+fi
 
 check_service "openstudio-db" "27017"
 check_service "openstudio-redis" "6379"

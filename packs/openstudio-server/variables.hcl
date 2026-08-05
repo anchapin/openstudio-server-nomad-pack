@@ -114,6 +114,12 @@ variable "traefik_consul_catalog_address" {
   default     = "127.0.0.1:8500"
 }
 
+variable "traefik_consul_refresh_interval" {
+  type        = string
+  description = "How frequently Traefik polls the Consul Catalog for service changes. Lower values reduce the delay before Traefik routes to a new backend after recovery. Default 10s (Traefik v3 default is 15s; shorter interval ensures faster failback when a web backend returns after an outage)."
+  default     = "10s"
+}
+
 variable "nomad_namespace" {
   type        = string
   description = "The Nomad namespace in which all pack jobs are registered. Use 'default' for the built-in namespace."
@@ -515,6 +521,12 @@ variable "worker_preflight_sleep_seconds" {
   type        = number
   description = "Sleep duration (seconds) between worker dependency preflight attempts."
   default     = 2
+}
+
+variable "worker_preflight_jitter_max_seconds" {
+  type        = number
+  description = "Maximum random initial sleep (seconds) added to each worker preflight before the first Consul check. With many workers starting simultaneously (e.g. scale-from-zero on a large fleet), each preflight makes 3+ synchronous Consul HTTP requests — without jitter the request wave is synchronized and Consul returns 429, failing all preflights. A random sleep in [1, worker_preflight_jitter_max_seconds] spreads the wave. Set to 0 to disable jitter (not recommended for fleets > 50 workers). Default 30 spreads a 4,000-worker fleet across 30 seconds (~133 workers/second peak vs. ~4,000 instantaneous)."
+  default     = 30
 }
 
 variable "worker_preflight_connect_timeout_seconds" {
@@ -1132,8 +1144,14 @@ variable "vector_image" {
 
 variable "vector_memory_mb" {
   type        = number
-  description = "Memory allocation in MB for the Vector sidecar."
-  default     = 256
+  description = "Memory allocation in MB for the Vector sidecar. Raised from 256 to 512: high-volume MongoDB operations (bulk updateMany on thousands of documents) generate log bursts that OOM-kill Vector at 256 MB, exhausting its restart attempts and causing Nomad to tear down the entire task group (including MongoDB or Redis as siblings). 512 MB soft + vector_memory_max_mb hard cap prevents this cascade."
+  default     = 512
+}
+
+variable "vector_memory_max_mb" {
+  type        = number
+  description = "Memory hard limit (Nomad memory_max) in MB for the Vector sidecar. Set to 0 to use no hard cap (soft limit only). Recommended: 1024 MB to allow burst headroom during log spikes without OOM-killing the sidecar. Must be greater than vector_memory_mb when non-zero."
+  default     = 1024
 }
 
 # Scheduling helper inputs

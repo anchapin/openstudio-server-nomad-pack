@@ -33,6 +33,8 @@ job "[[ var "job_name" . ]]-traefik" {
         ports        = ["http", "https", "dashboard"]
         args = [
           "--providers.consulcatalog.endpoint.address=[[ var "traefik_consul_catalog_address" . ]]",
+          "--providers.consulcatalog.refreshinterval=[[ var "traefik_consul_refresh_interval" . ]]",
+          "--providers.consulcatalog.requireConsistent=true",
           "--entrypoints.web.address=:[[ var "traefik_http_port" . ]]",
           "--entrypoints.web.transport.respondingTimeouts.readTimeout=[[ var "traefik_read_timeout" . ]]",
           "--entrypoints.web.transport.respondingTimeouts.writeTimeout=[[ var "traefik_write_timeout" . ]]",

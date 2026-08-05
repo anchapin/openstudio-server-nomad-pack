@@ -24,6 +24,7 @@
 | `traefik_read_timeout` | `string` | `"300s"` | Traefik entrypoint read timeout (time to read the full request from the client). Only applies when deploy_traefik = true. |
 | `traefik_write_timeout` | `string` | `"300s"` | Traefik entrypoint write timeout (time to write the full response to the client). Only applies when deploy_traefik = true. |
 | `traefik_consul_catalog_address` | `string` | `"127.0.0.1:8500"` | Consul HTTP endpoint used by Traefik's Consul Catalog provider (host:port). Use 127.0.0.1:8500 when Consul agent is local on Nomad clients; override when Traefik cannot reach local Consul. |
+| `traefik_consul_refresh_interval` | `string` | `"10s"` | How frequently Traefik polls the Consul Catalog for service changes. Lower values reduce the delay before Traefik routes to a new backend after recovery. Default 10s (Traefik v3 default is 15s; shorter interval ensures faster failback when a web backend returns after an outage). |
 | `nomad_namespace` | `string` | `"default"` | The Nomad namespace in which all pack jobs are registered. Use 'default' for the built-in namespace. |
 | `region` | `string` | `"global"` | The Nomad region where the job will be deployed. |
 | `datacenters` | `list(string)` | `["dc1"]` | A list of datacenters in the region which are eligible for task placement. |
@@ -91,6 +92,7 @@
 | `worker_wait_for_deps_proceed_on_timeout` | `bool` | `false` | If true, worker dependency preflight timeouts log and continue startup. If false (default), the preflight task exits non-zero so Nomad surfaces the failed dependency explicitly. |
 | `worker_preflight_max_attempts` | `number` | `5` | Maximum number of worker dependency preflight attempts per service before failing the allocation. Defaults keep the bounded retry window below 30 seconds. |
 | `worker_preflight_sleep_seconds` | `number` | `2` | Sleep duration (seconds) between worker dependency preflight attempts. |
+| `worker_preflight_jitter_max_seconds` | `number` | `30` | Maximum random initial sleep (seconds) added to each worker preflight before the first Consul check. With many workers starting simultaneously (e.g. scale-from-zero on a large fleet), each preflight makes 3+ synchronous Consul HTTP requests — without jitter the request wave is synchronized and Consul returns 429, failing all preflights. A random sleep in [1, worker_preflight_jitter_max_seconds] spreads the wave. Set to 0 to disable jitter (not recommended for fleets > 50 workers). Default 30 spreads a 4,000-worker fleet across 30 seconds (~133 workers/second peak vs. ~4,000 instantaneous). |
 | `worker_preflight_connect_timeout_seconds` | `number` | `2` | HTTP and TCP connect timeout (seconds) for each worker dependency preflight attempt. |
 | `worker_priority` | `number` | `40` | Nomad job priority for calculation workers (Nomad scale 1–100). Must always be less than web_priority so the web UI is scheduled preferentially during resource contention. Mirrors the Kubernetes low-priority PriorityClass (value 10000) used by the Helm chart. WARNING: do not set this higher than or equal to web_priority. |
 | `worker_queues` | `string` | `"requeued,simulations"` | Comma-separated queue list processed by worker tasks. |
@@ -191,7 +193,8 @@
 | `log_max_files` | `number` | `3` | The maximum number of log files to keep. |
 | `enable_vector_collection` | `bool` | `true` | Enable Vector sidecar for log collection. |
 | `vector_image` | `string` | `"timberio/vector:0.30.0-alpine"` | The Vector image name and tag. |
-| `vector_memory_mb` | `number` | `256` | Memory allocation in MB for the Vector sidecar. |
+| `vector_memory_mb` | `number` | `512` | Memory allocation in MB for the Vector sidecar. Raised from 256 to 512: high-volume MongoDB operations (bulk updateMany on thousands of documents) generate log bursts that OOM-kill Vector at 256 MB, exhausting its restart attempts and causing Nomad to tear down the entire task group (including MongoDB or Redis as siblings). 512 MB soft + vector_memory_max_mb hard cap prevents this cascade. |
+| `vector_memory_max_mb` | `number` | `1024` | Memory hard limit (Nomad memory_max) in MB for the Vector sidecar. Set to 0 to use no hard cap (soft limit only). Recommended: 1024 MB to allow burst headroom during log spikes without OOM-killing the sidecar. Must be greater than vector_memory_mb when non-zero. |
 | `db_constraints` | `any` | `[]` | Placement constraints for the db group. |
 | `web_constraints` | `any` | `[]` | Placement constraints for the web group. Use to pin the web task to nodes with sufficient disk (e.g. 179d nodes) for large Docker image pulls. |
 | `db_affinities` | `any` | `[]` | Placement affinities for the db group. |
