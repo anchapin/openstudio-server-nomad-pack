@@ -53,6 +53,10 @@ job "[[ var "job_name" . ]]-web" {
     [[ end ]]
     [[ end ]]
 
+    ephemeral_disk {
+      size = [[ var "web_disk_mb" . ]]
+    }
+
     network {
       port "http" {
         static = [[ var "web_port" . ]]
@@ -314,6 +318,10 @@ EOT
     }
     [[ end ]]
     [[ end ]]
+
+    ephemeral_disk {
+      size = [[ var "web_disk_mb" . ]]
+    }
 
     [[ if var "nfs_shared_volume_enabled" . ]]
     # Prestart: create and chmod the shared analysis directory on NFS before workers start.

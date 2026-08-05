@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Added `worker_update_health_check` variable (default `task_states`) to make the worker canary deployment health strategy configurable. Batch-style workers complete their job and exit before the `checks` health strategy's `min_healthy_time` window, preventing canary promotion; `task_states` only requires the task to be in the running state for `min_healthy_time`.
+- Added `web_disk_mb` variable (default `10240` MB) and `ephemeral_disk` blocks to the `web` and `web-background` task groups. The default Nomad ephemeral disk (300 MB) fills rapidly when many workers concurrently POST result files through nginx `client_body_temp` and Rack/Paperclip `/tmp`; 10 GB prevents the disk-full condition that caused nginx 500s and Traefik to return 404 to the browser.
 
 ### Fixed
 - Raised `vector_memory_mb` from 256 MB to 512 MB in `examples/advanced/openstack-production.hcl` to prevent the Vector log sidecar from being OOM-killed during high-volume MongoDB operations (bulk `updateMany` log bursts exceeded the 256 MB limit, killing the sidecar and causing MongoDB to be torn down as a sibling task failure).

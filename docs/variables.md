@@ -34,6 +34,7 @@
 | `web_cpu` | `number` | `1000` | CPU shares allocated to the OpenStudio Web task. |
 | `web_memory` | `number` | `2048` | Memory (MB) allocated to the OpenStudio Web task. |
 | `web_memory_max` | `number` | `4096` | Memory hard limit (MB) for the OpenStudio Web task (Nomad memory_max). Must be greater than web_memory for burst capacity. |
+| `web_disk_mb` | `number` | `10240` | Ephemeral disk size in MB for the web and web-background task groups. The web container uses /tmp for Rack multipart upload staging, Paperclip temp file processing, and nginx client_body_temp buffering. With many workers uploading result files concurrently, the default Nomad ephemeral disk (300 MB) fills quickly and causes nginx to return 500 errors. Set to at least 10240 (10 GB) for production deployments with more than 10 concurrent workers. |
 | `web_passenger_memory_per_process` | `number` | `250` | Passenger memory budget (MB) per web process used to derive MAX_POOL when web_max_pool is unset. Formula: ceil((web_memory * 0.75) / web_passenger_memory_per_process). Mirrors Helm passenger_memory_per_process behavior. |
 | `web_max_pool` | `number` | `0` | Explicit Passenger MAX_POOL for the web task. Set to 0 to auto-calculate from web_memory and web_passenger_memory_per_process. |
 | `web_max_requests_multiplier` | `number` | `1.05` | Multiplier used to derive web MAX_REQUESTS from worker_max_replicas when web_max_requests is unset. Mirrors Helm behavior (maxReplicas * 1.05). |

@@ -175,6 +175,12 @@ variable "web_memory_max" {
   default     = 4096
 }
 
+variable "web_disk_mb" {
+  type        = number
+  description = "Ephemeral disk size in MB for the web and web-background task groups. The web container uses /tmp for Rack multipart upload staging, Paperclip temp file processing, and nginx client_body_temp buffering. With many workers uploading result files concurrently, the default Nomad ephemeral disk (300 MB) fills quickly and causes nginx to return 500 errors. Set to at least 10240 (10 GB) for production deployments with more than 10 concurrent workers."
+  default     = 10240
+}
+
 variable "web_passenger_memory_per_process" {
   type        = number
   description = "Passenger memory budget (MB) per web process used to derive MAX_POOL when web_max_pool is unset. Formula: ceil((web_memory * 0.75) / web_passenger_memory_per_process). Mirrors Helm passenger_memory_per_process behavior."
