@@ -1584,6 +1584,30 @@ variable "queue_sweeper_replay_delay_seconds" {
   default     = 10
 }
 
+variable "enable_orphan_dp_auto_reset" {
+  type        = bool
+  description = "When true, the queue-sweeper resets data points stuck in 'started' status for longer than orphan_dp_stale_hours back to 'queued' and re-enqueues them into resque:queue:simulations (payload class ResqueJobs::RunSimulateDataPoint, single-arg [dp_id]). Recovers simulations orphaned by workers killed mid-job during scale-down or node drain — the same infra-recoverable failure class as PruneDeadWorkerDirtyExit. The sweep-state task runs in the openstudio-server image (web_image) using the bundled mongo and redis gems, so it requires the web image to be deployed. Requires enable_queue_sweeper = true."
+  default     = true
+}
+
+variable "orphan_dp_stale_hours" {
+  type        = number
+  description = "Hours a data point may remain in 'started' status before the queue-sweeper considers it an orphan and auto-resets it to 'queued' (and re-enqueues its Resque job). Must be greater than the longest legitimate simulation run time plus headroom; the default 2h is safe for typical 45-75 min EnergyPlus runs."
+  default     = 2
+}
+
+variable "enable_resque_mongodb_reconcile" {
+  type        = bool
+  description = "When true, the queue-sweeper compares data points in Mongo status='queued' against the entries present in resque:queue:simulations and re-enqueues (LPUSH) any that are missing from Resque, capped at resque_mongodb_reconcile_max_requeue per cycle. Recovers datapoints lost when a queue was cleared or Redis state was rebuilt without the matching Mongo updates (e.g. after the 2026-08-05 Consul 429 orphan-reset incident). The sweep-state task runs in the openstudio-server image (web_image) using the bundled mongo and redis gems. Requires enable_queue_sweeper = true."
+  default     = true
+}
+
+variable "resque_mongodb_reconcile_max_requeue" {
+  type        = number
+  description = "Maximum number of missing 'queued' data points the Resque<->MongoDB reconciliation re-enqueues per sweep cycle. Caps bulk re-enqueue burst to avoid overwhelming the queue (mirrors the staggered-replay guidance for queue_sweeper_replay_dirty_exit)."
+  default     = 500
+}
+
 variable "queue_sweeper_consul_retry_attempts" {
   type        = number
   description = "Maximum fallback Consul health-API retries when queue-sweeper cannot reach Redis via `openstudio-redis.service.consul` DNS. Transient 429/5xx responses are treated as non-fatal skip-cycle after this bounded retry budget."

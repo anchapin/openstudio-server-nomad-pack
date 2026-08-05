@@ -213,6 +213,290 @@ EOH
         REDIS_URL = "[[ var "web_redis_url" . ]]"
       }
     }
+
+    [[ if or (var "enable_orphan_dp_auto_reset" .) (var "enable_resque_mongodb_reconcile" .) ]]
+    # State reconciliation for infra-recoverable queue failures:
+    #  1. enable_orphan_dp_auto_reset    - 'started' DPs stuck > orphan_dp_stale_hours
+    #  2. enable_resque_mongodb_reconcile - 'queued' DPs missing from the Resque queue
+    # Runs in the openstudio-server image (web_image) where the bundled mongo and
+    # redis gems are available (mongoid/resque dependencies), so neither store needs
+    # a CLI tool. The web image must be deployed for this task to run.
+    task "sweep-state" {
+      driver = "docker"
+      user   = "[[ var "docker_user" . ]]"
+
+      config {
+        image           = "[[ var "web_image" . ]]"
+        entrypoint      = ["/bin/sh", "-ec"]
+        args            = ["cd /opt/openstudio/server && bundle exec ruby /local/sweep_state.rb"]
+        readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
+      }
+
+      template {
+        destination = "local/sweep_state.rb"
+        perms       = "644"
+        data        = <<EOH
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# sweep_state.rb - queue-sweeper state reconciliation.
+#
+# Recovers simulations lost to infra failures (node drain, scale-down, worker
+# kill) without manual intervention:
+#
+#  1. Orphan DP auto-reset (enable_orphan_dp_auto_reset)
+#     Data points stuck in 'started' longer than orphan_dp_stale_hours are reset
+#     to 'queued' in Mongo (clearing run_start_time/status_message) and
+#     re-enqueued into resque:queue:simulations with the single-arg Resque
+#     payload ResqueJobs::RunSimulateDataPoint.
+#
+#  2. Resque <-> MongoDB reconcile (enable_resque_mongodb_reconcile)
+#     Data points in Mongo status='queued' that are missing from
+#     resque:queue:simulations are re-enqueued (LPUSH), capped at
+#     resque_mongodb_reconcile_max_requeue per cycle. Recovers datapoints lost
+#     when the queue was cleared or Redis state rebuilt without matching Mongo
+#     updates.
+#
+# Exit codes: 0 = clean or store unreachable (skip cycle, mirroring sweep.sh);
+# 1 = hard script error (surfaces via the group restart policy). Service
+# discovery mirrors sweep.sh: try the Consul DNS name first, then resolve the
+# address via the Consul HTTP health API.
+
+require "json"
+require "net/http"
+require "time"
+require "redis"
+require "mongo"
+
+mongo_host = ENV.fetch("MONGO_HOST", "openstudio-db.service.consul")
+mongo_port = ENV.fetch("MONGO_PORT", "27017")
+mongo_db = ENV.fetch("MONGO_DB", "os_docker")
+mongo_user = ENV.fetch("MONGO_USER", "")
+mongo_password = ENV.fetch("MONGO_PASSWORD", "")
+
+redis_host = ENV.fetch("REDIS_HOST", "openstudio-redis.service.consul")
+redis_port = ENV.fetch("REDIS_PORT", "6379").to_i
+redis_password = ENV.fetch("REDIS_PASSWORD", "")
+
+consul_addr = ENV.fetch("CONSUL_ADDR", "127.0.0.1:8500")
+consul_retry_attempts = ENV.fetch("CONSUL_RETRY_ATTEMPTS", "6").to_i
+consul_retry_backoff = ENV.fetch("CONSUL_RETRY_BACKOFF", "1").to_i
+
+resque_queue_key = "resque:queue:simulations"
+resque_payload_class = "ResqueJobs::RunSimulateDataPoint"
+stale_dp_hours = [[ var "orphan_dp_stale_hours" . ]]
+max_requeue = [[ var "resque_mongodb_reconcile_max_requeue" . ]]
+
+def log(message)
+  puts message
+  $stdout.flush
+end
+
+def resque_payload(dp_id, payload_class)
+  JSON.generate("class" => payload_class, "args" => [dp_id])
+end
+
+def payload_dp_id(payload)
+  parsed = JSON.parse(payload)
+  args = parsed["args"]
+  args.is_a?(Array) ? args.first.to_s : nil
+rescue StandardError
+  nil
+end
+
+def resolve_service_ip_via_consul(service, consul_addr, retry_attempts, retry_backoff)
+  attempt = 1
+  delay = retry_backoff
+  while attempt <= retry_attempts
+    begin
+      uri = URI("http://#{consul_addr}/v1/health/service/#{service}?passing=true")
+      response = Net::HTTP.get_response(uri)
+      status = response.code.to_i
+      if response.is_a?(Net::HTTPSuccess)
+        JSON.parse(response.body).each do |entry|
+          svc = entry["Service"] || {}
+          node = entry["Node"] || {}
+          addr = svc["Address"] || node["Address"] || ""
+          return addr unless addr.empty?
+        end
+      end
+      if status == 429 || (status >= 500 && status < 600)
+        log "queue_sweeper_warn msg=consul_transient status=#{status} attempt=#{attempt}/#{retry_attempts}"
+      end
+    rescue StandardError => e
+      log "queue_sweeper_warn msg=consul_error detail=#{e.message} attempt=#{attempt}/#{retry_attempts}"
+    end
+    sleep delay
+    delay = [delay * 2, 8].min
+    attempt += 1
+  end
+  nil
+end
+
+def mongo_uri(host, port, db, user, password)
+  if user.empty?
+    "mongodb://#{host}:#{port}/#{db}"
+  else
+    "mongodb://#{user}:#{password}@#{host}:#{port}/#{db}?authSource=admin"
+  end
+end
+
+def redis_connect(host, port, password)
+  options = { host: host, port: port, timeout: 5 }
+  options[:password] = password unless password.empty?
+  Redis.new(options)
+end
+
+def redis_reachable?(client)
+  client.ping
+  true
+rescue StandardError
+  false
+end
+
+# --- Redis: try the Consul DNS name first, then the Consul HTTP API ---
+redis = redis_connect(redis_host, redis_port, redis_password)
+unless redis_reachable?(redis)
+  resolved = resolve_service_ip_via_consul("openstudio-redis", consul_addr, consul_retry_attempts, consul_retry_backoff)
+  if resolved
+    log "queue_sweeper_warn msg=redis_consul_resolved host=#{resolved}"
+    redis_host = resolved
+    redis = redis_connect(redis_host, redis_port, redis_password)
+  end
+end
+unless redis_reachable?(redis)
+  log "queue_sweeper_warn msg=redis_unreachable action=skip_cycle"
+  exit 0
+end
+
+# --- MongoDB: same DNS-first-then-Consul-API approach ---
+mongo_client = Mongo::Client.new(
+  mongo_uri(mongo_host, mongo_port, mongo_db, mongo_user, mongo_password),
+  server_selection_timeout: 5,
+  connect_timeout: 5,
+  socket_timeout: 10
+)
+begin
+  mongo_client.database_names
+rescue StandardError
+  resolved = resolve_service_ip_via_consul("openstudio-db", consul_addr, consul_retry_attempts, consul_retry_backoff)
+  if resolved
+    log "queue_sweeper_warn msg=mongo_consul_resolved host=#{resolved}"
+    mongo_client.close
+    mongo_host = resolved
+    mongo_client = Mongo::Client.new(
+      mongo_uri(mongo_host, mongo_port, mongo_db, mongo_user, mongo_password),
+      server_selection_timeout: 5,
+      connect_timeout: 5,
+      socket_timeout: 10
+    )
+  end
+  begin
+    mongo_client.database_names
+  rescue StandardError
+    log "queue_sweeper_warn msg=mongo_unreachable action=skip_cycle"
+    mongo_client.close
+    exit 0
+  end
+end
+
+log "queue_sweeper_state_start mongodb=#{mongo_host}:#{mongo_port}/#{mongo_db} redis=#{redis_host}:#{redis_port}"
+
+[[ if var "enable_orphan_dp_auto_reset" . ]]
+# --- Orphan DP auto-reset: 'started' too long -> 'queued' + re-enqueued ---
+begin
+  cutoff = Time.now.utc - (stale_dp_hours * 3600)
+  orphans = mongo_client[:data_points].find(
+    "status" => "started",
+    "run_start_time" => { "$lt" => cutoff }
+  ).to_a
+  log "orphan_dp_scan stale_hours=#{stale_dp_hours} started_stale=#{orphans.size}"
+  orphans.each do |dp|
+    dp_id = dp["_id"].to_s
+    old_start_time = dp["run_start_time"]
+    mongo_client[:data_points].update_one(
+      { "_id" => dp["_id"] },
+      {
+        "$set"   => { "status" => "queued" },
+        "$unset" => { "run_start_time" => "", "status_message" => "" }
+      }
+    )
+    redis.rpush(resque_queue_key, resque_payload(dp_id, resque_payload_class))
+    log "orphan_dp_reset dp_id=#{dp_id} old_start_time=#{old_start_time}"
+  end
+rescue StandardError => e
+  log "queue_sweeper_error msg=orphan_dp_reset_failed detail=#{e.message}"
+  exit 1
+end
+[[ end ]]
+
+[[ if var "enable_resque_mongodb_reconcile" . ]]
+# --- Resque <-> MongoDB reconcile: 'queued' in Mongo but missing from Resque ---
+begin
+  queued_ids = mongo_client[:data_points].find("status" => "queued").projection("_id" => 1).to_a.map { |dp| dp["_id"].to_s }
+  queue_payloads = redis.lrange(resque_queue_key, 0, -1)
+  present_ids = queue_payloads.map { |payload| payload_dp_id(payload) }.compact
+  missing = queued_ids - present_ids
+  requeued = 0
+  missing.each do |dp_id|
+    break if requeued >= max_requeue
+    redis.lpush(resque_queue_key, resque_payload(dp_id, resque_payload_class))
+    log "resque_mongodb_reconcile_requeue dp_id=#{dp_id}"
+    requeued += 1
+  end
+  log "resque_mongodb_reconcile_summary total_queued=#{queued_ids.size} missing_from_resque=#{missing.size} requeued=#{requeued}"
+rescue StandardError => e
+  log "queue_sweeper_error msg=resque_mongodb_reconcile_failed detail=#{e.message}"
+  exit 1
+end
+[[ end ]]
+
+mongo_client.close
+log "queue_sweeper_state_summary complete"
+EOH
+      }
+
+      [[ template "openstudio_server.vault_integration_block" . ]]
+      [[ template "openstudio_server.vault_block" (dict "root" .) ]]
+
+      [[ if var "vault_integration_enabled" . ]]
+      template {
+        destination = "secrets/env"
+        env         = true
+        change_mode = "restart"
+        data        = <<-EOT
+{{ with secret "[[ var "vault_kv_mongodb_path" . ]]" }}
+MONGO_PASSWORD={{ .Data.data.password | toJSON }}
+{{ end }}
+{{ with secret "[[ var "vault_kv_redis_path" . ]]" }}
+REDIS_PASSWORD={{ .Data.data.password | toJSON }}
+{{ end }}
+EOT
+      }
+      [[ end ]]
+
+      env {
+        MONGO_HOST            = "openstudio-db.service.consul"
+        MONGO_PORT            = "27017"
+        MONGO_DB              = "os_docker"
+        MONGO_USER            = "[[ var "mongo_user" . ]]"
+        REDIS_HOST            = "openstudio-redis.service.consul"
+        REDIS_PORT            = "6379"
+        CONSUL_ADDR           = "[[ var "consul_address" . ]]"
+        CONSUL_RETRY_ATTEMPTS = "[[ var "queue_sweeper_consul_retry_attempts" . ]]"
+        CONSUL_RETRY_BACKOFF  = "[[ var "queue_sweeper_consul_retry_backoff_seconds" . ]]"
+        [[ if not (var "vault_integration_enabled" .) ]]
+        MONGO_PASSWORD = "[[ var "mongo_password" . ]]"
+        REDIS_PASSWORD = "[[ var "redis_password" . ]]"
+        [[ end ]]
+      }
+
+      resources {
+        cpu    = [[ var "queue_sweeper_cpu" . ]]
+        memory = [[ var "queue_sweeper_memory" . ]]
+      }
+    }
+    [[ end ]]
   }
 
   group "queue-health-alert" {
