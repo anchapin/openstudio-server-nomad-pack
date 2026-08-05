@@ -251,10 +251,10 @@ update_alias() {
   fi
 }
 
-update_alias db    '{{ with service "openstudio-db" }}{{ (index . 0).Address }}{{ end }}'
-update_alias queue '{{ with service "openstudio-redis" }}{{ (index . 0).Address }}{{ end }}'
-update_alias rserve '{{ with service "openstudio-rserve" }}{{ (index . 0).Address }}{{ end }}'
-update_alias web   '{{ with service "openstudio-web" }}{{ (index . 0).Address }}{{ end }}'
+update_alias db    '{{ with service "openstudio-db" "any" }}{{ (index . 0).Address }}{{ end }}'
+update_alias queue '{{ with service "openstudio-redis" "any" }}{{ (index . 0).Address }}{{ end }}'
+update_alias rserve '{{ with service "openstudio-rserve" "any" }}{{ (index . 0).Address }}{{ end }}'
+update_alias web   '{{ with service "openstudio-web" "any" }}{{ (index . 0).Address }}{{ end }}'
 EOT
       }
 
