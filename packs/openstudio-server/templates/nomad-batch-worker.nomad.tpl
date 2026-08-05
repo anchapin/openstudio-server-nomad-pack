@@ -140,8 +140,8 @@ update_alias() {
   fi
 }
 
-update_alias "db"    "{{ with service "openstudio-db"    }}{{ (index . 0).Address }}{{ end }}"
-update_alias "queue" "{{ with service "openstudio-redis" }}{{ (index . 0).Address }}{{ end }}"
+update_alias "db"    '{{ with service "openstudio-db"    }}{{ (index . 0).Address }}{{ end }}'
+update_alias "queue" '{{ with service "openstudio-redis" }}{{ (index . 0).Address }}{{ end }}'
 EOT
       }
     }
