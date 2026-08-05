@@ -95,8 +95,12 @@ job "[[ var "job_name" . ]]-test" {
       driver = "docker"
 
       config {
-        image   = "busybox:[[ var "test_busybox_image_tag" . ]]"
-        command = "sh"
+        # network_mode = "host" is required so that the Consul agent on
+        # 127.0.0.1:8500 is reachable from inside the container.
+        # Bridge-networked containers cannot reach the host loopback.
+        network_mode = "host"
+        image        = "busybox:[[ var "test_busybox_image_tag" . ]]"
+        command      = "sh"
         args = [
           "-ec",
           <<-EOF

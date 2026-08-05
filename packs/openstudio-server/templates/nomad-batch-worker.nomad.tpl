@@ -101,56 +101,48 @@ EOT
         memory = [[ var "nomad_batch_memory" . ]]
       }
 
-      # Consul-hosted service addresses are resolved once via DNS lookups.
+      # Consul-hosted service addresses are resolved via Consul Template watches.
+      # Using {{ service }} watches avoids calling the Consul HTTP API from inside
+      # the container over bridge networking (127.0.0.1 is the container's own
+      # loopback there, not the host's Consul agent).
       template {
         destination     = "local/patch-hosts.sh"
         left_delimiter  = "{{"
         right_delimiter = "}}"
-        data            = <<-EOT
+        change_mode     = "script"
+        change_script {
+          command = "/bin/sh"
+          args    = ["-c", "sh /local/patch-hosts.sh"]
+        }
+        data = <<-EOT
 #!/bin/sh
 set -eu
 
-CONSUL_ADDR="[[ var "consul_address" . ]]"
-
-resolve_service_ip() {
-  service="$1"
-  max_attempts=60
-  attempt=1
-  while [ "$attempt" -le "$max_attempts" ]; do
-    json="$(wget -qO- -T 2 "http://${CONSUL_ADDR}/v1/health/service/${service}?passing=true" || true)"
-    ip=""
-    if [ -n "$json" ] && command -v python3 >/dev/null 2>&1; then
-      ip="$(printf '%s' "$json" | python3 -c 'import json,sys
-data=json.load(sys.stdin)
-for entry in data:
-    svc=(entry or {}).get("Service") or {}
-    node=(entry or {}).get("Node") or {}
-    addr=svc.get("Address") or node.get("Address") or ""
-    if addr:
-        print(addr)
-        break
-')"
+# update_alias writes or refreshes a single /etc/hosts alias.
+# If new_ip is empty (service currently unhealthy) the existing entry is
+# left in place so an in-flight simulation is not disrupted.
+update_alias() {
+  alias="$1"
+  new_ip="$2"
+  if [ -z "$new_ip" ]; then
+    return 0
+  fi
+  if grep -q " ${alias}$" /etc/hosts 2>/dev/null; then
+    old_ip=$(grep " ${alias}$" /etc/hosts | awk '{print $1}')
+    if [ "$old_ip" != "$new_ip" ]; then
+      sed -i "/ ${alias}$/d" /etc/hosts
+      printf '%s %s\n' "$new_ip" "$alias" >> /etc/hosts
+      echo "patch-hosts: updated ${alias}: ${old_ip} -> ${new_ip}"
     fi
-    if [ -z "$ip" ] && [ -n "$json" ]; then
-      ip="$(printf '%s' "$json" | sed -n 's/.*"ServiceAddress":"\([^"]*\)".*/\1/p' | head -n 1)"
-      if [ -z "$ip" ]; then
-        ip="$(printf '%s' "$json" | sed -n 's/.*"Address":"\([^"]*\)".*/\1/p' | head -n 1)"
-      fi
-    fi
-    if [ -n "$ip" ]; then
-      printf '%s\n' "$ip"
-      return 0
-    fi
-    sleep 2
-    attempt=$((attempt + 1))
-  done
-  return 1
+  else
+    printf '%s %s\n' "$new_ip" "$alias" >> /etc/hosts
+    echo "patch-hosts: added ${alias}: ${new_ip}"
+  fi
 }
 
-echo "$(resolve_service_ip "openstudio-db") db" >> /etc/hosts
-echo "$(resolve_service_ip "openstudio-redis") queue" >> /etc/hosts
+update_alias "db"    "{{ with service "openstudio-db"    }}{{ (index . 0).Address }}{{ end }}"
+update_alias "queue" "{{ with service "openstudio-redis" }}{{ (index . 0).Address }}{{ end }}"
 EOT
-        change_mode     = "noop"
       }
     }
   }

@@ -200,6 +200,18 @@ fi
 EOT
 ```
 
+**POSIX character classes** like `[[:space:]]`, `[[:alpha:]]`, `[[:digit:]]` also contain the `[[` sequence — the Nomad Pack template delimiter — and will cause a pack parse error anywhere in a `.nomad.tpl` file.
+
+```sh
+# BAD inside a .nomad.tpl file (anywhere, not just in heredocs)
+sed 's/[[:space:]]//g'   # [[ triggers the pack parser
+
+# GOOD
+sed 's/[ \t]//g'         # instead of [[:space:]]
+sed 's/[a-zA-Z]//g'      # instead of [[:alpha:]]
+sed 's/[0-9]//g'         # instead of [[:digit:]]
+```
+
 Use these local guardrails before pushing:
 
 ```bash

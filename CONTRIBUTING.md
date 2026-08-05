@@ -148,7 +148,25 @@ template {
 }
 ```
 
-The CI warning is grep-based and intentionally non-blocking because template-like text can have false positives:
+### POSIX character classes inside Nomad Pack templates
+
+POSIX character classes like `[[:space:]]`, `[[:alpha:]]`, `[[:digit:]]` etc. contain the
+`[[` sequence — the Nomad Pack template delimiter. Using them anywhere in a `.nomad.tpl` file
+(including inside `data = <<-EOT` heredoc blocks) causes a parse error because the template
+engine tries to interpret `[[:space:]]` as a template action starting at `[[`.
+
+```sh
+# BAD inside a .nomad.tpl file — [[ triggers the Nomad Pack parser
+sed 's/[[:space:]]//g'
+
+# GOOD: use bracket expressions that avoid [[
+sed 's/[ \t]//g'      # instead of [[:space:]]
+sed 's/[a-zA-Z]//g'   # instead of [[:alpha:]]
+sed 's/[0-9]//g'      # instead of [[:digit:]]
+```
+
+The CI check `scripts/check-nomad-heredoc-interpolation.sh` detects both `${...:...}` expansions
+and POSIX character classes in pack templates:
 
 ```bash
 ./scripts/check-nomad-heredoc-interpolation.sh
