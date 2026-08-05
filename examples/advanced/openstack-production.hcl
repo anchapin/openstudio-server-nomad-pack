@@ -155,6 +155,13 @@ rserve_constraints = [
 # Traefik Host rule — must match the DNS name or IP/hostname used to reach the cluster.
 # Deploy in-pack Traefik for OpenStack fresh redeploys unless explicitly overridden.
 deploy_traefik = true
+# Point Traefik at the Consul SERVER (not the local 127.0.0.1 agent) to avoid HTTP 429
+# rate-limiting. On this cluster, local Consul agents on each Nomad client node serve
+# ~278 worker template requests simultaneously (5600 workers / 20 nodes × 4 templates
+# = ~1,112 concurrent Consul HTTP requests per node), exceeding the default 100-
+# connection limit and causing Traefik catalog queries to be rejected.
+# SITE-SPECIFIC: update this IP if the Consul server moves.
+traefik_consul_catalog_address = "192.168.100.87:8500"
 # SITE-SPECIFIC: set this in openstack-site-local.hcl.
 # ingress_domain = "openstudio.yourdomain.com"
 

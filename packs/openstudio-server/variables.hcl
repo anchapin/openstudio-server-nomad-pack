@@ -110,7 +110,7 @@ variable "traefik_write_timeout" {
 
 variable "traefik_consul_catalog_address" {
   type        = string
-  description = "Consul HTTP endpoint used by Traefik's Consul Catalog provider (host:port). Use 127.0.0.1:8500 when Consul agent is local on Nomad clients; override when Traefik cannot reach local Consul."
+  description = "Consul HTTP endpoint used by Traefik's Consul Catalog provider (host:port). Use 127.0.0.1:8500 (local Consul agent) only when the Traefik node has a dedicated Consul agent with low competing traffic. On clusters with 1,000+ workers, each worker's Nomad template engine makes concurrent Consul health API requests to the local agent; the default per-client connection limit (100) can be exceeded, causing HTTP 429 errors that prevent Traefik from fetching the catalog. In large-fleet deployments, set this to the Consul server address (e.g. 192.168.100.87:8500) so Traefik uses a dedicated connection pool isolated from worker template traffic."
   default     = "127.0.0.1:8500"
 }
 
