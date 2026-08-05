@@ -58,6 +58,7 @@ verification_image   = "busybox:1.36"
 poststop_cleanup_image = "alpine:3.20"
 vector_image              = "timberio/vector:0.30.0-alpine"
 enable_vector_collection  = true
+vector_memory_mb          = 512   # MB — raised from 256; MongoDB log bursts during bulk ops OOM-killed the sidecar at 256 MB (2026-08-05 incident)
 prometheus_image       = "prom/prometheus:v2.53.2"
 redis_exporter_image   = "oliver006/redis_exporter:v1.62.0"
 nomad_autoscaler_image = "hashicorp/nomad-autoscaler:0.5.0"
