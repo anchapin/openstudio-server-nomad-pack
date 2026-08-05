@@ -181,62 +181,30 @@ EOT
         }
         data = <<-EOT
 #!/bin/sh
-set -eu
+# /etc/hosts patch for web task — IPs are resolved by Consul Template on the
+# Nomad client host (full Consul access at 127.0.0.1:8500). The container never
+# needs to reach Consul directly, removing the bridge-networking limitation where
+# 127.0.0.1 inside the container is the container's own loopback, not the host.
+# change_script runs this file again whenever a watched service changes health.
 
-MAX_ATTEMPTS=[[ var "web_worker_runtime_service_resolution_attempts" . ]]
-BASE_DELAY=[[ var "web_worker_runtime_service_resolution_backoff_seconds" . ]]
-RUNTIME_RESOLUTION_ENABLED=[[ var "web_worker_runtime_service_resolution_enabled" . ]]
-CONSUL_ADDR=[[ var "consul_address" . ]]
-
-if [ "$RUNTIME_RESOLUTION_ENABLED" != "true" ]; then
-  echo "web_runtime_resolution_disabled legacy_template_watch_mode_removed=true" >&2
-  exit 0
-fi
-
-if [ "$MAX_ATTEMPTS" -lt 1 ]; then
-  echo "web_runtime_invalid_attempts value=${MAX_ATTEMPTS}" >&2
-  exit 1
-fi
-
-if [ "$BASE_DELAY" -lt 1 ]; then
-  echo "web_runtime_invalid_backoff value=${BASE_DELAY}" >&2
-  exit 1
-fi
-
-resolve_alias() {
-  service="$1"
-  alias="$2"
-  attempt=1
-  delay="$BASE_DELAY"
-  while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
-    response=$(wget -qO- "http://${CONSUL_ADDR}/v1/catalog/service/${service}" 2>/dev/null || true)
-    ip=$(echo "$response" | grep -o '"ServiceAddress":"[^"]*"' | head -1 | cut -d'"' -f4)
-    [ -z "$ip" ] && ip=$(echo "$response" | grep -o '"Address":"[^"]*"' | head -1 | cut -d'"' -f4)
-    if [ -n "$ip" ]; then
-      grep -vE "(^|[ \t])${alias}$" /etc/hosts > /alloc/hosts.tmp 2>/dev/null || true
-      printf '%s %s\n' "$ip" "$alias" >> /alloc/hosts.tmp
-      cat /alloc/hosts.tmp > /etc/hosts
-      echo "web_runtime_resolve_ok service=${service} alias=${alias} ip=${ip} attempt=${attempt}"
-      return 0
-    fi
-    sleep "$delay"
-    attempt=$((attempt + 1))
-    delay=$((delay * 2))
-    [ "$delay" -gt 8 ] && delay=8
-  done
-  # Preserve existing /etc/hosts entry as a stale fallback rather than leaving
-  # the alias unresolved. Avoids a crash loop if Consul is temporarily empty.
-  if grep -qE "(^|[ \t])${alias}$" /etc/hosts 2>/dev/null; then
-    echo "web_runtime_resolve_stale service=${service} alias=${alias}" >&2
+update_alias() {
+  alias="$1"
+  new_ip="$2"
+  if [ -n "$new_ip" ]; then
+    grep -vE "(^|[ \t])${alias}$" /etc/hosts > /alloc/hosts.tmp 2>/dev/null || true
+    printf '%s %s\n' "$new_ip" "$alias" >> /alloc/hosts.tmp
+    cat /alloc/hosts.tmp > /etc/hosts
+    echo "web_runtime_resolve_ok alias=${alias} ip=${new_ip} source=consul_template"
+  elif grep -qE "(^|[ \t])${alias}$" /etc/hosts 2>/dev/null; then
+    echo "web_runtime_resolve_stale alias=${alias} source=consul_template" >&2
   else
-    echo "web_runtime_resolve_failed service=${service} alias=${alias}" >&2
+    echo "web_runtime_resolve_failed alias=${alias} source=consul_template" >&2
   fi
-  return 1
 }
 
-resolve_alias "openstudio-db" "db" || true
-resolve_alias "openstudio-redis" "queue" || true
-resolve_alias "openstudio-rserve" "rserve" || true
+update_alias db    '{{ with service "openstudio-db" }}{{ (index . 0).Address }}{{ end }}'
+update_alias queue '{{ with service "openstudio-redis" }}{{ (index . 0).Address }}{{ end }}'
+update_alias rserve '{{ with service "openstudio-rserve" }}{{ (index . 0).Address }}{{ end }}'
 EOT
       }
 
@@ -465,62 +433,30 @@ EOT
         }
         data = <<-EOT
 #!/bin/sh
-set -eu
+# /etc/hosts patch for web-background task — IPs are resolved by Consul Template
+# on the Nomad client host (full Consul access at 127.0.0.1:8500). The container
+# never needs to reach Consul directly, removing the bridge-networking limitation
+# where 127.0.0.1 inside the container is the container's own loopback, not host.
+# change_script runs this file again whenever a watched service changes health.
 
-MAX_ATTEMPTS=[[ var "web_worker_runtime_service_resolution_attempts" . ]]
-BASE_DELAY=[[ var "web_worker_runtime_service_resolution_backoff_seconds" . ]]
-RUNTIME_RESOLUTION_ENABLED=[[ var "web_worker_runtime_service_resolution_enabled" . ]]
-CONSUL_ADDR=[[ var "consul_address" . ]]
-
-if [ "$RUNTIME_RESOLUTION_ENABLED" != "true" ]; then
-  echo "web_background_runtime_resolution_disabled legacy_template_watch_mode_removed=true" >&2
-  exit 0
-fi
-
-if [ "$MAX_ATTEMPTS" -lt 1 ]; then
-  echo "web_background_runtime_invalid_attempts value=${MAX_ATTEMPTS}" >&2
-  exit 1
-fi
-
-if [ "$BASE_DELAY" -lt 1 ]; then
-  echo "web_background_runtime_invalid_backoff value=${BASE_DELAY}" >&2
-  exit 1
-fi
-
-resolve_alias() {
-  service="$1"
-  alias="$2"
-  attempt=1
-  delay="$BASE_DELAY"
-  while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
-    response=$(wget -qO- "http://${CONSUL_ADDR}/v1/catalog/service/${service}" 2>/dev/null || true)
-    ip=$(echo "$response" | grep -o '"ServiceAddress":"[^"]*"' | head -1 | cut -d'"' -f4)
-    [ -z "$ip" ] && ip=$(echo "$response" | grep -o '"Address":"[^"]*"' | head -1 | cut -d'"' -f4)
-    if [ -n "$ip" ]; then
-      grep -vE "(^|[ \t])${alias}$" /etc/hosts > /alloc/hosts.tmp 2>/dev/null || true
-      printf '%s %s\n' "$ip" "$alias" >> /alloc/hosts.tmp
-      cat /alloc/hosts.tmp > /etc/hosts
-      echo "web_background_runtime_resolve_ok service=${service} alias=${alias} ip=${ip} attempt=${attempt}"
-      return 0
-    fi
-    sleep "$delay"
-    attempt=$((attempt + 1))
-    delay=$((delay * 2))
-    [ "$delay" -gt 8 ] && delay=8
-  done
-  # Preserve existing /etc/hosts entry as a stale fallback rather than leaving
-  # the alias unresolved. Avoids a crash loop if Consul is temporarily empty.
-  if grep -qE "(^|[ \t])${alias}$" /etc/hosts 2>/dev/null; then
-    echo "web_background_runtime_resolve_stale service=${service} alias=${alias}" >&2
+update_alias() {
+  alias="$1"
+  new_ip="$2"
+  if [ -n "$new_ip" ]; then
+    grep -vE "(^|[ \t])${alias}$" /etc/hosts > /alloc/hosts.tmp 2>/dev/null || true
+    printf '%s %s\n' "$new_ip" "$alias" >> /alloc/hosts.tmp
+    cat /alloc/hosts.tmp > /etc/hosts
+    echo "web_background_runtime_resolve_ok alias=${alias} ip=${new_ip} source=consul_template"
+  elif grep -qE "(^|[ \t])${alias}$" /etc/hosts 2>/dev/null; then
+    echo "web_background_runtime_resolve_stale alias=${alias} source=consul_template" >&2
   else
-    echo "web_background_runtime_resolve_failed service=${service} alias=${alias}" >&2
+    echo "web_background_runtime_resolve_failed alias=${alias} source=consul_template" >&2
   fi
-  return 1
 }
 
-resolve_alias "openstudio-db" "db" || true
-resolve_alias "openstudio-redis" "queue" || true
-resolve_alias "openstudio-rserve" "rserve" || true
+update_alias db    '{{ with service "openstudio-db" }}{{ (index . 0).Address }}{{ end }}'
+update_alias queue '{{ with service "openstudio-redis" }}{{ (index . 0).Address }}{{ end }}'
+update_alias rserve '{{ with service "openstudio-rserve" }}{{ (index . 0).Address }}{{ end }}'
 EOT
       }
 
