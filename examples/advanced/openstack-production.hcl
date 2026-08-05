@@ -329,6 +329,7 @@ worker_update_progress_deadline = "0"
 worker_wait_for_deps_proceed_on_timeout = true   # workers start even if Consul is momentarily rate-limiting
 worker_preflight_max_attempts           = 15     # was 5; extra attempts absorb transient 429s during scale-up
 worker_preflight_sleep_seconds          = 5      # was 2; backs off between retries to reduce Consul load
+worker_preflight_jitter_max_seconds     = 120    # spread 5600 workers across 120s → ~47 workers/sec peak Consul load
 
 # ---------- MongoDB ----------
 # 2 000 MHz / 4 096 MB covers observed query load during Stage 3 soak.

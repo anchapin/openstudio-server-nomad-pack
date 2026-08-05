@@ -386,7 +386,204 @@ Pass criteria: no output.
 
 ---
 
-## 6. Exit criteria
+## 7. Consul 429 thundering-herd: worker template blocked, deployment auto-reverting
+
+### Symptoms
+
+- All recent worker allocs show `Task "worker" is "pending"` and never reach `running`
+- Alloc events contain: `Template Missing: health.service(openstudio-db passing)` followed by `Template failed: Unexpected response code: 429 (Your IP is issuing too many concurrent connections)`
+- Nomad deployment shows "failed due to unhealthy allocations" and auto-reverts immediately after each fix attempt
+- Simulations queue depth is flat or growing; 0 completions in 5 minutes despite workers nominally "running" at the fleet level
+
+### Root cause
+
+5,600+ workers starting simultaneously → each worker's Nomad template engine makes
+`health.service("openstudio-X")` calls to Consul (4 per worker) → ~22,400 concurrent
+requests → Consul HTTP 429 → template can't render → worker task stays `pending` →
+deployment health check times out → `auto_revert = true` rolls back every fix.
+
+The positive feedback loop: retry after 429 causes more concurrent requests, sustaining
+the rate-limiting indefinitely.
+
+### Immediate mitigation: scale down to break the loop
+
+```bash
+export NOMAD_ADDR=http://<nomad-server>:4646
+WORKER_JOB=openstudio-server-worker
+CURRENT_VERSION=$(nomad job status -json "${WORKER_JOB}" | python3 -c "import json,sys; print(json.load(sys.stdin)['Version'])")
+
+# Scale to 50 — below the 429 threshold (~200 concurrent requests)
+nomad job scale "${WORKER_JOB}" 50
+
+# Confirm the scale took effect
+nomad job status "${WORKER_JOB}" | grep -E "^Allocation|^Task"
+```
+
+With 50 workers, Consul load drops from ~22,400 to ~200 concurrent requests. Wait 2–3
+minutes for workers to start successfully and verify completions are accumulating:
+
+```bash
+# In the MongoDB alloc:
+nomad alloc exec -task mongodb <db-alloc-id> \
+  mongosh os_docker --quiet --eval "print('completed:', db.data_points.countDocuments({status:'completed'}))"
+# Run twice 2 minutes apart — count should be increasing
+```
+
+### Deploy the fix with auto_revert=false
+
+**Critical:** auto_revert must be disabled for this deployment or the fix will be rolled
+back the moment the deployment health check runs (before the 50-worker smoke test
+completes at scale).
+
+1. Confirm the worker job spec has `{{ with service "openstudio-X" "any" }}` (not
+   `{{ with service "openstudio-X" }}`). This is the pack fix in commit `9c9683c`. If
+   you are on an older version, redeploy the pack first.
+
+2. Fetch the current job spec and patch `auto_revert`:
+
+```bash
+# Fetch spec
+nomad job inspect "${WORKER_JOB}" > /tmp/worker-job.json
+
+# Check current auto_revert value
+python3 -c "
+import json
+spec = json.load(open('/tmp/worker-job.json'))
+update = spec['Job']['TaskGroups'][0].get('Update', {})
+print('auto_revert:', update.get('AutoRevert'))
+print('count:', spec['Job']['TaskGroups'][0]['Count'])
+"
+```
+
+3. Deploy at count=50 with auto_revert=false:
+
+```bash
+python3 - << 'PY'
+import json
+
+spec = json.load(open('/tmp/worker-job.json'))
+job = spec['Job']
+
+# Set count=50
+for tg in job['TaskGroups']:
+    tg['Count'] = 50
+
+# Disable auto_revert so the deployment is not rolled back
+for tg in job['TaskGroups']:
+    if 'Update' in tg:
+        tg['Update']['AutoRevert'] = False
+
+# Re-wrap for the API
+payload = {'Job': job}
+with open('/tmp/worker-job-patched.json', 'w') as f:
+    json.dump(payload, f)
+print('Wrote /tmp/worker-job-patched.json')
+PY
+
+curl -s -X POST "${NOMAD_ADDR}/v1/jobs" \
+  -H "Content-Type: application/json" \
+  -d @/tmp/worker-job-patched.json | python3 -c "import json,sys; r=json.load(sys.stdin); print('EvalID:', r.get('EvalID'))"
+```
+
+4. Wait for the deployment to succeed (50 workers running, health check passes):
+
+```bash
+nomad job status "${WORKER_JOB}" | head -20
+# Look for: Latest Deployment ... Status = successful
+```
+
+5. Let the autoscaler restore the count. The autoscaler reads the scaling policy in the
+   job spec and will scale back to the desired count (e.g. 5,600) within one evaluation
+   interval. The full job spec — including the `"any"` filter fix — is preserved.
+
+```bash
+# Monitor restoration
+watch -n 10 "nomad job status ${WORKER_JOB} | head -5"
+```
+
+6. Confirm no new 429 errors as count rises:
+
+```bash
+# Sample a recently-created alloc
+NEW_ALLOC=$(nomad job allocs -json "${WORKER_JOB}" | python3 -c "
+import json, sys
+allocs = sorted(json.load(sys.stdin), key=lambda a: a['CreateTime'], reverse=True)
+print(next((a['ID'] for a in allocs if a['ClientStatus'] == 'running'), ''))
+")
+nomad alloc status "${NEW_ALLOC}" | grep -A 20 "Recent Events"
+```
+
+Pass criteria: events show `Task started by client` with no `Template Killing` or
+`Template failed: 429` entries.
+
+### Preventive configuration
+
+Ensure `openstack-production.hcl` (or equivalent site-local override) contains:
+
+```hcl
+worker_preflight_jitter_max_seconds = 120   # spread 5600 workers over 120s
+worker_preflight_max_attempts       = 15
+worker_wait_for_deps_proceed_on_timeout = true
+```
+
+And that the deployed pack version uses `{{ with service "openstudio-X" "any" }}` in
+`worker.nomad.tpl` (commit `9c9683c` or later).
+
+On the **Consul server** (infrastructure-level fix), increase the per-client connection
+limit to accommodate large fleets. Add to `/etc/consul.d/consul.hcl`:
+
+```hcl
+limits {
+  http_max_conns_per_client = 1000
+  rpc_max_conns_per_client  = 1000
+}
+```
+
+Restart Consul after this change. The appropriate limit is approximately:
+`ceil(worker_count × 4 / num_nomad_client_nodes) × 2`. For 5,600 workers across 10
+client nodes: `ceil(5600 × 4 / 10) × 2 = 4480` — set to at least `500` to provide
+headroom above the default `200`.
+
+### Re-enqueue DPs missing from Resque after mass orphan reset
+
+If you reset orphaned `started` DPs to `queued` via MongoDB `updateMany`, those DPs
+will not have corresponding Resque entries. Detect and enqueue them:
+
+```bash
+# 1. Find all queued DP IDs from MongoDB
+nomad alloc exec -task mongodb <db-alloc-id> \
+  mongosh os_docker --quiet --eval "
+db.data_points.find({status:'queued'}, {_id:1}).forEach(d => print(d._id));
+" > /tmp/queued_dp_ids.txt
+
+# 2. Get all DP IDs currently in Resque
+nomad alloc exec -task redis <redis-alloc-id> \
+  redis-cli lrange resque:queue:simulations 0 -1 | \
+  python3 -c "
+import sys, json
+for line in sys.stdin:
+    try:
+        job = json.loads(line.strip())
+        args = job.get('args', [])
+        if args: print(args[0])
+    except: pass
+" | sort -u > /tmp/resque_dp_ids.txt
+
+# 3. Find missing DPs
+comm -23 <(sort /tmp/queued_dp_ids.txt) /tmp/resque_dp_ids.txt > /tmp/missing_dp_ids.txt
+echo "Missing DPs to enqueue: $(wc -l < /tmp/missing_dp_ids.txt)"
+
+# 4. Bulk enqueue via redis-cli --pipe
+python3 -c "
+import sys
+for dp_id in open('/tmp/missing_dp_ids.txt'):
+    dp_id = dp_id.strip()
+    if not dp_id: continue
+    payload = '{\"class\":\"ResqueJobs::RunSimulateDataPoint\",\"args\":[\"' + dp_id + '\"]}'
+    cmd = f'*3\r\n\$5\r\nRPUSH\r\n\$26\r\nresque:queue:simulations\r\n\${len(payload)}\r\n{payload}\r\n'
+    sys.stdout.write(cmd)
+" | nomad alloc exec -task redis <redis-alloc-id> redis-cli --pipe
+```
 
 The incident is resolved only when all of the following are true:
 

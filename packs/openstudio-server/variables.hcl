@@ -525,7 +525,7 @@ variable "worker_preflight_sleep_seconds" {
 
 variable "worker_preflight_jitter_max_seconds" {
   type        = number
-  description = "Maximum random initial sleep (seconds) added to each worker preflight before the first Consul check. With many workers starting simultaneously (e.g. scale-from-zero on a large fleet), each preflight makes 3+ synchronous Consul HTTP requests — without jitter the request wave is synchronized and Consul returns 429, failing all preflights. A random sleep in [1, worker_preflight_jitter_max_seconds] spreads the wave. Set to 0 to disable jitter (not recommended for fleets > 50 workers). Default 30 spreads a 4,000-worker fleet across 30 seconds (~133 workers/second peak vs. ~4,000 instantaneous)."
+  description = "Maximum random initial sleep (seconds) added to each worker preflight before the first Consul check. With many workers starting simultaneously (e.g. scale-from-zero on a large fleet), each preflight makes 3+ synchronous Consul HTTP requests — without jitter the request wave is synchronized and Consul returns 429, failing all preflights. A random sleep in [1, worker_preflight_jitter_max_seconds] spreads the wave. Set to 0 to disable jitter (not recommended for fleets > 50 workers). Default 120 spreads a 5,600-worker fleet across 120 seconds (~47 workers/second peak vs. ~5,600 instantaneous). Increase further for larger fleets."
   default     = 120
 }
 
