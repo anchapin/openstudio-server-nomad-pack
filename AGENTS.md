@@ -26,13 +26,16 @@ nomad-pack plan --name openstudio-server-minimal-dev -var-file examples/quicksta
 nomad-pack plan --name openstudio-server-production-ha -var-file examples/advanced/production-ha.hcl packs/openstudio-server
 nomad-pack plan --name openstudio-server-airgapped -var-file examples/advanced/airgapped.hcl packs/openstudio-server
 
-# Run the integration test script (render + plan across key scenarios)
-bash scripts/test_nomad_pack_integration.sh
+# Integration suite (Terratest Go tests in tests/terratest/; requires nomad-pack CLI on PATH)
+# NOTE: scripts/test_nomad_pack_integration.sh is a deprecated wrapper that just runs `go test ./...`
+go test ./tests/terratest/...
+# Run a single Terratest target (fast iteration)
+go test ./tests/terratest/... -run '^TestNomadPackIntegrationScenarios$'
 
 # Lint rendered /bin/sh scripts embedded in Nomad templates
 ./scripts/lint-posix-shell.sh packs/openstudio-server
 
-# Warn on shell parameter expansion patterns that Nomad HCL heredocs can parse
+# Warn on shell parameter expansion and POSIX [[:class:]] patterns that Nomad HCL heredocs can parse
 ./scripts/check-nomad-heredoc-interpolation.sh
 
 # Run a single focused test script (fast iteration)
@@ -41,6 +44,10 @@ bash scripts/test_nomad_pack_integration.sh
 ./scripts/test_backup_restore_docs_defaults.sh
 ./scripts/test_release_version_bump_workflow.sh
 ./scripts/test_migration_doc_variable_mapping.sh
+./scripts/test_worker_startup_dns_resolution.sh
+./scripts/test_service_discovery_guardrails.sh
+./scripts/test_openstack_autoscaler_render.sh
+./scripts/test_validate_traefik_consul_endpoint.sh
 
 # Render a specific scenario inline (e.g., verify a single template change)
 nomad-pack render -var "enable_vector_collection=false" packs/openstudio-server
@@ -68,6 +75,14 @@ diff docs/variables.md docs/variables.generated.md
 ./scripts/pre-teardown.sh [--namespace <ns>] [JOB_NAME]
 # Run the batch verification job to ping/TCP-check all services
 ./scripts/run-batch-verification.sh
+# Drain worker allocations in batches (queue-stall recovery; --dry-run supported)
+./scripts/drain-workers.sh
+# Confirm the image pre-pull sentinel is running on every eligible node
+./scripts/verify-prepull.sh
+# Staggered re-enqueue of datapoints stuck at na/started
+./scripts/requeue-stuck-datapoints.sh [--dry-run]
+# Detect CSI topology pin drift for db/redis volumes
+./scripts/check-csi-topology.sh
 
 # Validate ACL policy HCL formatting
 nomad fmt -check policies/
@@ -115,7 +130,7 @@ Each component is a **separate Nomad job** (`<job_name>-web`, `<job_name>-worker
 
 ### Template layout
 
-Each Nomad job is a separate `.nomad.tpl` file under `packs/openstudio-server/templates/`. The pack renders all of them together via `nomad-pack render`:
+Each Nomad job is a separate `.nomad.tpl` file under `packs/openstudio-server/templates/`. The pack renders all of them together via `nomad-pack render`. Every optional template is gated by a boolean feature flag (defaults shown):
 
 | Template | Nomad job rendered | Conditional |
 |---|---|---|
@@ -133,11 +148,12 @@ Each Nomad job is a separate `.nomad.tpl` file under `packs/openstudio-server/te
 | `queue-health-alert.nomad.tpl` | `<job_name>-queue-health-alert` | `enable_queue_health_alert = true` (default) |
 | `queue-sweeper.nomad.tpl` | `<job_name>-queue-sweeper` (task groups: `queue-sweeper`, `stall-watchdog`) | `enable_queue_sweeper` or `enable_stall_watchdog` |
 | `stall-watchdog.nomad.tpl` | Architecture marker file (consolidated into `queue-sweeper.nomad.tpl`) | `enable_stall_watchdog = true` |
+| `lock-sweeper.nomad.tpl` | `<job_name>-lock-sweeper` (periodic batch; removes orphaned `analysis_zip.lock` files from the shared NFS volume) | `enable_lock_sweeper` |
 | `nomad-batch-worker.nomad.tpl` | `<job_name>-nomad-batch-worker` | `batch_engine == "nomad_batch"` |
 | `state-backup.nomad.tpl` | `<job_name>-state-backup` (periodic batch) | `backup_enabled = false` (default) |
 | `state-restore.nomad.tpl` | `<job_name>-state-restore` (on-demand batch) | `restore_enabled = false` (default) |
 | `infra-setup.nomad.tpl` | `<job_name>-infra-setup` (system job for client config) | `enable_infra_setup = false` (default) |
-| `openstudio_test.nomad.tpl` | `<job_name>-test` (parameterized batch) | always |
+| `openstudio_test.nomad.tpl` | `<job_name>-test` (parameterized batch) | `enable_openstudio_test = true` (default) |
 
 `packs/openstudio-server/templates/_helpers.tpl` defines reusable named templates called throughout all job templates:
 
@@ -151,6 +167,13 @@ Each Nomad job is a separate `.nomad.tpl` file under `packs/openstudio-server/te
 | `openstudio_server.system_node_constraint` | Shorthand for `system_node_class` variable |
 | `openstudio_server.arch_constraint` | Hard constraint: `kernel.name = linux`, `cpu.arch = amd64` |
 | `openstudio_server.node_affinity` | Soft affinity with configurable weight |
+| `openstudio_server.wait_for_deps_task` | Prestart task polling Consul health API (web, web-background) |
+| `openstudio_server.worker_preflight_task` | Worker prestart task: Consul health + catalog address + TCP reachability for db/redis/rserve |
+| `openstudio_server.vector_task` | Vector log-collection sidecar (`enable_vector_collection = true`) |
+| `openstudio_server.cleanup_poststop_task` | Poststop task removing `poststop_cleanup_paths` |
+| `openstudio_server.vault_block` / `openstudio_server.vault_integration_block` | Role-based Vault block / KV-secrets env template |
+| `openstudio_server.restart_block` | Restart policy block |
+| `openstudio_server.update_block` | Update stanza (canary-capable; used by web and worker) |
 
 ### Template syntax
 
@@ -231,7 +254,13 @@ Use `packs/openstudio-server/` for all `nomad-pack` commands in this repository.
 
 ### Consul service discovery
 
-Worker startup aliasing (`db`, `queue`, `rserve`, `web`) must stay **Consul-native**. Prefer Nomad template rendering (`{{ range service "..." }}`) for worker `/etc/hosts` patching, and only rely on `.service.consul` names when the client node's OS resolver has been explicitly configured to forward `.consul` queries to Consul. Never switch worker startup back to `getent hosts` for Consul-only services such as `openstudio-db`, `openstudio-redis`, or `openstudio-rserve`.
+Worker startup aliasing (`db`, `queue`, `rserve`, `web`) must stay **Consul-native**. All service IP resolution is done by the **host-side Nomad template engine** via Consul Template watches — never by `wget`/`getent` inside the bridge-networked container (its `127.0.0.1` is the container loopback, not the host Consul agent). The rendered script writes `/etc/hosts` **atomically, one alias at a time** with an `update_alias` helper that preserves the previous entry if a Consul lookup fails:
+
+```hcl
+update_alias db '{{ with service "openstudio-db" }}{{ (index . 0).Address }}{{ end }}'
+```
+
+Never switch worker startup back to `getent hosts` for Consul-only services such as `openstudio-db`, `openstudio-redis`, or `openstudio-rserve`.
 
 
 Consul service names registered by this pack:
@@ -243,7 +272,7 @@ Consul service names registered by this pack:
 | `openstudio-rserve` | Rserve |
 | `openstudio-web` | Web (HTTP on `web_port`) |
 
-Web and worker tasks include a `wait-for-deps` **prestart lifecycle task** (`busybox:1.36`) that polls the Consul health API before the main container starts. The web prestart task waits for `openstudio-db`, `openstudio-redis`, and `openstudio-rserve`; the worker prestart task waits for `openstudio-db` and `openstudio-redis`.
+Web and web-background include a `wait-for-deps` **prestart lifecycle task** (`busybox:1.36`) that polls the Consul health API before the main container starts; the worker uses the `preflight` prestart task instead (Consul health + catalog + TCP checks). The web prestart task waits for `openstudio-db`, `openstudio-redis`, and `openstudio-rserve`; the worker preflight checks the same three services.
 
 Optional **Consul Connect** mTLS sidecar proxies for all services are enabled via `enable_consul_connect = true`. When enabled, each service task gets a `sidecar_service` proxy block.
 
@@ -251,10 +280,11 @@ Optional **Consul Connect** mTLS sidecar proxies for all services are enabled vi
 
 All job templates use a consistent task lifecycle pattern:
 
-1. **`wait-for-deps`** (`prestart`, not sidecar): polls Consul health API using `wget`; fails fast if dependencies don't come up
-2. **Main task**: the actual service container
-3. **`vector`** sidecar (`prestart`, sidecar = true): collects allocation logs from `/alloc/logs/*.std*` and emits JSON to stdout; enabled by default via `enable_vector_collection = true`
-4. **`cleanup-poststop`** (`poststop`): uses `alpine:3.20` to `rm -rf` paths listed in `poststop_cleanup_paths`
+1. **`preflight`** (`prestart`, worker only): runs on the host network and verifies Consul health, Consul catalog address resolution, and TCP reachability for `openstudio-db`, `openstudio-redis`, and `openstudio-rserve` before the worker starts. Emits structured `preflight_check service=... status=pass|fail` logs; fails the allocation cleanly on persistent failure (unless `worker_wait_for_deps_proceed_on_timeout = true`).
+2. **`wait-for-deps`** (`prestart`, web and web-background): polls the Consul health API with `busybox:1.36`; waits for `openstudio-db`, `openstudio-redis`, and `openstudio-rserve` in both task groups; fails fast unless `web_wait_for_deps_proceed_on_timeout = true`.
+3. **Main task**: the actual service container
+4. **`vector`** sidecar (`prestart`, sidecar = true): collects allocation logs from `/alloc/logs/*.std*` and emits JSON to stdout; enabled by default via `enable_vector_collection = true`
+5. **`cleanup-poststop`** (`poststop`): uses `alpine:3.20` to `rm -rf` paths listed in `poststop_cleanup_paths`
 
 ### Docker hardening defaults
 
@@ -307,6 +337,8 @@ Volume names default to `openstudio-mongodb` and `openstudio-redis`. MongoDB dat
 
 Volume ownership must be set before first deploy: MongoDB and Redis run as UID/GID `999:999` by default (configurable via `db_docker_user` and `redis_docker_user`). The global `docker_user` variable (default `1000:1000`) applies to web, worker, and rserve tasks.
 
+For `csi` storage, set `db_csi_topology_node_id` / `redis_csi_topology_node_id` to pin the allocation to the node that owns the volume (injects a hard `${node.unique.id}` constraint). Without this, rescheduling fails with `csi_hook failed … does not exist in volumes list`. `scripts/check-csi-topology.sh` detects topology-pin drift on live clusters.
+
 **NFS shared volume** (for web + worker): enabled via `nfs_shared_volume_enabled = true`. Recommended approach is an OS-level NFS mount registered as a Nomad host volume, not a CSI NFS driver. NFS alone does **not** provide distributed file locking — it shares the filesystem but does not make `web_count > 1` safe.
 
 ### Backup and restore jobs
@@ -320,6 +352,14 @@ Both jobs are disabled by default (`backup_enabled = false`, `restore_enabled = 
 ### Batch verification job
 
 `batch-verification.nomad.tpl` renders a one-shot **batch job** (enabled by `enable_batch_verification = true`) that uses `busybox` to ping and `nc` TCP-connect each service in `verification_targets`. Output lines use the structured log format `batch_verification_result component=... status=pass|fail` and `batch_verification_summary total=... passed=... failed=...`.
+
+### Queue-sweeper and stall-watchdog
+
+When both `enable_queue_sweeper` and `enable_stall_watchdog` are true, they share one consolidated periodic job and **must use the same cron** (`queue_sweeper_cron == stall_watchdog_cron`) — a render-time `[[ fail ]]` enforces this invariant.
+
+The queue-sweeper can auto-replay `PruneDeadWorkerDirtyExit` and `TermException` failures from `resque:failed` (`queue_sweeper_replay_dirty_exit = true`, default). Replays use the correct single-arg Resque payload format (`args: [dp_id]`) and are staggered by `queue_sweeper_replay_delay_seconds` (default `10`) to avoid bulk-push silent drops.
+
+`queue-health-alert.nomad.tpl` additionally emits a `queue_stagnation_alert` when the simulations queue stays flat-or-growing with zero processed-job progress past `alert_queue_stagnation_minutes`, plus failed-job acceleration and worker crash-loop restart alerts.
 
 ### Vault integration
 
@@ -357,16 +397,19 @@ This pack is the Nomad equivalent of the `openstudio-server-helm` chart. When im
 | PriorityClass (high/low) | Job-level `priority` (web=80 > worker=40) |
 | Ingress | Traefik via Consul service tags |
 
-**Worker rolling update (PDB equivalent):** The worker job uses an `update` stanza instead of a K8s PodDisruptionBudget:
+**Worker rolling update (PDB equivalent):** The worker job renders its `update` stanza through the shared `openstudio_server.update_block` helper instead of a K8s PodDisruptionBudget. Canary rollout is supported: `worker_canary_count > 0` places canary allocations first, `worker_auto_promote` promotes them if health checks pass, and `worker_min_healthy_time` gates promotion. Worker `auto_revert` is always `true` so a bad deployment rolls back to the last stable version instead of rolling fleet-wide (see `docs/infrastructure/runbooks/` for the promote/revert runbook):
 ```hcl
 update {
   max_parallel     = 1
+  canary           = [[ var "worker_canary_count" . ]]
+  auto_promote     = [[ var "worker_auto_promote" . ]]
   health_check     = "checks"
-  min_healthy_time = "10s"
+  min_healthy_time = [[ var "worker_min_healthy_time" . ]]
   healthy_deadline = "5m"
   auto_revert      = true
 }
 ```
+The web job supports canary mode too (`web_update_canary`, `web_update_auto_promote`).
 
 **Queue-based autoscaling (KEDA equivalent):** KEDA on Kubernetes queries message brokers directly. On Nomad, the autoscaler reads from Prometheus (which scrapes the broker metrics). Prometheus must be running and scraping queue metrics before `worker_autoscaling_enabled = true` and the Prometheus check strategy can be used.
 
@@ -415,6 +458,10 @@ After editing any variable in `packs/openstudio-server/variables.hcl`:
 2. Commit both `packs/openstudio-server/variables.hcl` and `docs/variables.md` together.
 
 CI fails if these files are out of sync (the `Check variables.md is up-to-date` workflow step performs a diff).
+
+### Local override files
+
+`user-overrides.hcl` and `*.override.hcl` are **gitignored** — never commit local variable overrides or cluster-specific IPs. `user-overrides.hcl.example` is the committed template; copy it to `user-overrides.hcl`. Likewise `examples/advanced/openstack-site-local.hcl` is gitignored (copy from `openstack-site-local.hcl.template`); deploy OpenStack with the two-file layered pattern (`-var-file examples/advanced/openstack-production.hcl -var-file openstack-site-local.hcl`).
 
 ### Release process
 
@@ -503,8 +550,8 @@ Node class targeting uses the named macros `openstudio_server.compute_node_const
 
 | Workflow | Trigger | What it checks |
 |---|---|---|
-| `pack-validation.yml` | push to `develop` or `main`, PR to `develop` or `main`, `workflow_dispatch` | fmt, render, plan (dry-run for multiple example var-files), `examples/test-batch.nomad` job spec validation, Vagrantfile syntax, script syntax, version-bump tests, `variables.md` diff, backup/restore default-doc consistency, README links to `docs/variables.md`, compatibility version gate, integration test script |
+| `pack-validation.yml` | push to `develop` or `main`, PR to `develop` or `main`, `workflow_dispatch` | fmt, render, `render-matrix` job (12 scenarios incl. production-ha, airgapped, e2e-test, batch engines), shellcheck lint of rendered `/bin/sh`, heredoc interpolation scan, worker startup DNS guardrails, service-discovery guardrails, autoscaler render invariants, `examples/test-batch.nomad` job spec validation, Vagrantfile/provisioning script syntax, `drain-workers.sh` syntax, version-bump tests, `variables.md` diff, backup/restore default-doc consistency, README links to `docs/variables.md`, compatibility version gate, `docker_user` hardening check, plan dry-runs against a Nomad dev agent |
 | `acl-policy-validation.yml` | push/PR to `develop` or `main` on `policies/**` or `scripts/apply-acl-policies.sh` changes | `nomad fmt -check policies/` |
-| `integration-test.yml` | PR to `develop` (path-filtered) | template render + e2e stack test |
+| `integration-test.yml` | PR to `develop` or `main` (path-filtered to pack-impacting paths) | Terratest render/plan suite + live e2e stack test (Consul + dnsmasq + Nomad dev agent with Consul integration, stub-image `e2e-test.hcl` deploy, Consul service-registration assertions, smoke batch job) |
 | `release-version-bump.yml` | push to `main` | **Step 1:** auto-bumps patch version in `packs/openstudio-server/metadata.hcl`, commits, creates and pushes `v*` git tag — triggers `release.yml` |
 | `release.yml` | push of tag matching `v*` | **Step 2:** publishes GitHub Release with auto-generated notes |
