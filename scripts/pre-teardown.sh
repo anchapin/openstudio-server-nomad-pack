@@ -216,6 +216,9 @@ echo ""
 stop_optional_job "${JOB_NAME}-prometheus"
 
 echo ""
+stop_optional_job "${JOB_NAME}-lock-sweeper"
+
+echo ""
 echo "==> All target jobs stopped successfully."
 echo ""
 echo "Next step — destroy the full pack (removes remaining jobs and Nomad state):"

@@ -26,6 +26,9 @@
 #                            REDIS_CSI_TOPOLOGY_KEY env vars.  If the resolved value is not
 #                            a 36-char hyphenated UUID a warning is printed and the pin is
 #                            skipped rather than emitting an unsatisfiable constraint.
+#   --skip-nfs-subdir-check  Skip the NFS required-subdirectory check.  Use when the NFS
+#                            share was just wiped and subdirectories will be created by
+#                            init-shared-storage-perms on the upcoming nomad-pack run.
 #
 # Exit codes:
 #   0  All required volumes are present, correctly registered, and healthy.
@@ -54,6 +57,7 @@ NOMAD_NAMESPACE="${NOMAD_NAMESPACE:-default}"
 CREATE_MISSING_CSI=false
 REBIND_STALE=false
 EMIT_TOPOLOGY_VARS=false
+SKIP_NFS_SUBDIR_CHECK=false
 CSI_PLUGIN_ID="${CSI_PLUGIN_ID:-nfs}"
 DB_CSI_PLUGIN_ID="${DB_CSI_PLUGIN_ID:-}"
 REDIS_CSI_PLUGIN_ID="${REDIS_CSI_PLUGIN_ID:-}"
@@ -96,6 +100,10 @@ while [ $# -gt 0 ]; do
       EMIT_TOPOLOGY_VARS=true
       shift
       ;;
+    --skip-nfs-subdir-check)
+      SKIP_NFS_SUBDIR_CHECK=true
+      shift
+      ;;
     --csi-plugin-id)
       CSI_PLUGIN_ID="$2"
       shift 2
@@ -110,6 +118,7 @@ while [ $# -gt 0 ]; do
 Usage: preflight-storage.sh [--var-file <path> ...] [--nomad-addr <url>] [--namespace <ns>]
                              [--create-missing-csi] [--rebind-stale] [--emit-topology-vars]
                              [--csi-plugin-id <id>] [--csi-topology-key <key>]
+                             [--skip-nfs-subdir-check]
 USAGE
       exit 2
       ;;
@@ -152,7 +161,7 @@ redis_volume_source="$(_extract_var redis_volume_source openstudio-redis)"
 db_csi_plugin_id="${DB_CSI_PLUGIN_ID:-${CSI_PLUGIN_ID}}"
 redis_csi_plugin_id="${REDIS_CSI_PLUGIN_ID:-${CSI_PLUGIN_ID}}"
 nfs_shared_volume_enabled="$(_extract_var nfs_shared_volume_enabled false)"
-nfs_volume_type="$(_extract_var nfs_volume_type host)"
+nfs_volume_type="$(_extract_var nfs_volume_type host_volume)"
 nfs_volume_source="$(_extract_var nfs_volume_source openstudio-nfs)"
 
 echo "==> Storage preflight"
@@ -180,7 +189,7 @@ elif [ "${redis_storage_type}" = "host_volume" ]; then
   required_host+=("${redis_volume_source}")
 fi
 
-if [ "${nfs_shared_volume_enabled}" = "true" ] && [ "${nfs_volume_type}" = "host" ]; then
+if [ "${nfs_shared_volume_enabled}" = "true" ] && [ "${nfs_volume_type}" = "host_volume" ]; then
   required_host+=("${nfs_volume_source}")
 fi
 
@@ -541,7 +550,7 @@ fi
 if [ ${#required_host[@]} -gt 0 ]; then
   names_csv="$(printf "%s\n" "${required_host[@]}" | awk '!seen[$0]++' | paste -sd, -)"
   nfs_vol_name="${nfs_volume_source:-openstudio-nfs}"
-  NOMAD_ADDR="${NOMAD_ADDR}" NAMES_CSV="${names_csv}" NFS_VOL_NAME="${nfs_vol_name}" python3 - <<'PY'
+  NOMAD_ADDR="${NOMAD_ADDR}" NAMES_CSV="${names_csv}" NFS_VOL_NAME="${nfs_vol_name}" SKIP_NFS_SUBDIR_CHECK="${SKIP_NFS_SUBDIR_CHECK}" python3 - <<'PY'
 import collections
 import json
 import os
@@ -597,52 +606,61 @@ if nfs_paths:
         "server/assets/analyses",
         "server/R",
     ]
-    # Check subdirectories via the Nomad filesystem API on one eligible allocation.
-    # We look for any running allocation that has the NFS volume mounted.
-    try:
-        with urllib.request.urlopen(f"{addr}/v1/jobs?namespace=*", timeout=10) as r:
-            all_jobs = json.load(r)
-        # Find a running service job that uses the NFS volume (web or rserve).
-        target_job = next(
-            (j for j in all_jobs
-             if j.get("Status") == "running"
-             and any(k in (j.get("ID") or "") for k in ["-rserve", "-web"])),
-            None,
+    # Skip the subdirectory check when the caller (e.g. fresh-redeploy) just wiped the NFS
+    # share — subdirectories will be re-created by init-shared-storage-perms on the next
+    # nomad-pack run.
+    if os.environ.get("SKIP_NFS_SUBDIR_CHECK", "false").lower() == "true":
+        print(
+            "⚠ Skipping NFS subdirectory check (--skip-nfs-subdir-check): "
+            "directories will be created by init-shared-storage-perms on deploy."
         )
-        if target_job:
-            job_id = target_job["ID"]
-            ns = target_job.get("Namespace", "default")
-            with urllib.request.urlopen(
-                f"{addr}/v1/job/{job_id}/allocations?namespace={ns}", timeout=10
-            ) as r:
-                allocs = json.load(r)
-            running_alloc = next(
-                (a for a in allocs if a.get("ClientStatus") == "running"), None
+    else:
+        # Check subdirectories via the Nomad filesystem API on one eligible allocation.
+        # We look for any running allocation that has the NFS volume mounted.
+        try:
+            with urllib.request.urlopen(f"{addr}/v1/jobs?namespace=*", timeout=10) as r:
+                all_jobs = json.load(r)
+            # Find a running service job that uses the NFS volume (web or rserve).
+            target_job = next(
+                (j for j in all_jobs
+                 if j.get("Status") == "running"
+                 and any(k in (j.get("ID") or "") for k in ["-rserve", "-web"])),
+                None,
             )
-            if running_alloc:
-                alloc_id = running_alloc["ID"]
-                missing = []
-                for subdir in REQUIRED_NFS_SUBDIRS:
-                    url = f"{addr}/v1/client/fs/ls/{alloc_id}?path=/mnt/openstudio/{subdir}"
-                    try:
-                        code = urllib.request.urlopen(url, timeout=5).status
-                        if code != 200:
+            if target_job:
+                job_id = target_job["ID"]
+                ns = target_job.get("Namespace", "default")
+                with urllib.request.urlopen(
+                    f"{addr}/v1/job/{job_id}/allocations?namespace={ns}", timeout=10
+                ) as r:
+                    allocs = json.load(r)
+                running_alloc = next(
+                    (a for a in allocs if a.get("ClientStatus") == "running"), None
+                )
+                if running_alloc:
+                    alloc_id = running_alloc["ID"]
+                    missing = []
+                    for subdir in REQUIRED_NFS_SUBDIRS:
+                        url = f"{addr}/v1/client/fs/ls/{alloc_id}?path=/mnt/openstudio/{subdir}"
+                        try:
+                            code = urllib.request.urlopen(url, timeout=5).status
+                            if code != 200:
+                                missing.append(subdir)
+                        except Exception:
                             missing.append(subdir)
-                    except Exception:
-                        missing.append(subdir)
-                if missing:
-                    print(
-                        f"✗ NFS share at {registered_path} is missing required "
-                        f"subdirectories (run 'nomad-pack run' to trigger "
-                        f"init-shared-storage-perms, or create them manually):",
-                        file=sys.stderr,
-                    )
-                    for d in missing:
-                        print(f"    {registered_path}/{d}", file=sys.stderr)
-                    sys.exit(1)
-                print(f"✓ NFS share required subdirectories present ({', '.join(REQUIRED_NFS_SUBDIRS)})")
-    except Exception as exc:
-        print(f"⚠ Could not verify NFS subdirectory structure: {exc}")
+                    if missing:
+                        print(
+                            f"✗ NFS share at {registered_path} is missing required "
+                            f"subdirectories (run 'nomad-pack run' to trigger "
+                            f"init-shared-storage-perms, or create them manually):",
+                            file=sys.stderr,
+                        )
+                        for d in missing:
+                            print(f"    {registered_path}/{d}", file=sys.stderr)
+                        sys.exit(1)
+                    print(f"✓ NFS share required subdirectories present ({', '.join(REQUIRED_NFS_SUBDIRS)})")
+        except Exception as exc:
+            print(f"⚠ Could not verify NFS subdirectory structure: {exc}")
 PY
 fi
 

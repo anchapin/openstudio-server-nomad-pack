@@ -369,6 +369,7 @@ PACK_JOB_SUFFIXES=(
   nomad-autoscaler
   nomad-batch-worker
   infra-setup
+  lock-sweeper
 )
 
 pack_jobs_found=false
@@ -2050,6 +2051,13 @@ for var_file in "${VAR_FILES[@]}"; do
 done
 if [[ -n "${CSI_PLUGIN_ID}" ]]; then
   PREFLIGHT_ARGS+=(--csi-plugin-id "${CSI_PLUGIN_ID}")
+fi
+# NFS subdirectories are wiped above and will be re-created by
+# init-shared-storage-perms on the upcoming nomad-pack run — skip the
+# subdir check so preflight does not abort the deploy with a false negative.
+# Mirror the exact condition used for the NFS wipe above (line 2032).
+if [[ "${WIPE_NFS}" == "true" && "${nfs_shared_volume_enabled:-false}" == "true" && "${nfs_volume_type}" == "host_volume" ]]; then
+  PREFLIGHT_ARGS+=(--skip-nfs-subdir-check)
 fi
 DB_CSI_PLUGIN_ID="${ACTIVE_DB_CSI_PLUGIN_ID:-${DB_CSI_PLUGIN_ID}}" \
   REDIS_CSI_PLUGIN_ID="${ACTIVE_REDIS_CSI_PLUGIN_ID:-${REDIS_CSI_PLUGIN_ID}}" \
