@@ -134,6 +134,38 @@ if [ "$stale_locks" -ge "$STALE_LOCK_THRESHOLD" ]; then
   append_reason "stale_locks"
 fi
 
+[[ if var "alert_queuing_gate_enabled" . ]]
+# Queuing-gate deadlock: at least one analysis is enqueued (a
+# resque:analysis:*:queuing lock exists) but no data-point jobs exist anywhere
+# (simulations queue empty) and the analysis_wrappers queue that web workers
+# drain to enqueue data-point jobs is empty, while workers are still
+# registered. In that state no new data-point jobs can ever be produced.
+GATE_QUEUE_KEY="resque:queue:analysis_wrappers"
+analysis_wrappers="$(redis_cmd LLEN "$GATE_QUEUE_KEY" 2>/dev/null | tr -d '[:space:]')"
+if ! is_integer "$analysis_wrappers"; then analysis_wrappers=0; fi
+
+analysis_queuing_count=0
+analysis_ids=""
+if [ "$simulations" -eq 0 ] && [ "$analysis_wrappers" -eq 0 ] && [ "$workers_working" -gt 0 ]; then
+  for key in $(redis_cmd --scan --pattern 'resque:analysis:*:queuing' 2>/dev/null); do
+    [ -z "$key" ] && continue
+    analysis_queuing_count=$((analysis_queuing_count + 1))
+    analysis_id="$(printf '%s' "$key" | sed -n 's/^resque:analysis:\([^:]*\):queuing$/\1/p')"
+    if [ -n "$analysis_id" ]; then
+      if [ -n "$analysis_ids" ]; then
+        analysis_ids="${analysis_ids},${analysis_id}"
+      else
+        analysis_ids="$analysis_id"
+      fi
+    fi
+  done
+  if [ "$analysis_queuing_count" -gt 0 ]; then
+    append_reason "queuing_gate_deadlock"
+    echo "queue_stagnation_alert type=queuing_gate_deadlock analysis_ids=${analysis_ids} count=${analysis_queuing_count} simulations=${simulations} analysis_wrappers=${analysis_wrappers} workers_working=${workers_working}"
+  fi
+fi
+[[ end ]]
+
 redis_cmd SET "$PREV_SIM_KEY" "$simulations" >/dev/null
 redis_cmd SET "$PREV_TS_KEY" "$ts" >/dev/null
 

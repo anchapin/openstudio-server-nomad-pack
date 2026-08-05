@@ -1614,6 +1614,12 @@ variable "alert_queue_stagnation_minutes" {
   default     = 10
 }
 
+variable "alert_queuing_gate_enabled" {
+  type        = bool
+  description = "When true, the queue-health-alert job also detects queuing-gate deadlocks: at least one analysis is enqueued (a resque:analysis:*:queuing lock exists), the analysis_wrappers queue that web workers drain to enqueue data-point jobs is empty, the simulations queue is empty, and workers are still registered. In that state no new data-point jobs can be produced, so the job emits queue_stagnation_alert type=queuing_gate_deadlock and exits non-zero. Detection is a pure Redis scan and does not require Mongo access."
+  default     = true
+}
+
 # ── Stall watchdog ──────────────────────────────────────────────────────────
 variable "enable_stall_watchdog" {
   type        = bool
