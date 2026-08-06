@@ -361,6 +361,7 @@ PACK_JOB_SUFFIXES=(
   prometheus
   queue-sweeper
   stall-watchdog
+  queue-health-alert
   state-backup
   state-restore
   test

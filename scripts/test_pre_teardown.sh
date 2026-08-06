@@ -22,6 +22,7 @@ custom-job-system-hooks
 custom-job-state-backup
 custom-job-state-restore
 custom-job-batch-verify
+custom-job-queue-health-alert
 custom-job-test
 custom-job-nomad-autoscaler
 custom-job-autoscaler
@@ -74,6 +75,7 @@ grep -q 'job stop -purge -global -namespace test-ns custom-job-system-hooks' "${
 grep -q 'job stop -purge -namespace test-ns custom-job-state-backup' "${LOG_FILE}"
 grep -q 'job stop -purge -namespace test-ns custom-job-state-restore' "${LOG_FILE}"
 grep -q 'job stop -purge -namespace test-ns custom-job-batch-verify' "${LOG_FILE}"
+grep -q 'job stop -purge -namespace test-ns custom-job-queue-health-alert' "${LOG_FILE}"
 grep -q 'job stop -purge -namespace test-ns custom-job-test' "${LOG_FILE}"
 grep -q 'job stop -purge -namespace test-ns custom-job-nomad-autoscaler' "${LOG_FILE}"
 grep -q 'job stop -purge -namespace test-ns custom-job-autoscaler' "${LOG_FILE}"
