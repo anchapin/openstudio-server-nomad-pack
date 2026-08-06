@@ -69,21 +69,14 @@ job "[[ var "job_name" . ]]-web" {
     [[ if var "web_nginx_tmpdir_in_alloc" . ]]
     # Prestart: create nginx client_body_temp dir in the alloc's ephemeral disk so
     # nginx temp files never fill the Docker overlay2 filesystem on the host node.
-    task "nginx-tmpdir" {
-      lifecycle {
-        hook    = "prestart"
-        sidecar = false
-      }
-      driver = "raw_exec"
-      config {
-        command = "/bin/bash"
-        args    = ["-c", "mkdir -p ${NOMAD_ALLOC_DIR}/tmp/nginx-body-temp && chown [[ var "docker_user" . ]] ${NOMAD_ALLOC_DIR}/tmp/nginx-body-temp && chmod 700 ${NOMAD_ALLOC_DIR}/tmp/nginx-body-temp && echo nginx_tmpdir_ready path=${NOMAD_ALLOC_DIR}/tmp/nginx-body-temp"]
-      }
-      resources {
-        cpu    = 50
-        memory = 32
-      }
-    }
+    # Uses the alloc-dir symlink helper to avoid HCL interpolation issues.
+    [[ template "openstudio_server.alloc_dir_prestart" (dict "symlink_name" "nginx-temp-openstudio-web" "dir_path" "tmp/nginx-body-temp" "docker_user" (var "docker_user" .)) ]]
+    [[ end ]]
+
+    [[ if var "nfs_shared_volume_enabled" . ]]
+    # Prestart: verify NFS shared volume is mounted and writable before web starts.
+    # Prevents silent data loss when NFS mount is missing (falls through to local disk).
+    [[ template "openstudio_server.nfs_preflight_task" (dict "mount_path" (var "nfs_volume_mount_path" .) "proceed_on_timeout" (var "web_wait_for_deps_proceed_on_timeout" .)) ]]
     [[ end ]]
 
     task "web" {
@@ -258,7 +251,7 @@ EOT
           }[[ if var "web_nginx_tmpdir_in_alloc" . ]],
           {
             type   = "bind"
-            source = "${NOMAD_ALLOC_DIR}/tmp/nginx-body-temp"
+            source = "/opt/nomad/nginx-temp-openstudio-web"
             target = "/opt/nginx/client_body_temp"
           }[[ end ]]
         ]
@@ -271,7 +264,7 @@ EOT
           }[[ if var "web_nginx_tmpdir_in_alloc" . ]],
           {
             type   = "bind"
-            source = "${NOMAD_ALLOC_DIR}/tmp/nginx-body-temp"
+            source = "/opt/nomad/nginx-temp-openstudio-web"
             target = "/opt/nginx/client_body_temp"
           }[[ end ]]
         ]
@@ -279,7 +272,7 @@ EOT
         mounts = [
           {
             type   = "bind"
-            source = "${NOMAD_ALLOC_DIR}/tmp/nginx-body-temp"
+            source = "/opt/nomad/nginx-temp-openstudio-web"
             target = "/opt/nginx/client_body_temp"
           }
         ]

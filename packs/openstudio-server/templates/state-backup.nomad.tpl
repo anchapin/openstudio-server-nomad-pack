@@ -33,12 +33,12 @@ job "[[ var "job_name" . ]]-state-backup" {
         entrypoint = ["/bin/sh", "-ec"]
         args = [<<EOH
 ts="$(date -u +%Y%m%dT%H%M%SZ)"
-base_dir="${BACKUP_MOUNT_PATH}/${BACKUP_SUBDIRECTORY}"
-mkdir -p "${base_dir}"
-mongo_file="${base_dir}/mongo-${ts}.archive.gz"
-mongodump --uri="${MONGODB_URI}" --gzip --archive="${mongo_file}"
-find "${base_dir}" -name 'mongo-*.archive.gz' -type f -mtime +"${BACKUP_RETENTION_DAYS}" -delete
-echo "MongoDB backup complete: ${mongo_file}"
+base_dir="$${BACKUP_MOUNT_PATH}/$${BACKUP_SUBDIRECTORY}"
+mkdir -p "$${base_dir}"
+mongo_file="$${base_dir}/mongo-$${ts}.archive.gz"
+mongodump --uri="$${MONGODB_URI}" --gzip --archive="$${mongo_file}"
+find "$${base_dir}" -name 'mongo-*.archive.gz' -type f -mtime +"$${BACKUP_RETENTION_DAYS}" -delete
+echo "MongoDB backup complete: $${mongo_file}"
 EOH
         ]
       }
@@ -71,17 +71,17 @@ EOH
         args = [<<EOH
 set -eu
 ts="$(date -u +%Y%m%dT%H%M%SZ)"
-base_dir="${BACKUP_MOUNT_PATH}/${BACKUP_SUBDIRECTORY}"
-mkdir -p "${base_dir}"
-redis_file="${base_dir}/redis-${ts}.dump.tsv"
-redis-cli -h "${REDIS_HOST}" -p "${REDIS_PORT}" --scan | while IFS= read -r key; do
-  key_b64="$(printf "%s" "${key}" | base64 | tr -d '\n')"
-  dump_b64="$(redis-cli -h "${REDIS_HOST}" -p "${REDIS_PORT}" --raw DUMP "${key}" | base64 | tr -d '\n')"
-  ttl_ms="$(redis-cli -h "${REDIS_HOST}" -p "${REDIS_PORT}" --raw PTTL "${key}")"
-  printf "%s\t%s\t%s\n" "${key_b64}" "${dump_b64}" "${ttl_ms}"
-done > "${redis_file}"
-find "${base_dir}" -name 'redis-*.dump.tsv' -type f -mtime +"${BACKUP_RETENTION_DAYS}" -delete
-echo "Redis backup complete: ${redis_file}"
+base_dir="$${BACKUP_MOUNT_PATH}/$${BACKUP_SUBDIRECTORY}"
+mkdir -p "$${base_dir}"
+redis_file="$${base_dir}/redis-$${ts}.dump.tsv"
+redis-cli -h "$${REDIS_HOST}" -p "$${REDIS_PORT}" --scan | while IFS= read -r key; do
+  key_b64="$(printf "%s" "$${key}" | base64 | tr -d '\n')"
+  dump_b64="$(redis-cli -h "$${REDIS_HOST}" -p "$${REDIS_PORT}" --raw DUMP "$${key}" | base64 | tr -d '\n')"
+  ttl_ms="$(redis-cli -h "$${REDIS_HOST}" -p "$${REDIS_PORT}" --raw PTTL "$${key}")"
+  printf "%s\t%s\t%s\n" "$${key_b64}" "$${dump_b64}" "$${ttl_ms}"
+done > "$${redis_file}"
+find "$${base_dir}" -name 'redis-*.dump.tsv' -type f -mtime +"$${BACKUP_RETENTION_DAYS}" -delete
+echo "Redis backup complete: $${redis_file}"
 EOH
         ]
       }

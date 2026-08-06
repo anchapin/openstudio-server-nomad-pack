@@ -111,7 +111,7 @@ BASE_DELAY=[[ var "web_worker_runtime_service_resolution_backoff_seconds" . ]]
 CONSUL_ADDR=[[ var "consul_address" . ]]
 
 if [ "$MAX_ATTEMPTS" -lt 1 ] || [ "$BASE_DELAY" -lt 1 ]; then
-  echo "runtime_discovery_canary_invalid_config attempts=${MAX_ATTEMPTS} backoff=${BASE_DELAY}" >&2
+  echo "runtime_discovery_canary_invalid_config attempts=$${MAX_ATTEMPTS} backoff=$${BASE_DELAY}" >&2
   exit 1
 fi
 
@@ -121,12 +121,12 @@ resolve_alias() {
   attempt=1
   delay="$BASE_DELAY"
   while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
-    response=$(wget -qO- "http://${CONSUL_ADDR}/v1/catalog/service/${service}" 2>/dev/null || true)
+    response=$(wget -qO- "http://$${CONSUL_ADDR}/v1/catalog/service/$${service}" 2>/dev/null || true)
     ip=$(echo "$response" | grep -o '"ServiceAddress":"[^"]*"' | head -1 | cut -d'"' -f4)
     [ -z "$ip" ] && ip=$(echo "$response" | grep -o '"Address":"[^"]*"' | head -1 | cut -d'"' -f4)
     if [ -n "$ip" ]; then
-      echo "${ip} ${alias}" >> /etc/hosts
-      echo "runtime_discovery_canary_alias_resolved service=${service} alias=${alias} ip=${ip} attempt=${attempt}"
+      echo "$${ip} $${alias}" >> /etc/hosts
+      echo "runtime_discovery_canary_alias_resolved service=$${service} alias=$${alias} ip=$${ip} attempt=$${attempt}"
       return 0
     fi
     sleep "$delay"
@@ -134,7 +134,7 @@ resolve_alias() {
     delay=$((delay * 2))
     [ "$delay" -gt 8 ] && delay=8
   done
-  echo "runtime_discovery_canary_alias_failed service=${service} alias=${alias}" >&2
+  echo "runtime_discovery_canary_alias_failed service=$${service} alias=$${alias}" >&2
   return 1
 }
 

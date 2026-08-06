@@ -271,7 +271,11 @@ check_service() {
 JITTER_MAX=[[ var "worker_preflight_jitter_max_seconds" .root ]]
 if [ "$JITTER_MAX" -gt 0 ]; then
   jitter=$(( (RANDOM % JITTER_MAX) + 1 ))
-  echo "preflight_check service=all status=jitter sleep=${jitter}s"
+  # NOTE: keep this line brace-free. Nomad's job-spec HCL parser evaluates
+  # dollar-brace expressions inside config heredocs before /bin/sh runs,
+  # so a braces-wrapped jitter reference here fails with an
+  # "Unknown variable" error. Use plain $jitter or printf instead.
+  printf 'preflight_check service=all status=jitter sleep=%ss\n' "$jitter"
   sleep "$jitter"
 fi
 
@@ -438,5 +442,41 @@ update {
   healthy_deadline  = "[[ .healthy_deadline ]]"
   progress_deadline = "[[ .progress_deadline ]]"
   auto_revert       = [[ .auto_revert ]]
+}
+[[- end -]]
+
+[[- define "openstudio_server.alloc_dir_prestart" -]]
+task "alloc-dir-setup" {
+  lifecycle {
+    hook    = "prestart"
+    sidecar = false
+  }
+  driver = "raw_exec"
+  config {
+    command = "/bin/bash"
+    args    = ["-c", "mkdir -p ${NOMAD_ALLOC_DIR}/[[ .dir_path ]] && chown [[ if .docker_user ]][[ .docker_user ]][[ else ]]65534:65534[[ end ]] ${NOMAD_ALLOC_DIR}/[[ .dir_path ]] && chmod 700 ${NOMAD_ALLOC_DIR}/[[ .dir_path ]] && ln -sfn ${NOMAD_ALLOC_DIR}/[[ .dir_path ]] /opt/nomad/[[ .symlink_name ]] && echo alloc_dir_setup_ready symlink=/opt/nomad/[[ .symlink_name ]] target=${NOMAD_ALLOC_DIR}/[[ .dir_path ]]"]
+  }
+  resources {
+    cpu    = 50
+    memory = 32
+  }
+}
+[[- end -]]
+
+[[- define "openstudio_server.nfs_preflight_task" -]]
+task "nfs-preflight" {
+  lifecycle {
+    hook    = "prestart"
+    sidecar = false
+  }
+  driver = "raw_exec"
+  config {
+    command = "/bin/bash"
+    args    = ["-c", "set -eu; MOUNT_PATH=\"[[ .mount_path ]]\"; PROCEED_ON_TIMEOUT=\"[[ .proceed_on_timeout ]]\"; ATTEMPTS=30; SLEEP=2; echo \"nfs_preflight_check mount_path=$MOUNT_PATH starting\"; for i in $(seq 1 $ATTEMPTS); do if mountpoint -q \"$MOUNT_PATH\" 2>/dev/null && [ -w \"$MOUNT_PATH\" ]; then echo \"nfs_preflight_check mount_path=$MOUNT_PATH status=pass attempt=$i\"; exit 0; fi; echo \"nfs_preflight_check mount_path=$MOUNT_PATH status=fail reason=not_mounted_or_not_writable attempt=$i\" >&2; sleep \"$SLEEP\"; done; echo \"nfs_preflight_check mount_path=$MOUNT_PATH status=fail reason=timeout attempts=$ATTEMPTS proceeding=$PROCEED_ON_TIMEOUT\" >&2; if [ \"$PROCEED_ON_TIMEOUT\" = \"true\" ]; then exit 0; else exit 1; fi"]
+  }
+  resources {
+    cpu    = 50
+    memory = 32
+  }
 }
 [[- end -]]

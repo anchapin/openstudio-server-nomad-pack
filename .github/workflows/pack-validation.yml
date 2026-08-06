@@ -121,6 +121,28 @@ jobs:
       - name: Lint rendered POSIX shell snippets
         run: ./scripts/lint-posix-shell.sh ${{ matrix.scenario.args }}
 
+      - name: Validate all rendered job specs
+        env:
+          NOMAD_ADDR: http://127.0.0.1:4646
+        run: |
+          # Start Nomad dev agent for validation
+          nomad agent -dev -bind=127.0.0.1 -log-level=ERROR &
+          for i in {1..30}; do
+            if nomad status >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          # Render to a temp file
+          RENDERED=$(mktemp)
+          nomad-pack render ${{ matrix.scenario.args }} > "${RENDERED}"
+          # Split into individual job files
+          awk '/^openstudio-server\/.*\.nomad:$/ {next} /^job "/{f=1; name=$2; gsub(/"/,"",name); out=name".hcl"} f{print > out}' "${RENDERED}"
+          # Validate each job
+          for j in *.hcl; do
+            echo "Validating ${j}..."
+            nomad job validate "${j}"
+          done
+          rm -f "${RENDERED}" *.hcl
+
       - name: Validate batch verification rendering
         run: nomad-pack render --var "enable_batch_verification=true" packs/openstudio-server
 

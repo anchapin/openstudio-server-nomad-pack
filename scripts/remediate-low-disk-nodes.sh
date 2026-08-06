@@ -10,6 +10,8 @@ THRESHOLD_MB="${THRESHOLD_MB:-20480}"
 ALLOW_WEB_ROLE_QUARANTINE="${ALLOW_WEB_ROLE_QUARANTINE:-false}"
 APPLY=false
 DRAIN=false
+CLEANUP=false
+CLEANUP_DRY_RUN=false
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -17,14 +19,18 @@ while [ $# -gt 0 ]; do
     --drain) DRAIN=true; shift ;;
     --threshold-mb) THRESHOLD_MB="$2"; shift 2 ;;
     --allow-web-role-quarantine) ALLOW_WEB_ROLE_QUARANTINE=true; shift ;;
+    --cleanup) CLEANUP=true; shift ;;
+    --cleanup-dry-run) CLEANUP_DRY_RUN=true; shift ;;
     --help|-h)
       cat <<EOF
-Usage: $0 [--apply] [--drain] [--threshold-mb N]
+Usage: $0 [--apply] [--drain] [--cleanup] [--cleanup-dry-run] [--threshold-mb N]
   --apply          Set low-disk nodes to ineligible in Nomad
   --drain          Also enable drain on low-disk nodes (requires --apply)
+  --cleanup        Run docker/containerd cleanup on low-disk nodes (requires SSH)
+  --cleanup-dry-run Show cleanup commands without executing
   --threshold-mb   Free-disk threshold in MB (default: ${THRESHOLD_MB})
   --allow-web-role-quarantine
-                   Allow quarantine of node_role=web nodes (default: false)
+                    Allow quarantine of node_role=web nodes (default: false)
 EOF
       exit 0
       ;;
@@ -40,9 +46,11 @@ if [ "${DRAIN}" = "true" ] && [ "${APPLY}" != "true" ]; then
   exit 1
 fi
 
-if [ ! -f "${SSH_KEY}" ]; then
-  echo "ERROR: SSH key not found: ${SSH_KEY}" >&2
-  exit 1
+if [ "${CLEANUP}" = "true" ] || [ "${CLEANUP_DRY_RUN}" = "true" ]; then
+  if [ ! -f "${SSH_KEY}" ]; then
+    echo "ERROR: SSH key not found: ${SSH_KEY}" >&2
+    exit 1
+  fi
 fi
 
 TMP_NODES="$(mktemp)"
@@ -101,6 +109,36 @@ PY
         NOMAD_ADDR="${NOMAD_ADDR}" nomad node drain -enable -yes -deadline=1h "${NODE_ID}" >/dev/null
         echo "  -> drain enabled"
       fi
+    fi
+
+    # Run cleanup if requested
+    if [ "${CLEANUP}" = "true" ] || [ "${CLEANUP_DRY_RUN}" = "true" ]; then
+      CLEANUP_CMDS=(
+        # Docker cleanup: remove unused images, containers, networks, build cache
+        "docker system df"
+        "docker system prune -af --filter until=24h"
+        "docker builder prune -af --filter until=24h"
+        # Containerd cleanup (if using containerd directly)
+        "crictl rmi --prune 2>/dev/null || true"
+        # Check disk after cleanup
+        "df -h /"
+      )
+      echo "  -> running cleanup on ${NODE_NAME} (dry-run=${CLEANUP_DRY_RUN})"
+      for cmd in "${CLEANUP_CMDS[@]}"; do
+        if [ "${CLEANUP_DRY_RUN}" = "true" ]; then
+          echo "    DRY-RUN: ${cmd}"
+        else
+          ssh -i "${SSH_KEY}" \
+            -n \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            -o BatchMode=yes \
+            -o ConnectTimeout=30 \
+            -J "${JUMP_HOST},${NOMAD_SERVER_HOST}" \
+            "${SSH_USER}@${NODE_IP}" \
+            "sudo ${cmd}" 2>&1 | sed 's/^/    /'
+        fi
+      done
     fi
   else
     echo "OK: ${NODE_NAME} (${NODE_ID:0:8}) free=${FREE_MB}MB"

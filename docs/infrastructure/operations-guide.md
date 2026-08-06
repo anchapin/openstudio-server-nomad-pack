@@ -62,6 +62,68 @@ application, keep `web_count = 1`.
 
 ---
 
+## Docker User and Alloc-Dir Bind Mounts
+
+### The `docker_user` Variable
+
+All service tasks (web, web-background, worker, db, redis, rserve) support a
+`docker_user` variable that controls the UID:GID the container runs as:
+
+- **Default (non-production):** `"1000:1000"` — runs as a non-root user.
+- **Production override (`openstack-production.hcl`):** `""` (empty string) — runs
+  as root inside the container. This is required because the OpenStudio Server
+  image expects root for certain operations (e.g., writing to `/opt/openstudio`,
+  binding to privileged ports).
+
+> [!WARNING]
+> When `docker_user = ""`, the container runs as root. Any prestart tasks that
+> `chown` directories for the container must handle this case explicitly —
+> `chown` with an empty owner argument fails with "missing operand".
+
+### Alloc-Dir Bind Mount Pattern (Symlink Approach)
+
+**Problem:** Nomad's HCL parser does not interpolate `${alloc.dir}` or
+`${alloc.id}` inside `docker` driver `mounts[].source`. The `${NOMAD_ALLOC_DIR}`
+environment variable expands to `/alloc` at parse time (a static string), not the
+real allocation directory path.
+
+**Solution:** Use a prestart task to:
+1. Create the real directory under `${NOMAD_ALLOC_DIR}` (shell expands this at runtime)
+2. Create a fixed symlink at `/opt/nomad/<symlink-name>` pointing to it
+3. Use the fixed symlink path in `mounts[].source`
+
+This pattern is encapsulated in the `openstudio_server.alloc_dir_prestart`
+helper template:
+
+```hcl
+# In task group (prestart task):
+[[ template "openstudio_server.alloc_dir_prestart" (dict
+  "symlink_name" "nginx-temp-openstudio-web"
+  "dir_path" "tmp/nginx-body-temp"
+  "docker_user" (var "docker_user" .)
+) ]]
+
+# In docker task config:
+mounts = [
+  { type = "bind", source = "/opt/nomad/nginx-temp-openstudio-web", target = "/opt/nginx/client_body_temp" }
+]
+```
+
+The helper handles the `docker_user = ""` case by falling back to `65534:65534`
+(the `nobody`/`nogroup` UID:GID that nginx workers run as).
+
+### NFS Preflight Check
+
+When `nfs_shared_volume_enabled = true`, the web task group includes an
+`nfs-preflight` prestart task (via `openstudio_server.nfs_preflight_task`)
+that verifies the NFS mount point exists and is writable before the web
+container starts. This prevents the silent data-loss scenario where the NFS
+mount is missing and writes fall through to the local root filesystem.
+
+The check uses `mountpoint -q` and `[ -w ]` with a configurable timeout.
+Control the behavior with `web_wait_for_deps_proceed_on_timeout` (default
+`false` — fail fast if NFS is not ready).
+
 ## Guides
 
 ### 🚀 Getting Started: Single-Node Dev Cluster
