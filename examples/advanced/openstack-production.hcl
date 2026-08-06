@@ -331,6 +331,16 @@ worker_min_healthy_time         = "10s"   # lowered from 1m — batch workers co
 worker_update_healthy_deadline  = "10m"
 worker_update_progress_deadline = "0"
 
+# Web update deadlines — on fresh CSI volumes MongoDB init + Rails startup can
+# take several minutes before Consul health checks pass. The 5m default
+# web_update_healthy_deadline is too tight and causes 3+ failed alloc attempts
+# before the 4th eventually stabilises, leaving the deployment in "failed" state.
+# 20m healthy_deadline gives web a single cold-start window; 30m progress_deadline
+# ensures the overall deployment doesn't time out while waiting.
+web_update_healthy_deadline  = "20m"
+web_update_progress_deadline = "30m"
+
+
 # Worker preflight resilience — raise attempt count to survive Consul thundering-herd
 # rate-limiting (HTTP 429) during large-scale simultaneous worker startup.
 worker_wait_for_deps_proceed_on_timeout = true   # workers start even if Consul is momentarily rate-limiting

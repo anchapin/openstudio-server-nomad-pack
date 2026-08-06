@@ -1610,6 +1610,22 @@ for job_id in core:
         dep_status = ""
     if dep_status == "successful":
         ready += 1
+        continue
+    # Fallback: accept a job whose latest deployment is "failed" or absent but
+    # which currently has all task groups running (Running>=1, Queued==0).
+    # This handles fresh deploys where prior alloc failures left a stale failed
+    # deployment record even though the job is now serving traffic.
+    try:
+        with urllib.request.urlopen(f"{addr}/v1/job/{job_id}/summary?namespace={ns}", timeout=20) as r:
+            summary = json.load(r)
+        groups = summary.get("Summary") or {}
+        if groups and all(
+            v.get("Running", 0) >= 1 and v.get("Queued", 0) == 0
+            for v in groups.values()
+        ):
+            ready += 1
+    except Exception:
+        pass
 print(f"{ready}/4")
 PY
     )"
