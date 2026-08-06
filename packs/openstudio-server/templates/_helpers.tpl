@@ -125,8 +125,8 @@ EOH
   }
 
   resources {
-    cpu        = 100
-    memory     = [[ var "vector_memory_mb" . ]]
+    cpu    = 100
+    memory = [[ var "vector_memory_mb" . ]]
     [[ if gt (var "vector_memory_max_mb" .) 0 ]]
     memory_max = [[ var "vector_memory_max_mb" . ]]
     [[ end ]]
@@ -470,9 +470,46 @@ task "nfs-preflight" {
     sidecar = false
   }
   driver = "raw_exec"
+  volume_mount {
+    volume      = "nfs-shared"
+    destination = "[[ .mount_path ]]"
+    read_only   = false
+  }
   config {
     command = "/bin/bash"
-    args    = ["-c", "set -eu; MOUNT_PATH=\"[[ .mount_path ]]\"; PROCEED_ON_TIMEOUT=\"[[ .proceed_on_timeout ]]\"; ATTEMPTS=30; SLEEP=2; echo \"nfs_preflight_check mount_path=$MOUNT_PATH starting\"; for i in $(seq 1 $ATTEMPTS); do if mountpoint -q \"$MOUNT_PATH\" 2>/dev/null && [ -w \"$MOUNT_PATH\" ]; then echo \"nfs_preflight_check mount_path=$MOUNT_PATH status=pass attempt=$i\"; exit 0; fi; echo \"nfs_preflight_check mount_path=$MOUNT_PATH status=fail reason=not_mounted_or_not_writable attempt=$i\" >&2; sleep \"$SLEEP\"; done; echo \"nfs_preflight_check mount_path=$MOUNT_PATH status=fail reason=timeout attempts=$ATTEMPTS proceeding=$PROCEED_ON_TIMEOUT\" >&2; if [ \"$PROCEED_ON_TIMEOUT\" = \"true\" ]; then exit 0; else exit 1; fi"]
+    args    = ["-c", <<-EOT
+set -eu
+# NOMAD_HOST_DIR_nfs_shared is injected by Nomad for every task in a group
+# that declares a host volume named "nfs-shared". It holds the actual host-side
+# path (e.g. /nfs/openstudio/batch/openstudio), which is what raw_exec sees.
+# The container-side mount_path (/mnt/openstudio) only exists inside Docker
+# and is NOT visible to raw_exec tasks running on the host.
+# Note: double dollar sign is HCL escaping — it renders as single dollar sign with braces in the actual job spec
+# so the shell sees the normal POSIX variable reference at runtime.
+NFS_PATH="$${NOMAD_HOST_DIR_nfs_shared}"
+PROCEED_ON_TIMEOUT="[[ .proceed_on_timeout ]]"
+ATTEMPTS=30
+SLEEP=2
+
+if [ -z "$NFS_PATH" ]; then
+  echo "nfs_preflight_check status=error reason=NOMAD_HOST_DIR_nfs_shared_not_set" >&2
+  if [ "$PROCEED_ON_TIMEOUT" = "true" ]; then exit 0; else exit 1; fi
+fi
+
+echo "nfs_preflight_check nfs_path=$NFS_PATH starting"
+for i in $(seq 1 $ATTEMPTS); do
+  if [ -d "$NFS_PATH" ] && [ -w "$NFS_PATH" ]; then
+    echo "nfs_preflight_check nfs_path=$NFS_PATH status=pass attempt=$i"
+    exit 0
+  fi
+  echo "nfs_preflight_check nfs_path=$NFS_PATH status=fail reason=not_a_dir_or_not_writable attempt=$i" >&2
+  sleep "$SLEEP"
+done
+
+echo "nfs_preflight_check nfs_path=$NFS_PATH status=fail reason=timeout attempts=$ATTEMPTS proceeding=$PROCEED_ON_TIMEOUT" >&2
+if [ "$PROCEED_ON_TIMEOUT" = "true" ]; then exit 0; else exit 1; fi
+EOT
+    ]
   }
   resources {
     cpu    = 50
