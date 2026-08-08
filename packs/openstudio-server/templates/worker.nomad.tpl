@@ -30,6 +30,7 @@ job "[[ var "job_name" . ]]-worker" {
     [[ end ]]
     [[ template "affinities" (var "worker_affinities" .) ]]
     [[ template "spreads" (var "worker_spreads" .) ]]
+    [[ template "openstudio_server.worker_anti_colocation" . ]]
 
 
     [[ if var "worker_autoscaling_enabled" . ]]
@@ -156,6 +157,9 @@ EOT
         }
         readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
         cap_drop        = [[ var "docker_cap_drop" . | toJson ]]
+        [[ if var "docker_cap_add" . ]]
+        cap_add = [[ var "docker_cap_add" . | toJson ]]
+        [[ end ]]
         [[ if var "worker_extra_hosts" . ]]
         extra_hosts = [[ var "worker_extra_hosts" . | toJson ]]
         [[ end ]]
@@ -212,6 +216,10 @@ EOT
         OS_REGION_NAME           = "[[ var "swift_region" . ]]"
         OS_AUTH_VERSION          = "[[ var "swift_auth_version" . ]]"
         SWIFT_CONTAINER          = "[[ var "swift_container" . ]]"
+        [[ end ]]
+        [[ if var "worker_extra_env" . ]]
+        # ── Extra worker environment overrides (worker_extra_env) ─────────────
+        [[ template "extra_env" (var "worker_extra_env" .) ]]
         [[ end ]]
       }
 

@@ -76,6 +76,7 @@ echo "  Sampling started DP ages via analysis status API..."
 
 NOW_EPOCH=$(date +%s)
 STALLED_COUNT=0
+SAMPLE_IDS=""
 
 # Get list of started analyses
 ANALYSES_STARTED=$(echo "$STATUS" | python3 -c "

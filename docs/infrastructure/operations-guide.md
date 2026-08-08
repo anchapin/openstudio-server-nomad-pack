@@ -80,6 +80,44 @@ All service tasks (web, web-background, worker, db, redis, rserve) support a
 > `chown` directories for the container must handle this case explicitly —
 > `chown` with an empty owner argument fails with "missing operand".
 
+### Container Security Model (root + capability hardening) — CURRENT APPROACH
+
+The stock `nrel/openstudio-server:<version>` image's `rails-entrypoint` **requires
+root and a writable rootfs**:
+
+1. It `mkdir`/`chmod 777` root-owned paths (`/mnt/openstudio/server/{analyses,R,assets}`,
+   `/opt/openstudio/server/tmp`, `/mnt/coredumps/`, `/opt/openstudio/server/log`).
+2. It rewrites `/opt/nginx/conf/nginx.conf` **in place** (`rm` + `awk` substitution
+   of `MAX_REQUESTS`/`MAX_POOL`), so `docker_readonly_rootfs = true` cannot be used.
+
+Running the containers as uid `1000:1000` with a read-only rootfs was investigated
+and is **not achievable with the stock image** — the entrypoint fails with
+`EACCES`/"Read-only file system" errors (Rails `docker.log`, nginx.conf rewrite).
+Enabling it would require a patched image that pre-chowns image paths and injects
+`/opt/nginx/conf/nginx.conf` via a writable mount.
+
+**Current, supported hardening for this deployment:** run as root with only the
+minimal Linux capabilities the stack needs:
+
+```hcl
+docker_user            = ""          # required by image entrypoint
+docker_readonly_rootfs = false       # required — entrypoint rewrites nginx.conf in place
+docker_cap_drop        = ["ALL"]     # drop ~30 capabilities
+docker_cap_add = [                   # minimal verified set for nginx/Passenger/rake
+  "CHOWN",             # nginx chowns client_body_temp to nobody
+  "FOWNER",            # entrypoint file ops
+  "DAC_OVERRIDE",      # entrypoint file ops
+  "SETUID",            # nginx/Passenger worker privilege drop
+  "SETGID",            # nginx/Passenger worker privilege drop
+  "NET_BIND_SERVICE",  # bind container port 80
+]
+```
+
+Verified in-container (`CapEff = 0x4cb` = exactly the 6 caps above; Docker default
+seccomp profile active). A prestart task that `chown`s paths has **no effect** on the
+application container's filesystem (it runs in its own container) and must not be
+used as a substitute for this model.
+
 ### Alloc-Dir Bind Mount Pattern (Symlink Approach)
 
 **Problem:** Nomad's HCL parser does not interpolate `${alloc.dir}` or
@@ -1389,6 +1427,67 @@ Rollback path:
 1. `nomad job scale <job>-worker 0`
 2. `nomad job revert <job>-worker 0` (optional fast rollback)
 3. `nomad-pack run --name <job> -var-file <previous-verified-vars> packs/openstudio-server`
+
+---
+
+## Sustainable worker scaling to 5,500 allocations
+
+The worker fleet can legitimately reach 5,500 (the memory-oversubscription
+ceiling documented in `examples/advanced/openstack-production.hcl`). The 2026-08-08
+incident proved the danger is not the *ceiling* but the *pace*: a deep Redis
+backlog combined with a 2m scale-up cooldown mapped the queue to thousands of
+desired workers almost instantly (2 → 500 → 5500 in ~10 minutes). The web task
+(Passenger/nginx) was saturated — load 154, 4,033 processes, MAX_REQUESTS=5775 —
+so the Consul `/status` health check timed out, Consul marked `openstudio-web`
+critical, Traefik dropped the route, and the ingress returned a 404 page.
+
+### Pace, not ceiling: the autoscaler knobs that matter
+
+| Variable | Pack default | 5,500-fleet value | Why |
+|---|---|---|---|
+| `worker_autoscaling_max_scale_delta` | 10 | 10 (raise only with evidence) | Per-cycle allocations; with 60s evaluation the fleet grows at most ~150/15m window |
+| `worker_autoscaling_evaluation_interval` | 60s | 60s | Fewer evaluation cycles = less Nomad API + Consul catalog churn at scale |
+| `worker_autoscaling_scale_up_cooldown` | 15m | 15m | Rate-limits consecutive scale-up cycles; 2m caused the herd |
+| `worker_autoscaling_scale_down_cooldown` | 20m | 20m | Avoids thrash when the queue briefly empties |
+| `worker_queue_requeued_target` / `worker_queue_simulations_target` | 20 / 20 | 20 / 20 | `ceil(queue/target)` → desired workers; dividing by 1-3 (the drift) mapped a 32k backlog to ~32k desired workers |
+| `worker_min_replicas` | 2 | 50 | Warm floor so a fresh backlog is picked up promptly |
+
+`examples/advanced/scale-to-5500.hcl` documents the complete, corrected
+configuration; apply it as a layered var-file after
+`openstack-production.hcl`. Always run the staged scale test
+(`scripts/scale-test-runbook.sh`, phases 100 → 1,000 → 2,500 → 5,500) after
+changing any of these knobs.
+
+### Web resilience (the 404 fix)
+
+The web task is the single ingress choke point; `web_count` must stay 1 (NFS
+has no distributed file-locking). Keep it healthy under worker load with:
+
+- **Bound `MAX_REQUESTS`**: set `web_max_requests = 500` instead of the
+  auto-derived `ceil(worker_max_replicas * 1.05)` (= 5775 at 5,500 workers).
+  Passenger then backpressures instead of accumulating a 5,775-item queue.
+- **Resilient health check**: `web_health_check_interval = "30s"`,
+  `web_health_check_timeout = "15s"`,
+  `web_health_check_success_before_passing = 2`,
+  `web_health_check_failures_before_critical = 3`. A transient probe timeout
+  under load must not flip Consul critical and drop the Traefik route.
+- **Workers must not co-locate with web**: the base profile targets workers to
+  `meta.node_role = "worker"` nodes; additionally pin the web/stateful node IDs
+  via `worker_excluded_node_ids` so a mislabeled node cannot receive workers.
+
+### Thundering-herd infrastructure
+
+- Point Traefik's Consul Catalog provider at the Consul **server**
+  (`traefik_consul_catalog_address = "<server-ip>:8500"`) instead of the local
+  agent (`127.0.0.1:8500`) so worker template traffic cannot starve the
+  catalog fetch.
+- Raise `limits.http_max_conns_per_client` on every Consul agent to
+  `ceil(workers_per_node * 4) * 2` (e.g. 1500 for 280 workers/node). Formula
+  and application details live in `variables.hcl` under
+  `consul_http_max_conns_per_client`; the pack's infra-setup system job applies
+  it (requires a Consul agent restart).
+- Keep `worker_runtime_image = "openstudio-worker:local"` image prepull so a
+  scale-up wave never triggers N simultaneous registry pulls.
 
 ---
 

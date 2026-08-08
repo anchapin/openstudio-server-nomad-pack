@@ -46,6 +46,7 @@
 #                      - <JOB_NAME>-batch-verify
 #                      - <JOB_NAME>-queue-sweeper
 #                      - <JOB_NAME>-stall-watchdog (legacy standalone watchdog job)
+#                      - <JOB_NAME>-queue-health-alert (periodic batch alert job)
 #                      - <JOB_NAME>-test
 #                      - <JOB_NAME>-nomad-autoscaler
 #                      - <JOB_NAME>-autoscaler (legacy name)
@@ -202,6 +203,9 @@ stop_optional_job "${JOB_NAME}-queue-sweeper"
 
 echo ""
 stop_optional_job "${JOB_NAME}-stall-watchdog"
+
+echo ""
+stop_optional_job "${JOB_NAME}-queue-health-alert"
 
 echo ""
 stop_optional_job "${JOB_NAME}-test"

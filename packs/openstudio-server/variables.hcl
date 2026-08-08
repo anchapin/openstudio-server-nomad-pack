@@ -21,7 +21,7 @@ variable "deployment_marker" {
 variable "worker_min_replicas" {
   type        = number
   description = "Minimum number of worker replicas when autoscaling is enabled. Set to 0 to allow scale-to-zero when the queue is empty. The Helm chart default of 2 is intentionally changed here to prevent idle worker accumulation."
-  default     = 0
+  default     = 2
 }
 
 variable "worker_max_replicas" {
@@ -118,6 +118,18 @@ variable "traefik_consul_refresh_interval" {
   type        = string
   description = "How frequently Traefik polls the Consul Catalog for service changes. Lower values reduce the delay before Traefik routes to a new backend after recovery. Default 10s (Traefik v3 default is 15s; shorter interval ensures faster failback when a web backend returns after an outage)."
   default     = "10s"
+}
+
+variable "traefik_type" {
+  type        = string
+  description = "Nomad job type for Traefik. Use 'system' to run on all nodes matching the ingress constraint (dedicated ingress nodes). Use 'service' for a single instance (current default). When 'system', the count parameter is ignored."
+  default     = "service"
+}
+
+variable "traefik_ingress_constraint" {
+  type        = bool
+  description = "When true and traefik_type = 'system', adds a constraint to run Traefik only on nodes with meta.ingress = 'true'. This enables the dedicated ingress node pattern. Requires setting meta.ingress = 'true' on desired client nodes in their Nomad client config."
+  default     = false
 }
 
 variable "nomad_namespace" {
@@ -287,6 +299,36 @@ variable "web_health_check_timeout" {
   type        = string
   description = "Timeout for Consul health checks for the web service."
   default     = "2s"
+}
+
+variable "web_health_check_success_before_passing" {
+  type        = number
+  description = "Number of consecutive successful web health checks before Consul marks the service passing. Under heavy worker load the web container can occasionally exceed a short check timeout (Passenger saturation, nginx backpressure) without being down. Raising this above the default of 1 prevents a single slow probe from immediately re-dropping the Traefik route (the root cause of the 404 page under the 5,500-worker thundering herd). Tune together with web_health_check_interval and web_health_check_failures_before_critical. Only applies to the web HTTP check; values > 1 delay first passing."
+  default     = 1
+}
+
+variable "web_health_check_failures_before_critical" {
+  type        = number
+  description = "Number of consecutive failed web health checks before Consul marks the service critical and Traefik drops the route. Default 0 follows Consul's built-in behavior (critical on first failure); set to 3 so transient web stalls under extreme worker load (e.g. > 100 load, 4,000 processes) do not flip the route to 404. Keep this well below the web restart policy so a genuinely dead web process is still detected and restarted promptly."
+  default     = 0
+}
+
+variable "web_extra_env" {
+  type        = map(string)
+  description = "Extra environment variables injected into the web task's env block. Values must be strings; use for tuning knobs not surfaced as pack variables (e.g. Passenger/nginx runtime overrides). Prefer dedicated pack variables over this escape hatch where the option is commonly tuned."
+  default     = {}
+}
+
+variable "web_background_extra_env" {
+  type        = map(string)
+  description = "Extra environment variables injected into the web-background task's env block. Values must be strings."
+  default     = {}
+}
+
+variable "worker_extra_env" {
+  type        = map(string)
+  description = "Extra environment variables injected into the worker task's env block. Values must be strings; use for worker runtime tuning not surfaced as pack variables. Useful for injecting fleet-wide knobs (e.g. analysis retry limits, logging verbosity) without a pack image change."
+  default     = {}
 }
 
 variable "web_update_max_parallel" {
@@ -562,13 +604,13 @@ variable "worker_cpu" {
 variable "worker_memory" {
   type        = number
   description = "Memory (MB) allocated to the OpenStudio worker task. These defaults are intentionally higher than Helm to support higher simulation concurrency per Nomad allocation."
-  default     = 4096
+  default     = 3072
 }
 
 variable "worker_memory_max" {
   type        = number
   description = "Memory hard limit (MB) for the OpenStudio worker task (Nomad memory_max)."
-  default     = 6144
+  default     = 4096
 }
 
 variable "worker_kill_timeout" {
@@ -598,7 +640,7 @@ variable "worker_restart_interval" {
 variable "worker_autoscaling_enabled" {
   type        = bool
   description = "Enable Nomad Autoscaler integration for the worker task group. When false (default), the scaling block is omitted and worker_count controls the fixed allocation count."
-  default     = false
+  default     = true
 }
 
 variable "worker_autoscaling_cpu_enabled" {
@@ -645,8 +687,8 @@ variable "autoscaler_prometheus_address" {
 
 variable "worker_autoscaling_scale_up_cooldown" {
   type        = string
-  description = "Cooldown between scale-up events for the worker group. Longer values prevent storage shock on shared NFS by limiting how quickly new workers are added during a burst. Recommended minimum 10m for NFS-backed deployments. Only applies when worker_autoscaling_enabled = true."
-  default     = "10m"
+  description = "Cooldown between scale-up events for the worker group. Longer values prevent storage shock on shared NFS by limiting how quickly new workers are added during a burst. For 1,000+ worker fleets raise this to 15m or more: a 10m cooldown still permits several consecutive large scale-up evaluations per hour, and each one sends a thundering herd of Consul template engine requests (worker startup aliases) through the local Consul agents. Only applies when worker_autoscaling_enabled = true."
+  default     = "15m"
 }
 
 variable "worker_autoscaling_scale_down_cooldown" {
@@ -657,14 +699,14 @@ variable "worker_autoscaling_scale_down_cooldown" {
 
 variable "worker_autoscaling_evaluation_interval" {
   type        = string
-  description = "How often the Nomad Autoscaler evaluates worker scaling policies. Lower values increase responsiveness but also increase Nomad API load. 30s is a safe default for most deployments. Only applies when worker_autoscaling_enabled = true."
-  default     = "30s"
+  description = "How often the Nomad Autoscaler evaluates worker scaling policies. Lower values increase responsiveness but also increase Nomad API load. 30s is responsive but, on 1,000+ worker fleets, multiplies Nomad API + Consul catalog churn from every evaluation cycle; 60s is the recommended floor for large fleets and the pack default. Only applies when worker_autoscaling_enabled = true."
+  default     = "60s"
 }
 
 variable "worker_autoscaling_max_scale_delta" {
   type        = number
-  description = "Maximum number of worker allocations to add or remove in a single autoscaler evaluation cycle. Prevents a mass scale-up event from flooding the cluster with thousands of new workers simultaneously when the Consul agent is unable to handle the sudden burst of template-engine requests (Consul 429 thundering-herd). Recommended: 200 for large fleets (5,000+ workers). Set to 0 to disable the delta limit (Nomad autoscaler default behavior). Only applies when worker_autoscaling_enabled = true."
-  default     = 200
+  description = "Maximum number of worker allocations to add or remove in a single autoscaler evaluation cycle. Prevents a mass scale-up event from flooding the cluster with thousands of new workers simultaneously when the Consul agent is unable to handle the sudden burst of template-engine requests (Consul 429 thundering-herd). Recommended: 200 for large fleets (5,000+ workers). Set to 0 to disable the delta limit (Nomad autoscaler default behavior). Only applies when worker_autoscaling_enabled = true. NOTE: the pack default is intentionally bounded (10) so a backlog-to-demand conflation (a deep queue maps to thousands of desired workers) can never translate into an unbounded scale-up: even if an operator raises worker_max_replicas, each evaluation cycle moves the fleet by at most this many allocations, and the scale-up cooldown (worker_autoscaling_scale_up_cooldown) rate-limits consecutive cycles. The effective scale-up ceiling is therefore roughly (max_scale_delta * (evaluation_interval-derived cycles per cooldown window)). With the defaults (10 per 60s evaluation, 15m cooldown) the ceiling is about 150 new workers per 15m window; raise max_scale_delta deliberately (e.g. 100-200) only for validated 5,000+ fleet deployments with `worker_autoscaling_evaluation_interval` = 60s and a 15m+ scale-up cooldown."
+  default     = 10
 }
 
 variable "autoscaler_constraints" {
@@ -1294,6 +1336,48 @@ variable "redis_backup_port" {
   default     = 6379
 }
 
+variable "db_backup_image" {
+  type        = string
+  description = "Docker image used by the MongoDB dump task in the state-backup job. Defaults to the db_image default (mongo:6.0.7) so the dumper version matches the live database; override independently of db_image so the live database image can stay pinned. Must contain mongodump."
+  default     = "mongo:6.0.7"
+}
+
+variable "redis_backup_image" {
+  type        = string
+  description = "Docker image used by the Redis dump task in the state-backup job. Defaults to the redis_image default (redis:6.2-alpine) so the dumper version matches the live database; override independently of redis_image so the live database image can stay pinned. Must contain redis-cli."
+  default     = "redis:6.2-alpine"
+}
+
+variable "backup_include_fs" {
+  type        = bool
+  description = "Include a filesystem/artefacts backup of the shared OpenStudio data volume (analyses, projects, server state) alongside the MongoDB and Redis dumps. The artefacts source volume is mounted read-only and archived to the backup volume. Requires a shared data volume (typically the same NFS volume mounted into web/worker via nfs_shared_volume_enabled) to be declared and schedulable."
+  default     = false
+}
+
+variable "backup_fs_volume_type" {
+  type        = string
+  description = "Storage backend for the artefacts source volume mounted into the artefacts-backup task. Use \"host_volume\" (default, recommended) for the OS-level NFS mount registered as a Nomad host volume, or \"csi\" for a CSI-managed volume. Mirrors the backup_volume_type pattern."
+  default     = "host_volume"
+}
+
+variable "backup_fs_volume_source" {
+  type        = string
+  description = "Nomad volume source for the shared OpenStudio data volume mounted into the artefacts-backup task. For host_volume this is the host volume name; for csi this is the CSI volume ID. Defaults to openstudio-nfs (the shared data volume used by web/worker)."
+  default     = "openstudio-nfs"
+}
+
+variable "backup_fs_mount_path" {
+  type        = string
+  description = "Path inside the artefacts-backup task where the shared OpenStudio data volume is mounted."
+  default     = "/artefacts"
+}
+
+variable "backup_fs_subdirectory" {
+  type        = string
+  description = "Subdirectory (relative to backup_fs_mount_path) containing the artefacts to archive. OpenStudio Server writes analyses under <osdata>/server/analyses, so the default is server/analyses."
+  default     = "server/analyses"
+}
+
 variable "restore_enabled" {
   type        = bool
   description = "Enable the on-demand restore batch job definition."
@@ -1411,6 +1495,27 @@ variable "docker_cap_drop" {
   default     = ["ALL"]
 }
 
+variable "docker_cap_add" {
+  type        = list(string)
+  description = <<-EOT
+    Linux capabilities to (re-)add to Docker containers after the global
+    cap_drop = ["ALL"] has been applied.
+
+    The stock OpenStudio Server image's rails-entrypoint requires root and a
+    writable rootfs (it chmods/mkdirs root-owned paths and rewrites
+    /opt/nginx/conf/nginx.conf in place), so docker_user/readonly_rootfs
+    hardening cannot be applied without a patched image. Capability
+    hardening IS supported: run as root with only the minimal caps the
+    nginx/Passenger/rake stack needs.
+
+    Verified minimal set for web/web-background/worker:
+      CHOWN, FOWNER, DAC_OVERRIDE  - entrypoint file ops (mkdir/chmod/chown)
+      SETUID, SETGID               - nginx drops worker privileges (user nobody)
+      NET_BIND_SERVICE             - bind container port 80
+  EOT
+  default     = []
+}
+
 variable "enable_image_prepull" {
   type        = bool
   description = "When true, renders the system-hooks job that pre-pulls all heavy images on every eligible node before scheduling."
@@ -1484,6 +1589,12 @@ variable "enable_queue_health_alert" {
   type        = bool
   description = "Enable the periodic batch job that emits `queue_health` structured log lines and exits 2 when queue backlog growth, failed-job depth, stale queuing locks, or Redis reachability breach the configured thresholds. Enabled by default so production renders replace the ad hoc manual alert job with a pack-managed equivalent."
   default     = true
+}
+
+variable "queue_health_redis_host" {
+  type        = string
+  description = "Redis host (or IP) the queue-health-alert task connects to. Defaults to the Consul DNS name; clusters without Consul DNS forwarding on client nodes must override this with the Redis node address (e.g. the same IP mapped by `extra_hosts` for `queue`)."
+  default     = "openstudio-redis.service.consul"
 }
 
 variable "alert_stale_lock_threshold" {
@@ -2037,6 +2148,49 @@ variable "enable_infra_setup" {
   type        = bool
   description = "When true, renders the infra-setup client configuration system job. Disabled by default."
   default     = false
+}
+
+# Consul Client Agent variables
+variable "enable_consul_client" {
+  type        = bool
+  description = "When true, renders the Consul client agent system job that runs on all Nomad client nodes. This enables service registration and discovery for OpenStudio Server jobs. Requires a Consul server at consul_server_address."
+  default     = false
+}
+
+variable "consul_client_image" {
+  type        = string
+  description = "The Consul Docker image to use for client agents."
+  default     = "hashicorp/consul:1.17.0"
+}
+
+variable "consul_server_address" {
+  type        = string
+  description = "Address of the Consul server (or server cluster) for client agents to join. Format: 'host:port' or 'provider=aws tag_key=... tag_value=...'. For a single server: '192.168.100.87:8301'."
+  default     = "192.168.100.87:8301"
+}
+
+variable "consul_client_log_level" {
+  type        = string
+  description = "Log level for Consul client agents (trace, debug, info, warn, err)."
+  default     = "info"
+}
+
+variable "consul_client_cpu" {
+  type        = number
+  description = "CPU shares allocated to the Consul client agent."
+  default     = 200
+}
+
+variable "consul_client_memory" {
+  type        = number
+  description = "Memory (MB) allocated to the Consul client agent."
+  default     = 256
+}
+
+variable "consul_client_data_volume" {
+  type        = string
+  description = "Nomad host volume name for Consul client data directory. Must be pre-created on each client node."
+  default     = "consul-data"
 }
 
 variable "consul_http_max_conns_per_client" {

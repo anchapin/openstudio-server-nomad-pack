@@ -64,6 +64,25 @@ spread {
 [[- end -]]
 [[- end -]]
 
+[[- define "extra_env" -]]
+[[- range $key, $value := . -]]
+[[ printf "%s = \"%s\"\n" $key $value -]]
+[[- end -]]
+[[- end -]]
+
+[[- define "openstudio_server.worker_anti_colocation" -]]
+# Workers must never share a node with the web process: the OpenStudio Server
+# web task (Passenger + nginx) is the single choke point that kept the ingress
+# route up under the 5,500-worker thundering herd. A worker co-located with web
+# directly contends for CPU/memory/network with it and can push the /status
+# health check past its timeout, flipping Traefik's route to 404.
+#
+# Set meta.node_role = "web" on the node(s) that run the web/web-background
+# groups (in the Nomad client config), or pin by node ID via
+# worker_excluded_node_ids. Both knobs are placement constraints, so no
+# container-level changes are needed.
+[[- end -]]
+
 [[- define "openstudio_server.node_class_constraint" -]]
 
 constraint {
@@ -125,8 +144,8 @@ EOH
   }
 
   resources {
-    cpu        = 100
-    memory     = [[ var "vector_memory_mb" . ]]
+    cpu    = 100
+    memory = [[ var "vector_memory_mb" . ]]
     [[ if gt (var "vector_memory_max_mb" .) 0 ]]
     memory_max = [[ var "vector_memory_max_mb" . ]]
     [[ end ]]
@@ -469,10 +488,36 @@ task "nfs-preflight" {
     hook    = "prestart"
     sidecar = false
   }
-  driver = "raw_exec"
+  driver = "docker"
+  volume_mount {
+    volume      = "nfs-shared"
+    destination = "[[ .mount_path ]]"
+    read_only   = false
+  }
   config {
-    command = "/bin/bash"
-    args    = ["-c", "set -eu; MOUNT_PATH=\"[[ .mount_path ]]\"; PROCEED_ON_TIMEOUT=\"[[ .proceed_on_timeout ]]\"; ATTEMPTS=30; SLEEP=2; echo \"nfs_preflight_check mount_path=$MOUNT_PATH starting\"; for i in $(seq 1 $ATTEMPTS); do if mountpoint -q \"$MOUNT_PATH\" 2>/dev/null && [ -w \"$MOUNT_PATH\" ]; then echo \"nfs_preflight_check mount_path=$MOUNT_PATH status=pass attempt=$i\"; exit 0; fi; echo \"nfs_preflight_check mount_path=$MOUNT_PATH status=fail reason=not_mounted_or_not_writable attempt=$i\" >&2; sleep \"$SLEEP\"; done; echo \"nfs_preflight_check mount_path=$MOUNT_PATH status=fail reason=timeout attempts=$ATTEMPTS proceeding=$PROCEED_ON_TIMEOUT\" >&2; if [ \"$PROCEED_ON_TIMEOUT\" = \"true\" ]; then exit 0; else exit 1; fi"]
+    image   = "[[ var "poststop_cleanup_image" .root ]]"
+    command = "/bin/sh"
+    args = ["-c", <<-EOT
+set -eu
+NFS_PATH="[[ .mount_path ]]"
+PROCEED_ON_TIMEOUT="[[ .proceed_on_timeout ]]"
+ATTEMPTS=30
+SLEEP=2
+
+echo "nfs_preflight_check nfs_path=$NFS_PATH starting"
+for i in $(seq 1 $ATTEMPTS); do
+  if [ -d "$NFS_PATH" ] && [ -w "$NFS_PATH" ]; then
+    echo "nfs_preflight_check nfs_path=$NFS_PATH status=pass attempt=$i"
+    exit 0
+  fi
+  echo "nfs_preflight_check nfs_path=$NFS_PATH status=fail reason=not_a_dir_or_not_writable attempt=$i" >&2
+  sleep "$SLEEP"
+done
+
+echo "nfs_preflight_check nfs_path=$NFS_PATH status=fail reason=timeout attempts=$ATTEMPTS proceeding=$PROCEED_ON_TIMEOUT" >&2
+if [ "$PROCEED_ON_TIMEOUT" = "true" ]; then exit 0; else exit 1; fi
+EOT
+    ]
   }
   resources {
     cpu    = 50

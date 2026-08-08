@@ -76,7 +76,7 @@ job "[[ var "job_name" . ]]-web" {
     [[ if var "nfs_shared_volume_enabled" . ]]
     # Prestart: verify NFS shared volume is mounted and writable before web starts.
     # Prevents silent data loss when NFS mount is missing (falls through to local disk).
-    [[ template "openstudio_server.nfs_preflight_task" (dict "mount_path" (var "nfs_volume_mount_path" .) "proceed_on_timeout" (var "web_wait_for_deps_proceed_on_timeout" .)) ]]
+    [[ template "openstudio_server.nfs_preflight_task" (dict "root" . "mount_path" (var "nfs_volume_mount_path" .) "proceed_on_timeout" (var "web_wait_for_deps_proceed_on_timeout" .)) ]]
     [[ end ]]
 
     task "web" {
@@ -172,6 +172,10 @@ EOT
         AWS_BATCH_JOB_DEFINITION = "[[ var "aws_batch_job_definition" . ]]"
         [[ end ]]
         [[ end ]]
+        [[ if var "web_extra_env" . ]]
+        # ── Extra web environment overrides (web_extra_env) ──────────────────
+        [[ template "extra_env" (var "web_extra_env" .) ]]
+        [[ end ]]
       }
 
       [[ if eq (var "batch_engine" .) "nomad_batch" ]]
@@ -233,6 +237,9 @@ EOT
         }
         readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
         cap_drop        = [[ var "docker_cap_drop" . | toJson ]]
+        [[ if var "docker_cap_add" . ]]
+        cap_add = [[ var "docker_cap_add" . | toJson ]]
+        [[ end ]]
         [[ if var "web_extra_hosts" . ]]
         extra_hosts = [[ var "web_extra_hosts" . | toJson ]]
         [[ end ]]
@@ -248,12 +255,12 @@ EOT
             type   = "volume"
             source = "[[ var "dev_shared_volume_name" . ]]"
             target = "[[ var "nfs_volume_mount_path" . ]]"
-          }[[ if var "web_nginx_tmpdir_in_alloc" . ]],
+          } [[ if var "web_nginx_tmpdir_in_alloc" . ]],
           {
             type   = "bind"
             source = "/opt/nomad/nginx-temp-openstudio-web"
             target = "/opt/nginx/client_body_temp"
-          }[[ end ]]
+          } [[ end ]]
         ]
         [[ else if var "dev_shared_data_path" . ]]
         mounts = [
@@ -261,12 +268,12 @@ EOT
             type   = "bind"
             source = "[[ var "dev_shared_data_path" . ]]"
             target = "[[ var "nfs_volume_mount_path" . ]]"
-          }[[ if var "web_nginx_tmpdir_in_alloc" . ]],
+          } [[ if var "web_nginx_tmpdir_in_alloc" . ]],
           {
             type   = "bind"
             source = "/opt/nomad/nginx-temp-openstudio-web"
             target = "/opt/nginx/client_body_temp"
-          }[[ end ]]
+          } [[ end ]]
         ]
         [[ else if var "web_nginx_tmpdir_in_alloc" . ]]
         mounts = [
@@ -313,6 +320,12 @@ EOT
           path     = "/status"
           interval = "[[ var "web_health_check_interval" . ]]"
           timeout  = "[[ var "web_health_check_timeout" . ]]"
+          [[ if gt (var "web_health_check_success_before_passing" .) 1 ]]
+          success_before_passing = [[ var "web_health_check_success_before_passing" . ]]
+          [[ end ]]
+          [[ if gt (var "web_health_check_failures_before_critical" .) 0 ]]
+          failures_before_critical = [[ var "web_health_check_failures_before_critical" . ]]
+          [[ end ]]
         }
       }
 
@@ -461,6 +474,10 @@ EOT
         REDIS_PASSWORD  = "[[ var "redis_password" . ]]"
         SECRET_KEY_BASE = "[[ var "app_secret_key_base" . ]]"
         [[ end ]]
+        [[ if var "web_background_extra_env" . ]]
+        # ── Extra web-background environment overrides (web_background_extra_env) ──
+        [[ template "extra_env" (var "web_background_extra_env" .) ]]
+        [[ end ]]
       }
 
       template {
@@ -508,6 +525,9 @@ EOT
         }
         readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
         cap_drop        = [[ var "docker_cap_drop" . | toJson ]]
+        [[ if var "docker_cap_add" . ]]
+        cap_add = [[ var "docker_cap_add" . | toJson ]]
+        [[ end ]]
         [[ if var "web_extra_hosts" . ]]
         extra_hosts = [[ var "web_extra_hosts" . | toJson ]]
         [[ end ]]

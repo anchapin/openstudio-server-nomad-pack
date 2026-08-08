@@ -19,7 +19,7 @@ REDIS_CSI_CAPACITY_MIN="${REDIS_CSI_CAPACITY_MIN:-1GiB}"
 REDIS_CSI_CAPACITY_MAX="${REDIS_CSI_CAPACITY_MAX:-5GiB}"
 REDIS_NODE_CLASS_OVERRIDE="${OS_REDIS_NODE_CLASS:-}"
 WIPE_NFS=true
-BOOTSTRAP_WORKER_MAX_REPLICAS="${OS_BOOTSTRAP_WORKER_MAX_REPLICAS:-200}"
+BOOTSTRAP_WORKER_MAX_REPLICAS="${OS_BOOTSTRAP_WORKER_MAX_REPLICAS:-5500}"
 BOOTSTRAP_AUTOSCALER_COOLDOWN="${OS_BOOTSTRAP_AUTOSCALER_COOLDOWN:-2m}"
 PREPULL_WAIT_TIMEOUT_SECONDS="${OS_PREPULL_WAIT_TIMEOUT_SECONDS:-900}"
 PREPULL_MIN_READY_PERCENT="${OS_PREPULL_MIN_READY_PERCENT:-10}"
@@ -361,6 +361,7 @@ PACK_JOB_SUFFIXES=(
   prometheus
   queue-sweeper
   stall-watchdog
+  queue-health-alert
   state-backup
   state-restore
   test
@@ -1609,6 +1610,22 @@ for job_id in core:
         dep_status = ""
     if dep_status == "successful":
         ready += 1
+        continue
+    # Fallback: accept a job whose latest deployment is "failed" or absent but
+    # which currently has all task groups running (Running>=1, Queued==0).
+    # This handles fresh deploys where prior alloc failures left a stale failed
+    # deployment record even though the job is now serving traffic.
+    try:
+        with urllib.request.urlopen(f"{addr}/v1/job/{job_id}/summary?namespace={ns}", timeout=20) as r:
+            summary = json.load(r)
+        groups = summary.get("Summary") or {}
+        if groups and all(
+            v.get("Running", 0) >= 1 and v.get("Queued", 0) == 0
+            for v in groups.values()
+        ):
+            ready += 1
+    except Exception:
+        pass
 print(f"{ready}/4")
 PY
     )"

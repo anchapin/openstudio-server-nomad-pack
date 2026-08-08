@@ -3,14 +3,24 @@ job "[[ var "job_name" . ]]-traefik" {
   region      = "[[ var "region" . ]]"
   datacenters = [[ var "datacenters" . | toJson ]]
   namespace   = "[[ var "nomad_namespace" . ]]"
-  type        = "service"
+  type        = "[[ var "traefik_type" . ]]"
 
   [[ template "openstudio_server.update_block" (dict "max_parallel" 1 "health_check" "checks" "min_healthy_time" "10s" "healthy_deadline" "5m" "progress_deadline" "10m" "auto_revert" true) ]]
 
   group "traefik" {
+    [[ if eq (var "traefik_type" .) "service" ]]
     count = 1
+    [[ end ]]
 
     [[ template "openstudio_server.arch_constraint" . ]]
+
+    [[ if and (eq (var "traefik_type" .) "system") (var "traefik_ingress_constraint" .) ]]
+    constraint {
+      attribute = "${meta.ingress}"
+      operator  = "="
+      value     = "true"
+    }
+    [[ end ]]
 
     network {
       port "http" {
