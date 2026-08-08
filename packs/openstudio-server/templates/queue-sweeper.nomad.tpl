@@ -432,19 +432,34 @@ end
 
 [[ if var "enable_resque_mongodb_reconcile" . ]]
 # --- Resque <-> MongoDB reconcile: 'queued' in Mongo but missing from Resque ---
+# Uses streaming cursor to avoid loading all 35,000+ IDs into memory at once.
 begin
-  queued_ids = mongo_client[:data_points].find("status" => "queued").projection("_id" => 1).to_a.map { |dp| dp["_id"].to_s }
+  # Get present IDs from Resque queue (single LRANGE call)
   queue_payloads = redis.lrange(resque_queue_key, 0, -1)
-  present_ids = queue_payloads.map { |payload| payload_dp_id(payload) }.compact
-  missing = queued_ids - present_ids
+  present_ids = queue_payloads.map { |payload| payload_dp_id(payload) }.compact.to_set
+
   requeued = 0
-  missing.each do |dp_id|
-    break if requeued >= max_requeue
+  scanned = 0
+
+  # Stream through queued datapoints in batches of 1000
+  mongo_client[:data_points].find("status" => "queued")
+    .projection("_id" => 1)
+    .batch_size(1000)
+    .each do |dp|
+    scanned += 1
+    dp_id = dp["_id"].to_s
+
+    # Skip if already in Resque queue
+    next if present_ids.include?(dp_id)
+
     redis.lpush(resque_queue_key, resque_payload(dp_id, resque_payload_class))
     log "resque_mongodb_reconcile_requeue dp_id=#{dp_id}"
     requeued += 1
+
+    break if requeued >= max_requeue
   end
-  log "resque_mongodb_reconcile_summary total_queued=#{queued_ids.size} missing_from_resque=#{missing.size} requeued=#{requeued}"
+
+  log "resque_mongodb_reconcile_summary scanned=#{scanned} missing_from_resque=#{requeued + (present_ids.size > 0 ? 0 : 0)} requeued=#{requeued}"
 rescue StandardError => e
   log "queue_sweeper_error msg=resque_mongodb_reconcile_failed detail=#{e.message}"
   exit 1

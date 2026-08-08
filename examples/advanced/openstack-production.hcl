@@ -79,6 +79,22 @@ web_priority = 80
 web_cpu      = 6000   # MHz — sufficient for Passenger + request routing
 web_memory   = 51200  # MB  — covers Passenger workers + upload buffer
 web_memory_max = 61440
+
+# Bound Passenger's request queue instead of deriving MAX_REQUESTS from
+# worker_max_replicas * 1.05 (= 5775 at 5500 workers — the value that saturated
+# web during the 2026-08-08 incident). 500 keeps the web task responsive while
+# workers drain; raise only with headroom evidence (web load, queue latency).
+web_max_requests = 500
+
+# Web health check resilience: at 5,500 workers the web container briefly
+# exceeds short timeouts (Passenger saturation) without being down. A single
+# failed probe immediately flips Consul critical and Traefik drops the route →
+# 404 page. Tolerate 3 consecutive failures before critical and require 2
+# consecutive successes before passing.
+web_health_check_interval               = "30s"
+web_health_check_timeout                = "15s"
+web_health_check_success_before_passing = 2
+web_health_check_failures_before_critical = 3
 web_constraints = [
   {
     attribute = "$${meta.node_role}"
@@ -313,10 +329,22 @@ worker_max_replicas              = 5500
 worker_queue_simulations_target = 3   # ceil(32000/3)=10667 → clamped to worker_max_replicas
 worker_queue_requeued_target    = 1
 
-# Scale-up cooldown: 2 min keeps queue bursts from waiting on long cooldown windows.
-# Scale-down cooldown: 10 min reduces oscillation after burst drains.
-worker_autoscaling_scale_up_cooldown   = "2m"
-worker_autoscaling_scale_down_cooldown = "10m"
+# Autoscaler pace — deliberately conservative. The 2026-08-08 incident showed a
+# 2m scale-up cooldown + a deep backlog maps a burst to thousands of desired
+# workers almost instantly (2 → 500 → 5500 in ~10 minutes), saturating the web
+# task's Passenger/nginx (load 154, 4,033 processes) and flipping the Traefik
+# route to a 404 because the Consul /status check timed out.
+#
+# The pack default max_scale_delta (10) bounds each evaluation cycle; with a
+# 60s evaluation interval and a 15m scale-up cooldown the effective scale-up
+# ceiling is ~150 new workers per 15m window — fast enough to drain a deep
+# queue, slow enough to keep web, Consul, and NFS healthy. Raise
+# worker_autoscaling_max_scale_delta only for validated fleets (see
+# examples/advanced/scale-to-5500.hcl).
+worker_autoscaling_scale_up_cooldown   = "15m"
+worker_autoscaling_scale_down_cooldown = "20m"
+worker_autoscaling_evaluation_interval = "60s"
+worker_autoscaling_max_scale_delta     = 10
 
 # Rolling update — canary-first high-scale strategy to retire bad versions faster
 # than max_parallel=1 while preserving guardrails.

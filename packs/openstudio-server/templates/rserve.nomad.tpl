@@ -50,7 +50,7 @@ job "[[ var "job_name" . ]]-rserve" {
     network {
       port "rserve" {
         to     = 6311
-        static = [[ var "rserve_static_port" . ]]
+        static = 6311
       }
     }
 
@@ -75,9 +75,22 @@ job "[[ var "job_name" . ]]-rserve" {
         }
         [[ if ne (var "rserve_command" .) "" ]]
         command = "[[ var "rserve_command" . ]]"
+        [[ else ]]
+        # Use Rserve() with args parameter to pass --RS-conf to child Rserve process
+        # Config file is rendered to local/Rserve.conf -> /local/Rserve.conf in container
+        # Use a shell wrapper to keep parent process alive while child Rserve runs
+        command = "/bin/sh"
         [[ end ]]
+        # Override image entrypoint to allow shell execution
+        entrypoint = [""]
         [[ if var "rserve_args" . ]]
         args = [[ var "rserve_args" . | toJson ]]
+        [[ else ]]
+        # Default: run Rserve via Rserve() function with args parameter
+        # The args parameter passes command-line arguments to the child Rserve process
+        # --RS-conf tells child Rserve to read config from /local/Rserve.conf
+        # Wrapper script keeps parent alive while child runs
+        args = ["-c", "R --vanilla -e \"library(Rserve); Rserve(debug=FALSE, port=6311, args='--vanilla --RS-conf /local/Rserve.conf')\" & wait"]
         [[ end ]]
         readonly_rootfs = [[ var "docker_readonly_rootfs" . ]]
         cap_drop        = [[ var "docker_cap_drop" . | toJson ]]
@@ -89,6 +102,19 @@ job "[[ var "job_name" . ]]-rserve" {
             tmpfs_options = { size = 67108864 }
           }
         ]
+      }
+
+      # Rserve config to bind to all interfaces (0.0.0.0)
+      # Renders to local/Rserve.conf -> /local/Rserve.conf in container
+      template {
+        data        = <<EOH
+# Rserve configuration
+# Bind to all interfaces so Nomad port mapping works
+address 0.0.0.0
+port 6311
+EOH
+        destination = "local/Rserve.conf"
+        change_mode = "restart"
       }
 
       service {
