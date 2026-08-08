@@ -172,6 +172,10 @@ EOT
         AWS_BATCH_JOB_DEFINITION = "[[ var "aws_batch_job_definition" . ]]"
         [[ end ]]
         [[ end ]]
+        [[ if var "web_extra_env" . ]]
+        # ── Extra web environment overrides (web_extra_env) ──────────────────
+        [[ template "extra_env" (var "web_extra_env" .) ]]
+        [[ end ]]
       }
 
       [[ if eq (var "batch_engine" .) "nomad_batch" ]]
@@ -316,6 +320,12 @@ EOT
           path     = "/status"
           interval = "[[ var "web_health_check_interval" . ]]"
           timeout  = "[[ var "web_health_check_timeout" . ]]"
+          [[ if gt (var "web_health_check_success_before_passing" .) 1 ]]
+          success_before_passing = [[ var "web_health_check_success_before_passing" . ]]
+          [[ end ]]
+          [[ if gt (var "web_health_check_failures_before_critical" .) 0 ]]
+          failures_before_critical = [[ var "web_health_check_failures_before_critical" . ]]
+          [[ end ]]
         }
       }
 
@@ -463,6 +473,10 @@ EOT
         MONGO_PASSWORD  = "[[ var "mongo_password" . ]]"
         REDIS_PASSWORD  = "[[ var "redis_password" . ]]"
         SECRET_KEY_BASE = "[[ var "app_secret_key_base" . ]]"
+        [[ end ]]
+        [[ if var "web_background_extra_env" . ]]
+        # ── Extra web-background environment overrides (web_background_extra_env) ──
+        [[ template "extra_env" (var "web_background_extra_env" .) ]]
         [[ end ]]
       }
 

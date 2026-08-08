@@ -64,6 +64,25 @@ spread {
 [[- end -]]
 [[- end -]]
 
+[[- define "extra_env" -]]
+[[- range $key, $value := . -]]
+[[ printf "%s = \"%s\"\n" $key $value -]]
+[[- end -]]
+[[- end -]]
+
+[[- define "openstudio_server.worker_anti_colocation" -]]
+# Workers must never share a node with the web process: the OpenStudio Server
+# web task (Passenger + nginx) is the single choke point that kept the ingress
+# route up under the 5,500-worker thundering herd. A worker co-located with web
+# directly contends for CPU/memory/network with it and can push the /status
+# health check past its timeout, flipping Traefik's route to 404.
+#
+# Set meta.node_role = "web" on the node(s) that run the web/web-background
+# groups (in the Nomad client config), or pin by node ID via
+# worker_excluded_node_ids. Both knobs are placement constraints, so no
+# container-level changes are needed.
+[[- end -]]
+
 [[- define "openstudio_server.node_class_constraint" -]]
 
 constraint {
@@ -469,32 +488,21 @@ task "nfs-preflight" {
     hook    = "prestart"
     sidecar = false
   }
-  driver = "raw_exec"
+  driver = "docker"
   volume_mount {
     volume      = "nfs-shared"
     destination = "[[ .mount_path ]]"
     read_only   = false
   }
   config {
-    command = "/bin/bash"
-    args    = ["-c", <<-EOT
+    image   = "[[ var "poststop_cleanup_image" .root ]]"
+    command = "/bin/sh"
+    args = ["-c", <<-EOT
 set -eu
-# NOMAD_HOST_DIR_nfs_shared is injected by Nomad for every task in a group
-# that declares a host volume named "nfs-shared". It holds the actual host-side
-# path (e.g. /nfs/openstudio/batch/openstudio), which is what raw_exec sees.
-# The container-side mount_path (/mnt/openstudio) only exists inside Docker
-# and is NOT visible to raw_exec tasks running on the host.
-# Note: double dollar sign is HCL escaping — it renders as single dollar sign with braces in the actual job spec
-# so the shell sees the normal POSIX variable reference at runtime.
-NFS_PATH="$${NOMAD_HOST_DIR_nfs_shared}"
+NFS_PATH="[[ .mount_path ]]"
 PROCEED_ON_TIMEOUT="[[ .proceed_on_timeout ]]"
 ATTEMPTS=30
 SLEEP=2
-
-if [ -z "$NFS_PATH" ]; then
-  echo "nfs_preflight_check status=error reason=NOMAD_HOST_DIR_nfs_shared_not_set" >&2
-  if [ "$PROCEED_ON_TIMEOUT" = "true" ]; then exit 0; else exit 1; fi
-fi
 
 echo "nfs_preflight_check nfs_path=$NFS_PATH starting"
 for i in $(seq 1 $ATTEMPTS); do

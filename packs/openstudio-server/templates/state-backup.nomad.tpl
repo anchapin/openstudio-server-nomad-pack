@@ -25,11 +25,25 @@ job "[[ var "job_name" . ]]-state-backup" {
       read_only = false
     }
 
+    [[ if var "backup_include_fs" . ]]
+    volume "artefacts_source" {
+      [[ if eq (var "backup_fs_volume_type" .) "csi" ]]
+      type            = "csi"
+      access_mode     = "multi-node-multi-writer"
+      attachment_mode = "file-system"
+      [[ else ]]
+      type      = "host"
+      read_only = true
+      [[ end ]]
+      source = "[[ var "backup_fs_volume_source" . ]]"
+    }
+    [[ end ]]
+
     task "mongo-backup" {
       driver = "docker"
 
       config {
-        image      = "[[ var "db_image" . ]]"
+        image      = "[[ var "db_backup_image" . ]]"
         entrypoint = ["/bin/sh", "-ec"]
         args = [<<EOH
 ts="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -66,7 +80,7 @@ EOH
       driver = "docker"
 
       config {
-        image      = "[[ var "redis_image" . ]]"
+        image      = "[[ var "redis_backup_image" . ]]"
         entrypoint = ["/bin/sh", "-ec"]
         args = [<<EOH
 set -eu
@@ -105,6 +119,58 @@ EOH
         memory = 256
       }
     }
+
+    [[ if var "backup_include_fs" . ]]
+    task "artefacts-backup" {
+      driver = "docker"
+
+      config {
+        image      = "[[ var "verification_image" . ]]"
+        entrypoint = ["/bin/sh", "-ec"]
+        args = [<<EOH
+set -eu
+ts="$(date -u +%Y%m%dT%H%M%SZ)"
+base_dir="$${BACKUP_MOUNT_PATH}/$${BACKUP_SUBDIRECTORY}"
+mkdir -p "$${base_dir}"
+src="$${FS_MOUNT_PATH}/$${BACKUP_FS_SUBDIRECTORY}"
+if [ -d "$${src}" ]; then
+  fs_file="$${base_dir}/artefacts-$${ts}.tar.gz"
+  tar -czf "$${fs_file}" -C "$${FS_MOUNT_PATH}" "$${BACKUP_FS_SUBDIRECTORY}"
+  find "$${base_dir}" -name 'artefacts-*.tar.gz' -type f -mtime +"$${BACKUP_RETENTION_DAYS}" -delete
+  echo "Artefacts backup complete: $${fs_file}"
+else
+  echo "No artefacts directory at $${src}; skipping filesystem backup"
+fi
+EOH
+        ]
+      }
+
+      env {
+        BACKUP_MOUNT_PATH      = "[[ var "backup_mount_path" . ]]"
+        BACKUP_SUBDIRECTORY    = "[[ var "backup_subdirectory" . ]]"
+        BACKUP_RETENTION_DAYS  = "[[ var "backup_retention_days" . ]]"
+        FS_MOUNT_PATH          = "[[ var "backup_fs_mount_path" . ]]"
+        BACKUP_FS_SUBDIRECTORY = "[[ var "backup_fs_subdirectory" . ]]"
+      }
+
+      volume_mount {
+        volume      = "artefacts_source"
+        destination = "[[ var "backup_fs_mount_path" . ]]"
+        read_only   = true
+      }
+
+      volume_mount {
+        volume      = "state_backups"
+        destination = "[[ var "backup_mount_path" . ]]"
+        read_only   = false
+      }
+
+      resources {
+        cpu    = 200
+        memory = 256
+      }
+    }
+    [[ end ]]
   }
 }
 [[ end ]]

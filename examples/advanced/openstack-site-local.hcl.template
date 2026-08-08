@@ -61,6 +61,22 @@ ingress_domain = "REPLACE_WITH_YOUR_INGRESS_IP_OR_HOSTNAME"
 #
 # stall_watchdog_nomad_address = "http://REPLACE_WITH_NOMAD_SERVER_IP:4646"
 
+# ---------- Large-fleet scaling (1,000+ workers) ----------
+# The pack + openstack-production.hcl now default to a *bounded autoscaler
+# pace* (max_scale_delta 10, 60s evaluation interval, 15m scale-up cooldown)
+# so a deep Redis backlog can never translate into a thundering herd. See
+# examples/advanced/scale-to-5500.hcl for the complete 5,500-worker reference.
+#
+# Site-specific values for THIS cluster (copy into openstack-site-local.hcl):
+#   worker_excluded_node_ids = ["<web-node-id>", "<db-node-id>"]   # protect stateful/web nodes
+#   traefik_consul_catalog_address = "REPLACE_WITH_CONSUL_SERVER_IP:8500"
+#   consul_http_max_conns_per_client = 1500
+#   web_max_requests = 500
+#   web_health_check_interval               = "30s"
+#   web_health_check_timeout                = "15s"
+#   web_health_check_success_before_passing = 2
+#   web_health_check_failures_before_critical = 3
+
 # ---------- Service-resolution strategy ----------
 # Production default keeps proven template-based aliasing in web/worker tasks.
 # Enable runtime DNS resolver only after canary validation.

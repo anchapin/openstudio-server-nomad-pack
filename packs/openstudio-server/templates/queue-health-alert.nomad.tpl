@@ -35,7 +35,7 @@ job "[[ var "job_name" . ]]-queue-health-alert" {
 #!/bin/sh
 set -eu
 
-REDIS_HOST="openstudio-redis.service.consul"
+REDIS_HOST="[[ var "queue_health_redis_host" . ]]"
 REDIS_PORT="6379"
 SIM_QUEUE_KEY="resque:queue:simulations"
 FAILED_QUEUE_KEY="resque:failed"
